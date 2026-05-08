@@ -14,14 +14,14 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
-
+import LiveSearch from "../common/LiveSearch";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Navigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  // const [searchQuery, setSearchQuery] = useState("");
   const [activeMegaMenu, setActiveMegaMenu] = useState(null);
   const megaMenuTimeout = useRef(null);
   const navigate = useNavigate();
@@ -36,14 +36,14 @@ const Navigation = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/shop?search=${searchQuery}`);
-      setSearchQuery("");
-      setMobileSearchOpen(false);
-    }
-  };
+  // const handleSearch = (e) => {
+  //   e.preventDefault();
+  //   if (searchQuery.trim()) {
+  //     navigate(`/shop?search=${searchQuery}`);
+  //     setSearchQuery("");
+  //     setMobileSearchOpen(false);
+  //   }
+  // };
 
   const handleMegaMenuEnter = (menu) => {
     if (megaMenuTimeout.current) clearTimeout(megaMenuTimeout.current);
@@ -100,25 +100,11 @@ const Navigation = () => {
 
             {/* Desktop Navigation + Search */}
             <div className="hidden lg:flex items-center gap-3 flex-1 justify-center">
-              {/* Expanded Search Bar */}
-              <form
-                onSubmit={handleSearch}
-                className="relative w-full max-w-lg"
-              >
-                <input
-                  type="text"
-                  placeholder="Search for eyeglasses, sunglasses, contact lenses..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-5 pr-12 py-2.5 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-none focus:bg-white focus:border-[#3D96EB] focus:ring-2 focus:ring-[#3D96EB]/10 transition-all"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-[#3D96EB] text-white p-1.5 rounded-full hover:bg-[#2B7DD3] transition"
-                >
-                  <MagnifyingGlassIcon className="w-4 h-4" />
-                </button>
-              </form>
+              {/* Live Search */}
+              <LiveSearch
+                className="w-full max-w-lg"
+                placeholder="Search for eyeglasses, sunglasses, contact lenses..."
+              />
 
               {/* Nav Links */}
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -280,7 +266,7 @@ const Navigation = () => {
         )}
 
         {/* Mobile Search Bar */}
-        {mobileSearchOpen && (
+        {/* {mobileSearchOpen && (
           <div className="lg:hidden border-t bg-white px-4 py-3">
             <form
               onSubmit={handleSearch}
@@ -301,6 +287,13 @@ const Navigation = () => {
                 <MagnifyingGlassIcon className="w-4 h-4" />
               </button>
             </form>
+          </div>
+        )} */}
+
+        {/* Mobile Search */}
+        {mobileSearchOpen && (
+          <div className="lg:hidden border-t bg-white px-4 py-3">
+            <LiveSearch placeholder="Search eyewear..." />
           </div>
         )}
 
@@ -463,7 +456,11 @@ const MegaMenuContent = ({ type, onClose }) => {
           ) : (
             <p className="text-sm text-gray-400 px-3 py-2">No categories yet</p>
           )}
-          <Link to={`/shop/${type}`} onClick={onClose}>
+          <Link
+            to={`/shop/${type}`}
+            onClick={onClose}
+            className="block px-3 py-2 text-[#3D96EB] font-medium text-sm hover:underline mt-2"
+          >
             View All {typeLabels[type]} →
           </Link>
         </div>
