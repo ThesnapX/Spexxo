@@ -463,11 +463,7 @@ const MegaMenuContent = ({ type, onClose }) => {
           ) : (
             <p className="text-sm text-gray-400 px-3 py-2">No categories yet</p>
           )}
-          <Link
-            to={`/shop/${type}`}
-            onClick={onClose}
-            className="block px-3 py-2 text-[#3D96EB] font-medium text-sm hover:underline mt-2"
-          >
+          <Link to={`/shop/${type}`} onClick={onClose}>
             View All {typeLabels[type]} →
           </Link>
         </div>
