@@ -1,0 +1,58 @@
+i want to make Ecommerce website. This website will be a shopping website for Specs/Sunglasses/Contact Lenses. The main feature of website is to shop online with COD feature (in future will be also adding online payment).
+
+--------------------------------------------
+
+The main inspiration of website is
+1. https://spexxo.rf.gd/   (This is wordpress website made by me i need little bit of same UI and UX)
+2. For Single Product page take refrence from official jhon jacobs website as now it is owned by lenskart so thier official website is redirecting to lenskart so you need to search for it.
+3. for product page take refrence from lenskart website https://www.lenskart.com/eyeglasses/brands/john-jacobs-eyeglasses.html. I need simmilar product showcasing and side filter.
+4. My website dosent include face scan feature (try with ai) as it will be a lot complex and hard to manage.
+5. for graphics i'll be creating all the graphics by myself. for stock photo if you need to use, you can choose (pexels,pinterst, unsplash ). for demo use stock images once the entire website is made ill be creating graphics and adding in the photo just make sure to give the appropriate naming for them so ill so give the same name and replace the old images with the new graphic images. Also keep them in seprate folder so i can know all the imagess will be in this folder.
+
+--------------------------------------------
+
+it will be made using mern stack. 
+Website info - choose from spexxo.rf.gd as it is my own website and i am just makeing in fullstack instead of wordpress.
+the website will be made on windows 11 system
+Icons - heroicons (primary) and react icon(if any icon not available on heroicon then only). make sure the icons look good and also had a colour varint so if the colour is there then it is active if not then its not active( not  clicked) just like modern UI
+theme - light theme, modern, Minimal
+font - can used based on the theme (Poppins, Playfair, Montserrat, helvetica) based on theme select a better font. i prefer poppins as for my wordpress website spexxo  i have used that only.
+IDE - vs Code
+css - tailwind v4 (it dosent consist tailwind config  and this is the one version which come by default so make sure to use this)
+animation - basic tailwind animation (dont overdo as the website is Ecommerce based.)
+Color - #3D96EA (main button, hover and primary kind of colour), #fff (background), text - #0B1C39
+Database - stored in MongoDB (if any better take that (free only))
+image upload and using- cloudniary
+deployment  - vercel and render so make sure the env file is perfectly because in deployment i dont need any problem.
+this website will be also posted on google so make sure to take all necessary action for making it on ranking on google 
+
+--------------------------------------------
+
+Frontend 
+
+menu - Shop, Eyeglass, Sunglass, Contact Lens, About Us.  Eyeglass, Sunglasses and Contact lens will be mega menu which include two div above div will include men, women, kids (small banner for this three) and then below div will include all the brands which we sell. (for now you use demo content but make sure that demo content is available on backend to for backend more details will be added in further. )
+
+Home page  - main refrence take from spexxo.rf.gd as it has better ui and ux. so make sure to use that all the images will be made by me and every image will be added in that folder.
+
+shop page - similar to lenskart shop page with custom filter(it includes everthing which consist in ecommerce shop filter make sure you take refrence from lenskart page),
+
+contact us page - Email - satyapatanakar@gmail.com, Mobile No. +91 9969538739, shop location  - Mayur Opticals, Chaitanya Nagar,  I.I.T Market, Powai, Mumbai. Maharastra, 400076. aslo this page will include location of shop (google map)
+
+Blog page - for SEO purpose you know the design
+
+there will be more pages make sure to create that to and add content in it with better design and images (again use stock images for demo later ill replace theme in folder )
+
+Other pages like whishlist, cart, account - make sure these pages are also well created and maintain the design of the overall theme. The funcnalities of thiere page should also be well connected.
+
+--------------------------------------------
+
+Backend 
+
+it will be same as wordpress admin pannel. the feature it will include is create, View, Update/Edit, Delete and Mangae Operation. 
+Blog tab, product tab, Orders tab(to view what order has camed of which product and from which customer and for which location) in simple take refrence from woocomerce for orders and product and for other section take refrence from wordpress. Make sure i should have entire controll on creating while creating product and Blogs and entire manage controll for order section so i can update the status and also delete if i dont need that. also the status of it should be updated to coustomer via whatsapp and email.
+
+also a section for adding custom popups and where to show theme in website like on which page and for how many time just like elementor popup builder.
+
+--------------------------------------------
+
+give me prompt for Cloude to make this website. Make sure to mention all the points which are there also make sure the points which are there are roughed though need to polished them and make it more better by keeping the idea same. also inprompt clearly mention this thing - i am new in development stuff i dont know much so i need a copy-paste code which i can directly copy it and paste to my vs code file. also mention about to go step by step like first commands for creating vite project then step by stepp all cocode to copy paste. give the prompt in copyable code block.
