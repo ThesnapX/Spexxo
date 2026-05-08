@@ -10,7 +10,6 @@ const orderSchema = new mongoose.Schema(
     orderNumber: {
       type: String,
       unique: true,
-      required: true,
     },
     items: [
       {
@@ -25,19 +24,28 @@ const orderSchema = new mongoose.Schema(
         },
         name: String,
         image: String,
-        price: Number,
+        price: {
+          type: Number,
+          required: true,
+        },
         quantity: {
           type: Number,
           required: true,
           min: 1,
         },
-        subtotal: Number,
+        subtotal: {
+          type: Number,
+          required: true,
+        },
       },
     ],
     shippingAddress: {
       fullName: String,
       phone: String,
-      street: String,
+      addressLine1: String,
+      addressLine2: String,
+      landmark: String,
+      area: String,
       city: String,
       state: String,
       pincode: String,
@@ -121,13 +129,13 @@ const orderSchema = new mongoose.Schema(
   },
 );
 
-// Generate order number
-orderSchema.pre("save", async function (next) {
-  if (this.isNew) {
+// Generate order number BEFORE validation
+orderSchema.pre("validate", async function (next) {
+  if (this.isNew && !this.orderNumber) {
     const date = new Date();
     const prefix = "SPX";
     const dateStr =
-      date.getFullYear().toString().substr(-2) +
+      date.getFullYear().toString().slice(-2) +
       ("0" + (date.getMonth() + 1)).slice(-2) +
       ("0" + date.getDate()).slice(-2);
     const random = Math.floor(Math.random() * 10000)

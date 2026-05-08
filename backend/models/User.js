@@ -13,6 +13,18 @@ const userSchema = new mongoose.Schema(
       required: [true, "Last name is required"],
       trim: true,
     },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null/undefined values without duplicate errors
+      trim: true,
+      minlength: 3,
+      maxlength: 30,
+      match: [
+        /^[a-zA-Z0-9_]+$/,
+        "Username can only contain letters, numbers, and underscores",
+      ],
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -39,11 +51,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Default delivery address
+    // Default delivery address
+    defaultAddress: {
+      fullName: String,
+      phone: String,
+      addressLine1: String,
+      addressLine2: String,
+      landmark: String,
+      area: String,
+      city: String,
+      state: String,
+      pincode: String,
+    },
     addresses: [
       {
         fullName: String,
         phone: String,
-        street: String,
+        addressLine1: String,
+        addressLine2: String,
+        landmark: String,
+        area: String,
         city: String,
         state: String,
         pincode: String,

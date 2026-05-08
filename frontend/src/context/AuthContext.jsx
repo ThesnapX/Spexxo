@@ -92,7 +92,11 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (profileData) => {
     try {
-      const { data } = await axios.put(`${API_URL}/auth/profile`, profileData);
+      const { data } = await axios.put(
+        `${API_URL}/auth/update-profile`,
+        profileData,
+      );
+      // Set user directly from the response
       setUser(data.user);
       toast.success("Profile updated successfully!");
       return data;
@@ -101,7 +105,6 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
-
   const value = {
     user,
     loading,

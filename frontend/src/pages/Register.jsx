@@ -73,6 +73,27 @@ const Register = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-text mb-1">
+                Username (Optional)
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  @
+                </div>
+                <input
+                  type="text"
+                  name="username"
+                  value={form.username}
+                  onChange={handleChange}
+                  className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  placeholder="your_username"
+                />
+              </div>
+              <p className="text-xs text-text-light mt-1">
+                You can use this to login instead of email
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text mb-1">
                 Email
               </label>
               <input

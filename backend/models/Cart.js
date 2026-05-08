@@ -21,12 +21,6 @@ const cartSchema = new mongoose.Schema(
           min: 1,
           default: 1,
         },
-        variant: {
-          name: String,
-          sku: String,
-          price: Number,
-          attributes: mongoose.Schema.Types.Mixed,
-        },
         price: {
           type: Number,
           required: true,

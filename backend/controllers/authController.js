@@ -8,49 +8,48 @@ import crypto from "crypto";
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone } = req.body;
+    const { firstName, lastName, email, password, phone, username } = req.body;
 
     // Check if user exists
-    const userExists = await User.findOne({ email });
+    const userExists = await User.findOne({
+      $or: [
+        { email: email.toLowerCase() },
+        ...(username ? [{ username: username.toLowerCase() }] : []),
+      ],
+    });
+
     if (userExists) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists with this email",
-      });
+      if (userExists.email === email.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: "User already exists with this email",
+        });
+      }
+      if (username && userExists.username === username.toLowerCase()) {
+        return res.status(400).json({
+          success: false,
+          message: "Username is already taken",
+        });
+      }
     }
 
     // Create user
-    const user = await User.create({
+    const userData = {
       firstName,
       lastName,
-      email,
+      email: email.toLowerCase(),
       password,
       phone,
-    });
+    };
+
+    if (username && username.trim()) {
+      userData.username = username.trim().toLowerCase();
+    }
+
+    const user = await User.create(userData);
 
     // Generate token
     const token = generateToken(user._id);
-
-    // Send welcome email
-    const welcomeEmail = `
-      <h1>Welcome to Spexxo!</h1>
-      <p>Hi ${firstName},</p>
-      <p>Thank you for creating an account with Spexxo. We're excited to have you!</p>
-      <p>Start exploring our premium collection of eyeglasses, sunglasses, and contact lenses.</p>
-      <a href="${process.env.FRONTEND_URL}/shop" style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:4px;">Shop Now</a>
-      <p>If you have any questions, feel free to contact us.</p>
-      <p>Best regards,<br>Team Spexxo</p>
-    `;
-
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: "Welcome to Spexxo!",
-        html: welcomeEmail,
-      });
-    } catch (emailError) {
-      console.log("Welcome email failed to send");
-    }
 
     res.status(201).json({
       success: true,
@@ -59,6 +58,7 @@ export const register = async (req, res) => {
         _id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
+        username: user.username,
         email: user.email,
         phone: user.phone,
         role: user.role,
@@ -73,15 +73,25 @@ export const register = async (req, res) => {
   }
 };
 
-// @desc    Login user
+// @desc    Login user with email or username
 // @route   POST /api/auth/login
 // @access  Public
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user exists
-    const user = await User.findOne({ email }).select("+password");
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email/username and password",
+      });
+    }
+
+    // Find user by email OR username
+    const user = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username: email.toLowerCase() }],
+    }).select("+password");
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -108,10 +118,12 @@ export const login = async (req, res) => {
         _id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
+        username: user.username,
         email: user.email,
         phone: user.phone,
         role: user.role,
         avatar: user.avatar,
+        defaultAddress: user.defaultAddress,
       },
     });
   } catch (error) {
@@ -140,49 +152,207 @@ export const getMe = async (req, res) => {
   }
 };
 
+// @desc    Check username availability
+// @route   GET /api/auth/check-username/:username
+// @access  Public
+export const checkUsername = async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    if (!username || username.length < 3) {
+      return res.json({
+        available: false,
+        message: "Username must be at least 3 characters",
+      });
+    }
+
+    const user = await User.findOne({ username: username.toLowerCase() });
+
+    if (user) {
+      return res.json({
+        available: false,
+        message: "Username is already taken",
+      });
+    }
+
+    res.json({
+      available: true,
+      message: "Username is available",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Update user profile (full)
+// @route   PUT /api/auth/update-profile
+// @access  Private
+export const updateFullProfile = async (req, res) => {
+  try {
+    const { firstName, lastName, username, email, phone } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
+    if (phone !== undefined) user.phone = phone;
+
+    // Username update with uniqueness check
+    if (username !== undefined) {
+      const usernameToSet = username.trim().toLowerCase();
+      if (usernameToSet) {
+        // Validate username format
+        if (!/^[a-zA-Z0-9_]+$/.test(usernameToSet)) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Username can only contain letters, numbers, and underscores",
+          });
+        }
+        if (usernameToSet.length < 3) {
+          return res.status(400).json({
+            success: false,
+            message: "Username must be at least 3 characters",
+          });
+        }
+
+        const existingUser = await User.findOne({
+          username: usernameToSet,
+          _id: { $ne: user._id },
+        });
+
+        if (existingUser) {
+          return res.status(400).json({
+            success: false,
+            message: "Username is already taken",
+          });
+        }
+        user.username = usernameToSet;
+      } else {
+        user.username = undefined;
+      }
+    }
+
+    // Email update with uniqueness check
+    if (email && email.toLowerCase() !== user.email) {
+      const existingUser = await User.findOne({
+        email: email.toLowerCase(),
+        _id: { $ne: user._id },
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is already in use",
+        });
+      }
+      user.email = email.toLowerCase();
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        avatar: user.avatar,
+        defaultAddress: user.defaultAddress,
+      },
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// @desc    Update delivery address
+// @route   PUT /api/auth/delivery-address
+// @access  Private
+export const updateDeliveryAddress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.defaultAddress = {
+      fullName: req.body.fullName || "",
+      phone: req.body.phone || "",
+      addressLine1: req.body.addressLine1 || "",
+      addressLine2: req.body.addressLine2 || "",
+      landmark: req.body.landmark || "",
+      area: req.body.area || "",
+      city: req.body.city || "",
+      state: req.body.state || "",
+      pincode: req.body.pincode || "",
+    };
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      defaultAddress: user.defaultAddress,
+      message: "Delivery address updated successfully",
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // @desc    Forgot password
 // @route   POST /api/auth/forgot-password
 // @access  Public
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
+    const user = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { username: email.toLowerCase() }],
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found with this email",
+        message: "User not found with this email/username",
       });
     }
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(20).toString("hex");
     user.resetPasswordToken = crypto
       .createHash("sha256")
       .update(resetToken)
       .digest("hex");
-    user.resetPasswordExpire = Date.now() + 30 * 60 * 1000; // 30 minutes
+    user.resetPasswordExpire = Date.now() + 30 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    // Send email
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
     const emailHTML = `
       <h1>Password Reset Request</h1>
-      <p>You requested a password reset. Click the link below to reset your password:</p>
-      <a href="${resetUrl}" style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:4px;">Reset Password</a>
-      <p>This link will expire in 30 minutes.</p>
-      <p>If you didn't request this, please ignore this email.</p>
+      <p>Click the link below to reset your password:</p>
+      <a href="${resetUrl}" style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;">Reset Password</a>
+      <p>This link expires in 30 minutes.</p>
+      <p>If you didn't request this, ignore this email.</p>
     `;
 
-    await sendEmail({
-      email: user.email,
-      subject: "Password Reset Request",
-      html: emailHTML,
-    });
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: "Password Reset - Spexxo",
+        html: emailHTML,
+      });
+    } catch (emailError) {
+      console.log("Reset email failed to send");
+    }
 
     res.status(200).json({
       success: true,
-      message: "Password reset email sent",
+      message: "Password reset link sent to your email",
     });
   } catch (error) {
     res.status(500).json({
@@ -210,7 +380,7 @@ export const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "Invalid or expired token",
+        message: "Invalid or expired reset token",
       });
     }
 
@@ -234,7 +404,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-// @desc    Update user profile
+// @desc    Update basic profile (legacy)
 // @route   PUT /api/auth/profile
 // @access  Private
 export const updateProfile = async (req, res) => {
@@ -244,7 +414,7 @@ export const updateProfile = async (req, res) => {
 
     if (firstName) user.firstName = firstName;
     if (lastName) user.lastName = lastName;
-    if (phone) user.phone = phone;
+    if (phone !== undefined) user.phone = phone;
 
     await user.save();
 
@@ -267,6 +437,20 @@ export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const user = await User.findById(req.user._id).select("+password");
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide current and new password",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {

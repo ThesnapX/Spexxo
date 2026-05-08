@@ -74,7 +74,7 @@ const Footer = () => {
           {/* Company Info */}
           <div>
             <h3 className="text-2xl font-bold mb-4">
-              Spe<span className="text-primary">xxo</span>
+              Spe<span className="text-primary">xx</span>o
             </h3>
             <p className="text-gray-400 mb-6 leading-relaxed">
               Your premium destination for eyeglasses, sunglasses, and contact
