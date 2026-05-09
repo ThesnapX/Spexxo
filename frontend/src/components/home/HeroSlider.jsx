@@ -7,21 +7,21 @@ const HeroSlider = () => {
   const heroSlides = [
     {
       id: 1,
-      image: "https://picsum.photos/1600/600?random=1",
+      image: "images/hero-banner/eyeglass.png",
       link: "/shop/eyeglasses",
       alt: "Eyeglasses Collection",
     },
     {
       id: 2,
-      image: "https://picsum.photos/1600/600?random=2",
+      image: "images/hero-banner/sunglasses.png",
       link: "/shop/sunglasses",
       alt: "Sunglasses Collection",
     },
     {
       id: 3,
-      image: "https://picsum.photos/1600/600?random=3",
-      link: "/shop/contact-lens",
-      alt: "Contact Lens Collection",
+      image: "images/hero-banner/eyewear.png",
+      link: "/shop",
+      alt: "All Collection",
     },
   ];
 

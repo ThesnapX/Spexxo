@@ -415,16 +415,16 @@ const MegaMenuContent = ({ type, onClose }) => {
             >
               <div className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden mb-2 border-2 border-transparent group-hover:border-[#3D96EB] transition-all">
                 <img
-                  src={`https://picsum.photos/400/533?random=${type}-${gender}`}
-                  alt={gender}
+                  src={`/images/mega-menu/${type}-${gender}.jpg`}
+                  alt={`${typeLabels[type]} for ${gender}`}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.style.display = "none";
                     e.target.parentElement.innerHTML = `
-                      <div class="w-full h-full bg-gradient-to-br from-${gender === "men" ? "blue" : gender === "women" ? "pink" : "green"}-100 to-${gender === "men" ? "blue" : gender === "women" ? "pink" : "green"}-200 flex items-center justify-center">
-                        <span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span>
-                      </div>
-                    `;
+              <div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                <span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span>
+              </div>
+            `;
                   }}
                 />
               </div>

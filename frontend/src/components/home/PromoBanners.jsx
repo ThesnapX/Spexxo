@@ -4,7 +4,7 @@ const PromoBanners = () => {
   const banners = [
     {
       id: 1,
-      image: "https://picsum.photos/600/500?random=10",
+      image: "images/promo-banner/banner1.png",
       link: "/shop/eyeglasses",
       alt: "Eyeglasses Promo",
       // Use aspectRatio for different shapes:
@@ -13,14 +13,14 @@ const PromoBanners = () => {
     },
     {
       id: 2,
-      image: "https://picsum.photos/600/500?random=11",
+      image: "images/promo-banner/banner2.png",
       link: "/shop/sunglasses",
       alt: "Sunglasses Promo",
       aspectRatio: "aspect-[4/4]", // Match all banners to same ratio
     },
     {
       id: 3,
-      image: "https://picsum.photos/600/500?random=12",
+      image: "images/promo-banner/banner3.png",
       link: "/shop/contact-lens",
       alt: "Contact Lens Promo",
       aspectRatio: "aspect-[4/4]", // Or use different ratios per banner

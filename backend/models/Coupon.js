@@ -21,6 +21,11 @@ const couponSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    discountOn: {
+      type: String,
+      enum: ["product", "delivery", "total"],
+      default: "total",
+    },
     minPurchase: {
       type: Number,
       default: 0,
@@ -36,13 +41,34 @@ const couponSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-    usageLimit: {
+    // Total usage limit across all users
+    totalUsageLimit: {
       type: Number,
+      default: null, // null = unlimited
     },
+    // How many times ONE user can use this coupon
+    perUserLimit: {
+      type: Number,
+      default: 1,
+    },
+    // Track total usage count
     usedCount: {
       type: Number,
       default: 0,
     },
+    // Track which users used this and how many times
+    usedBy: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        count: {
+          type: Number,
+          default: 1,
+        },
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,

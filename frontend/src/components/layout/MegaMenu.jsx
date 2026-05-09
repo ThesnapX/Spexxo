@@ -39,27 +39,32 @@ const MegaMenu = ({ type, onClose }) => {
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4">
           Shop By Gender
         </h3>
-        <div className="space-y-2">
+        <div className="grid grid-cols-3 gap-3">
           {["men", "women", "kids"].map((gender) => (
             <Link
               key={gender}
               to={`/shop?productType=${type}&gender=${gender}`}
-              className="block px-4 py-3 rounded-lg hover:bg-gray-50 transition group"
+              className="group text-center"
               onClick={onClose}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-primary/10 transition">
-                  <span className="text-lg">
-                    {gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}
-                  </span>
-                </div>
-                <div>
-                  <p className="font-medium text-text capitalize">{gender}</p>
-                  <p className="text-xs text-text-light">
-                    View all {gender}'s {typeLabels[type] || type}
-                  </p>
-                </div>
+              <div className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden mb-2 border-2 border-transparent group-hover:border-[#3D96EB] transition-all">
+                <img
+                  src={`/images/mega-menu/${type}-${gender}.jpg`}
+                  alt={`${typeLabels[type]} for ${gender}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    e.target.parentElement.innerHTML = `
+                      <div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                        <span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span>
+                      </div>
+                    `;
+                  }}
+                />
               </div>
+              <p className="text-sm font-medium text-text group-hover:text-[#3D96EB] transition capitalize">
+                {gender}
+              </p>
             </Link>
           ))}
         </div>
