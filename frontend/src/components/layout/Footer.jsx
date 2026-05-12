@@ -73,9 +73,15 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Company Info */}
           <div>
-            <h3 className="text-2xl font-bold mb-4">
-              Spe<span className="text-primary">xx</span>o
-            </h3>
+            <img
+              src="/images/logo-white.png"
+              alt="Spexxo"
+              className="h-8 md:h-12 w-auto "
+              onError={(e) => {
+                e.target.style.display = "none";
+                e.target.nextSibling.style.display = "block";
+              }}
+            />
             <p className="text-gray-400 mb-6 leading-relaxed">
               Your premium destination for eyeglasses, sunglasses, and contact
               lenses. Quality eyewear at affordable prices with free shipping.

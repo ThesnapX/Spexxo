@@ -1,9 +1,5 @@
 import { Link } from "react-router-dom";
-import {
-  HeartIcon,
-  ShoppingBagIcon,
-  StarIcon,
-} from "@heroicons/react/24/outline";
+import { HeartIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
@@ -36,11 +32,15 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
   if (!product) return null;
 
   const discount =
-    product.comparePrice && product.comparePrice > product.price
+    product.comparePrice && product.price > product.comparePrice
       ? Math.round(
-          ((product.comparePrice - product.price) / product.comparePrice) * 100,
+          ((product.price - product.comparePrice) / product.price) * 100,
         )
       : 0;
+
+  const displayPrice = product.comparePrice || product.price;
+  const hasDiscount =
+    product.comparePrice && product.comparePrice < product.price;
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -58,22 +58,21 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
   };
 
   return (
-    <div className="group relative bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-gray-200 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
+    <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
       {/* Image */}
-      <Link
-        to={`/product/${product.slug}`}
-        className="block relative overflow-hidden bg-gray-50"
-      >
-        {product.images?.[0]?.url ? (
-          <img
-            src={product.images[0].url}
-            alt={product.name}
-            className="w-full h-56 md:h-64 object-cover group-hover:scale-110 transition-transform duration-500"
-            loading="lazy"
-          />
-        ) : (
-          <PlaceholderImage className="w-full h-56 md:h-64" />
-        )}
+      <div className="relative overflow-hidden bg-gray-50">
+        <Link to={`/product/${product.slug}`}>
+          {product.images?.[0]?.url ? (
+            <img
+              src={product.images[0].url}
+              alt={product.name}
+              className="w-full h-56 md:h-64 object-cover group-hover:scale-110 transition-transform duration-500"
+              loading="lazy"
+            />
+          ) : (
+            <PlaceholderImage className="w-full h-56 md:h-64" />
+          )}
+        </Link>
 
         {/* Sale Badge */}
         {showSaleBadge && discount > 0 && (
@@ -85,68 +84,56 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
         {/* Wishlist Button */}
         <button
           onClick={handleWishlist}
-          className="absolute top-3 right-3 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:bg-white hover:scale-110 transition-all z-10"
+          className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all z-10"
         >
           {isInWishlist(product._id) ? (
             <HeartSolid className="w-4 h-4 text-red-500" />
           ) : (
-            <HeartIcon className="w-4 h-4 text-gray-600" />
+            <HeartIcon className="w-4 h-4" />
           )}
         </button>
-
-        {/* Quick Add to Cart */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <button
-            onClick={handleAddToCart}
-            className="w-full bg-white text-text py-2.5 rounded-xl font-medium text-sm hover:bg-[#3D96EB] hover:text-white transition-all flex items-center justify-center gap-2"
-          >
-            <ShoppingBagIcon className="w-4 h-4" />
-            Add to Cart
-          </button>
-        </div>
-      </Link>
+      </div>
 
       {/* Info */}
       <div className="p-4">
+        {/* Brand */}
         {product.brand?.name && (
           <p className="text-xs text-text-light mb-1 truncate">
             {product.brand.name}
           </p>
         )}
+
+        {/* Title */}
         <Link to={`/product/${product.slug}`}>
-          <h3 className="font-medium text-text text-sm line-clamp-1 hover:text-[#3D96EB] transition-colors mb-2">
+          <h3 className="font-medium text-sm text-text mb-2 line-clamp-1 hover:text-primary transition">
             {product.name}
           </h3>
         </Link>
 
-        {/* Rating */}
-        <div className="flex items-center gap-1 mb-2">
-          {[...Array(5)].map((_, i) => (
-            <StarIcon
-              key={i}
-              className={`w-3.5 h-3.5 ${
-                i < Math.round(product.ratings?.average || 0)
-                  ? "text-yellow-400 fill-current"
-                  : "text-gray-200"
-              }`}
-            />
-          ))}
-          <span className="text-xs text-text-light ml-1">
-            ({product.ratings?.count || 0})
-          </span>
-        </div>
-
         {/* Price */}
-        <div className="flex items-center gap-2">
-          <span className="text-base font-bold text-text">
-            ₹{product.price?.toLocaleString()}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="font-bold text-text">
+            ₹{displayPrice?.toLocaleString()}
           </span>
-          {product.comparePrice && product.comparePrice > product.price && (
+          {hasDiscount && (
             <span className="text-sm text-gray-400 line-through">
-              ₹{product.comparePrice.toLocaleString()}
+              ₹{product.price?.toLocaleString()}
+            </span>
+          )}
+          {discount > 0 && (
+            <span className="text-xs font-semibold text-green-600">
+              ({discount}% off)
             </span>
           )}
         </div>
+
+        {/* Add to Cart */}
+        <button
+          onClick={handleAddToCart}
+          className="w-full py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary hover:text-white transition flex items-center justify-center gap-2"
+        >
+          <ShoppingBagIcon className="w-4 h-4" /> Add to Cart
+        </button>
       </div>
     </div>
   );

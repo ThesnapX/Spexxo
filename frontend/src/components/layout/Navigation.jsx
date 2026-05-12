@@ -85,9 +85,9 @@ const Navigation = () => {
             {/* Logo */}
             <Link to="/" className="flex-shrink-0">
               <img
-                src="/images/logo.png"
+                src="/images/logo-black.png"
                 alt="Spexxo"
-                className="h-8 md:h-10 w-auto"
+                className="h-8 md:h-12 w-auto "
                 onError={(e) => {
                   e.target.style.display = "none";
                   e.target.nextSibling.style.display = "block";
@@ -108,6 +108,21 @@ const Navigation = () => {
 
               {/* Nav Links */}
               <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Shop - All Products */}
+                <NavLink
+                  to="/shop"
+                  end
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? "text-[#3D96EB] bg-[#EBF4FC]"
+                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
+                    }`
+                  }
+                >
+                  Shop
+                </NavLink>
+
                 {/* Eyeglasses */}
                 <div
                   className="relative"
@@ -171,7 +186,7 @@ const Navigation = () => {
                   </NavLink>
                 </div>
 
-                {/* Contact Us */}
+                {/* Contact Us
                 <NavLink
                   to="/contact"
                   className={({ isActive }) =>
@@ -183,7 +198,7 @@ const Navigation = () => {
                   }
                 >
                   Contact Us
-                </NavLink>
+                </NavLink> */}
               </div>
             </div>
 

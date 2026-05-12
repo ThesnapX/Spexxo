@@ -30,7 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
               <WishlistProvider>
                 <App />
                 <Toaster
-                  position="top-right"
+                  position="top-center"
                   toastOptions={{
                     duration: 3000,
                     style: {

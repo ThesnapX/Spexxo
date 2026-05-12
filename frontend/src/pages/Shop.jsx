@@ -23,6 +23,8 @@ const Shop = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get("sort") || "newest");
+
+  // LOCAL STATE for inputs (prevents cursor jumping)
   const [searchInput, setSearchInput] = useState(
     searchParams.get("search") || "",
   );
@@ -32,6 +34,7 @@ const Shop = () => {
   const [priceMaxInput, setPriceMaxInput] = useState(
     searchParams.get("maxPrice") || "",
   );
+
   const searchTimeout = useRef(null);
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
@@ -39,9 +42,7 @@ const Shop = () => {
   // Sync sortBy with URL
   useEffect(() => {
     const urlSort = searchParams.get("sort");
-    if (urlSort && urlSort !== sortBy) {
-      setSortBy(urlSort);
-    }
+    if (urlSort && urlSort !== sortBy) setSortBy(urlSort);
   }, [searchParams]);
 
   // Get current filter values from URL
@@ -64,7 +65,7 @@ const Shop = () => {
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
 
-  // Set productType from URL path and CLEAR other filters when nav changes
+  // Set productType from URL path
   useEffect(() => {
     if (categorySlug) {
       const typeMap = {
@@ -74,50 +75,105 @@ const Shop = () => {
       };
       const mappedType = typeMap[categorySlug];
       if (mappedType) {
-        // Reset all filters and set only productType
         const params = new URLSearchParams();
         params.set("productType", mappedType);
         setSearchParams(params, { replace: true });
-        // Reset local states
         setSortBy("newest");
         setSearchInput("");
         setPriceMinInput("");
         setPriceMaxInput("");
       }
     }
-  }, [categorySlug]); // Re-run when categorySlug changes
+  }, [categorySlug]);
 
-  // Sync search input with URL
+  // Sync inputs with URL changes
   useEffect(() => {
     setSearchInput(searchQuery);
-  }, [searchQuery]);
-
-  // Sync price inputs with URL
-  useEffect(() => {
     setPriceMinInput(minPrice);
     setPriceMaxInput(maxPrice);
-  }, [minPrice, maxPrice]);
+  }, [searchQuery, minPrice, maxPrice]);
 
-  // Determine page title
+  // Page title
   const getPageTitle = () => {
     if (productType) {
-      const typeLabels = {
-        eyeglasses: "Eyeglasses",
-        sunglasses: "Sunglasses",
-        contactlens: "Contact Lenses",
-      };
-      return typeLabels[productType] || "All Products";
+      return (
+        {
+          eyeglasses: "Eyeglasses",
+          sunglasses: "Sunglasses",
+          contactlens: "Contact Lenses",
+        }[productType] || "All Products"
+      );
     }
     return "All Products";
   };
 
   // Debounced search
-  const handleSearchChange = (value) => {
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
     setSearchInput(value);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       updateFilter("search", value);
-    }, 400);
+    }, 500);
+  };
+
+  // Update filter
+  const updateFilter = (key, value) => {
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    params.set("page", "1");
+    setSearchParams(params);
+  };
+
+  // Toggle array filter (multi-select)
+  const toggleArrayFilter = (key, value, currentArray) => {
+    const params = new URLSearchParams(searchParams);
+    let newArray = [...currentArray];
+    if (newArray.includes(value)) {
+      newArray = newArray.filter((v) => v !== value);
+    } else {
+      newArray.push(value);
+    }
+    if (newArray.length > 0) {
+      params.set(key, newArray.join(","));
+    } else {
+      params.delete(key);
+    }
+    params.set("page", "1");
+    setSearchParams(params);
+  };
+
+  // Single value filter
+  const setSingleFilter = (key, value) => {
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
+    params.set("page", "1");
+    setSearchParams(params);
+  };
+
+  // Apply price filter
+  const applyPriceFilter = () => {
+    updateFilter("minPrice", priceMinInput);
+    updateFilter("maxPrice", priceMaxInput);
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    const params = new URLSearchParams();
+    if (productType) params.set("productType", productType);
+    setSearchParams(params);
+    setSortBy("newest");
+    setSearchInput("");
+    setPriceMinInput("");
+    setPriceMaxInput("");
   };
 
   // Build query for API
@@ -155,8 +211,9 @@ const Shop = () => {
   const { data, isLoading } = useQuery({
     queryKey: ["products", buildQueryString()],
     queryFn: async () => {
-      const queryStr = buildQueryString();
-      const { data } = await axios.get(`${API_URL}/products?${queryStr}`);
+      const { data } = await axios.get(
+        `${API_URL}/products?${buildQueryString()}`,
+      );
       return data;
     },
   });
@@ -176,65 +233,6 @@ const Shop = () => {
       return data.brands || [];
     },
   });
-
-  // Toggle array filter
-  const toggleArrayFilter = (key, value, currentArray) => {
-    const params = new URLSearchParams(searchParams);
-    let newArray = [...currentArray];
-    if (newArray.includes(value)) {
-      newArray = newArray.filter((v) => v !== value);
-    } else {
-      newArray.push(value);
-    }
-    if (newArray.length > 0) {
-      params.set(key, newArray.join(","));
-    } else {
-      params.delete(key);
-    }
-    params.set("page", "1");
-    setSearchParams(params);
-  };
-
-  // Single value filter (radio style for category)
-  const setSingleFilter = (key, value) => {
-    const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    params.set("page", "1");
-    setSearchParams(params);
-  };
-
-  // Update filter
-  const updateFilter = (key, value) => {
-    const params = new URLSearchParams(searchParams);
-    if (value) {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    params.set("page", "1");
-    setSearchParams(params);
-  };
-
-  // Apply price filter
-  const applyPriceFilter = () => {
-    updateFilter("minPrice", priceMinInput);
-    updateFilter("maxPrice", priceMaxInput);
-  };
-
-  // Clear all filters
-  const clearAllFilters = () => {
-    const params = new URLSearchParams();
-    if (productType) params.set("productType", productType);
-    setSearchParams(params);
-    setSortBy("newest");
-    setPriceMinInput("");
-    setPriceMaxInput("");
-    setSearchInput("");
-  };
 
   const hasActiveFilters =
     searchQuery ||
@@ -281,35 +279,42 @@ const Shop = () => {
         </button>
       </div>
       <div className="p-4">
-        <p className="text-xs text-text-light mb-1">
-          {product.brand?.name || ""}
-        </p>
+        {/* Brand */}
+        {product.brand?.name && (
+          <p className="text-xs text-text-light mb-1 truncate">
+            {product.brand.name}
+          </p>
+        )}
+
+        {/* Title */}
         <Link to={`/product/${product.slug}`}>
           <h3 className="font-medium text-sm text-text mb-2 line-clamp-1 hover:text-primary transition">
             {product.name}
           </h3>
         </Link>
-        <div className="flex items-center gap-1 mb-2">
-          {[...Array(5)].map((_, i) => (
-            <StarIcon
-              key={i}
-              className={`w-3.5 h-3.5 ${i < Math.round(product.ratings?.average || 0) ? "text-yellow-400 fill-current" : "text-gray-200"}`}
-            />
-          ))}
-          <span className="text-xs text-text-light ml-1">
-            ({product.ratings?.count || 0})
-          </span>
-        </div>
+
+        {/* Price */}
         <div className="flex items-center gap-2">
           <span className="font-bold text-text">
             ₹{(product.comparePrice || product.price)?.toLocaleString()}
           </span>
-          {product.comparePrice && (
+          {product.comparePrice && product.comparePrice < product.price && (
             <span className="text-sm text-gray-400 line-through">
               ₹{product.price?.toLocaleString()}
             </span>
           )}
+          {product.comparePrice && product.price > product.comparePrice && (
+            <span className="text-xs font-semibold text-green-600">
+              (
+              {Math.round(
+                ((product.price - product.comparePrice) / product.price) * 100,
+              )}
+              % off)
+            </span>
+          )}
         </div>
+
+        {/* Add to Cart */}
         <button
           onClick={() => {
             addToCart(product._id, 1);
@@ -323,42 +328,38 @@ const Shop = () => {
     </div>
   );
 
-  // Category - Radio style (single select)
+  // Category - Radio Single Select
   const CategoryFilter = () => (
     <div>
       <h3 className="font-semibold text-text text-sm mb-2">Categories</h3>
       <div className="space-y-1 max-h-44 overflow-y-auto">
         <label
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
-            !categoryFilter ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
-          }`}
+          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${!categoryFilter ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
         >
           <input
             type="radio"
             name="category"
             checked={!categoryFilter}
             onChange={() => setSingleFilter("category", "")}
-            className="w-4 h-4 text-primary focus:ring-primary"
+            className="w-4 h-4 text-primary"
           />
           <span
             className={`text-sm ${!categoryFilter ? "text-primary font-medium" : "text-text-light"}`}
           >
-            All
+            All Categories
           </span>
         </label>
         {categories?.map((cat) => (
           <label
             key={cat._id}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
-              categoryFilter === cat.slug ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
-            }`}
+            className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${categoryFilter === cat.slug ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
           >
             <input
               type="radio"
               name="category"
               checked={categoryFilter === cat.slug}
               onChange={() => setSingleFilter("category", cat.slug)}
-              className="w-4 h-4 text-primary focus:ring-primary"
+              className="w-4 h-4 text-primary"
             />
             <span
               className={`text-sm ${categoryFilter === cat.slug ? "text-primary font-medium" : "text-text-light"}`}
@@ -371,7 +372,7 @@ const Shop = () => {
     </div>
   );
 
-  // Multi-Select Checkbox Group
+  // Multi-Select Checkbox
   const FilterCheckboxGroup = ({
     title,
     options,
@@ -394,13 +395,10 @@ const Shop = () => {
               ? opt.charAt(0).toUpperCase() + opt.slice(1).replace("-", " ")
               : opt.label || opt.name;
           const isChecked = selectedValues.includes(value);
-
           return (
             <label
               key={value}
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
-                isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
-              }`}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
             >
               <input
                 type="checkbox"
@@ -408,7 +406,7 @@ const Shop = () => {
                 onChange={() =>
                   toggleArrayFilter(filterKey, value, selectedValues)
                 }
-                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-0"
+                className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
               <span
                 className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
@@ -424,7 +422,7 @@ const Shop = () => {
 
   const FilterSection = () => (
     <div className="space-y-5">
-      {/* Search with debounce */}
+      {/* Search - STABLE INPUT */}
       <div>
         <h3 className="font-semibold text-text text-sm mb-2">Search</h3>
         <div className="relative">
@@ -432,17 +430,17 @@ const Shop = () => {
             type="text"
             placeholder="Search products..."
             value={searchInput}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full pl-3 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
           />
           <MagnifyingGlassIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
       </div>
 
-      {/* Categories - Radio (Single Select) */}
+      {/* Categories */}
       {categories?.length > 0 && <CategoryFilter />}
 
-      {/* Gender - Multi Select */}
+      {/* Gender */}
       <FilterCheckboxGroup
         title="Gender"
         options={["men", "women", "unisex", "kids"]}
@@ -450,7 +448,7 @@ const Shop = () => {
         filterKey="gender"
       />
 
-      {/* Price Range - Stable inputs */}
+      {/* Price Range */}
       <div>
         <h3 className="font-semibold text-text text-sm mb-2">Price Range</h3>
         <div className="flex gap-2">
@@ -459,24 +457,17 @@ const Shop = () => {
             placeholder="Min"
             value={priceMinInput}
             onChange={(e) => setPriceMinInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") applyPriceFilter();
-            }}
-            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
           />
           <input
             type="number"
             placeholder="Max"
             value={priceMaxInput}
             onChange={(e) => setPriceMaxInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") applyPriceFilter();
-            }}
-            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+            className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
           />
         </div>
         <button
-          type="button"
           onClick={applyPriceFilter}
           className="w-full mt-2 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-dark transition"
         >
@@ -543,12 +534,15 @@ const Shop = () => {
         title={getPageTitle()}
         description={`Browse our ${getPageTitle().toLowerCase()} collection at Spexxo.`}
       />
-
       <div className="pt-20 md:pt-24 pb-16">
         <div className="container-custom">
           <nav className="flex items-center gap-2 text-sm text-text-light mb-4">
             <Link to="/" className="hover:text-primary transition">
               Home
+            </Link>
+            <span>/</span>
+            <Link to="/shop" className="hover:text-primary transition">
+              Shop
             </Link>
             <span>/</span>
             <span className="text-text font-medium">{getPageTitle()}</span>
@@ -576,7 +570,7 @@ const Shop = () => {
                   setSortBy(e.target.value);
                   updateFilter("sort", e.target.value);
                 }}
-                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm"
               >
                 <option value="newest">Newest First</option>
                 <option value="price-low">Price: Low to High</option>
@@ -625,11 +619,7 @@ const Shop = () => {
                         <button
                           key={i}
                           onClick={() => updateFilter("page", String(i + 1))}
-                          className={`w-10 h-10 rounded-lg text-sm font-medium transition ${
-                            currentPage === i + 1
-                              ? "bg-primary text-white"
-                              : "bg-gray-100 text-text hover:bg-gray-200"
-                          }`}
+                          className={`w-10 h-10 rounded-lg text-sm font-medium transition ${currentPage === i + 1 ? "bg-primary text-white" : "bg-gray-100 text-text hover:bg-gray-200"}`}
                         >
                           {i + 1}
                         </button>

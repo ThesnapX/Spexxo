@@ -1,89 +1,125 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
-import LoadingSkeleton from "../common/LoadingSkeleton";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const categoryData = [
+  {
+    name: "Shop By Gender",
+    image: "images/bento-cards/shop-by-gender.png",
+    link: "/shop",
+  },
+  {
+    name: "Explore Collection",
+    image: "images/bento-cards/explore-collections.png",
+    link: "/shop",
+  },
+  {
+    name: "Blue Cut Glasses",
+    image: "images/bento-cards/blue-cut.png",
+    link: "/shop?lensType=blue-cut",
+  },
+  {
+    name: "Polarized Glasses",
+    image: "images/bento-cards/polarized.png",
+    link: "/shop?lensType=polarized",
+  },
+  {
+    name: "Scratch Resistant",
+    image: "images/bento-cards/scratch-resistent.png",
+    link: "/shop?frameMaterial=titanium",
+  },
+  {
+    name: "UV Protection",
+    image: "images/bento-cards/uv-protection.png",
+    link: "/shop/sunglasses",
+  },
+];
 
 const BentoCategoryGrid = () => {
-  const { data: categories, isLoading } = useQuery({
-    queryKey: ["categories-home"],
-    queryFn: async () => {
-      try {
-        const { data } = await axios.get(`${API_URL}/categories`);
-        return data.categories?.slice(0, 6) || [];
-      } catch {
-        return [];
-      }
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <section className="container-custom py-8">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-          <LoadingSkeleton type="category" count={6} />
-        </div>
-      </section>
-    );
-  }
-
-  if (!categories || categories.length === 0) {
-    return null; // Don't show section if no categories
-  }
-
-  // Bento grid layout
-  const gridLayout = [
-    "md:col-span-1 md:row-span-2", // Large item
-    "md:col-span-1 md:row-span-1",
-    "md:col-span-1 md:row-span-1",
-    "md:col-span-1 md:row-span-1",
-    "md:col-span-1 md:row-span-1",
-    "md:col-span-1 md:row-span-1",
-  ];
+  if (!categoryData || categoryData.length === 0) return null;
 
   return (
-    <section className="container-custom py-8">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 auto-rows-[150px] md:auto-rows-[180px]">
-        {categories.slice(0, 6).map((category, index) => (
-          <Link
-            key={category._id}
-            to={`/shop?category=${category.slug}`}
-            className={`group relative rounded-2xl overflow-hidden transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-              index === 0 ? "md:col-span-1 md:row-span-2" : ""
-            }`}
-          >
-            {category.image?.url ? (
+    <section className="container-custom py-6 md:py-8">
+      {/* ============ MOBILE ONLY ============ */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {/* Card 1 - Square 1:1 full width */}
+        <Link
+          to={categoryData[0].link}
+          className="block w-full aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <img
+            src={categoryData[0].image}
+            alt=""
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+          />
+        </Link>
+
+        {/* Card 2 - Full width */}
+        <Link
+          to={categoryData[1].link}
+          className="block w-full aspect-[16/10] rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <img
+            src={categoryData[1].image}
+            alt=""
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+          />
+        </Link>
+
+        {/* Cards 3-6 - 2x2 grid */}
+        <div className="grid grid-cols-2 gap-3">
+          {categoryData.slice(2, 6).map((card, i) => (
+            <Link
+              key={i}
+              to={card.link}
+              className="block w-full aspect-square rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+            >
               <img
-                src={category.image.url}
-                alt={category.name}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                loading="lazy"
+                src={card.image}
+                alt=""
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
               />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                <span className="text-4xl md:text-5xl opacity-30">
-                  {index === 0
-                    ? "👓"
-                    : index === 1
-                      ? "🕶️"
-                      : index === 2
-                        ? "👩"
-                        : index === 3
-                          ? "👨"
-                          : index === 4
-                            ? "👶"
-                            : "🔵"}
-                </span>
-              </div>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4">
-              <h3 className="text-white font-semibold text-sm md:text-base">
-                {category.name}
-              </h3>
-              <p className="text-white/70 text-xs mt-1">Shop Now →</p>
-            </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ============ TABLET & DESKTOP ============ */}
+      <div className="hidden md:grid md:grid-cols-5 gap-3 lg:gap-4">
+        {/* Card 1 - 2 cols × 4 rows */}
+        <Link
+          to={categoryData[0].link}
+          className="block col-span-2 row-span-4 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <img
+            src={categoryData[0].image}
+            alt=""
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+          />
+        </Link>
+
+        {/* Card 2 - 1 col × 4 rows (Full height) */}
+        <Link
+          to={categoryData[1].link}
+          className="block col-span-1 row-span-4 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <img
+            src={categoryData[1].image}
+            alt=""
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+          />
+        </Link>
+
+        {/* Cards 3-6 - Each 1 col × 2 rows */}
+        {categoryData.slice(2, 6).map((card, i) => (
+          <Link
+            key={i}
+            to={card.link}
+            className="block col-span-1 row-span-2 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+          >
+            <img
+              src={card.image}
+              alt=""
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+            />
           </Link>
         ))}
       </div>

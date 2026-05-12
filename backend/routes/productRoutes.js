@@ -10,8 +10,13 @@ import { protect, admin } from "../middleware/auth.js";
 
 const router = express.Router();
 
+// IMPORTANT: GET all products with filters - MUST come before /:slug
 router.get("/", getProducts);
+
+// GET single product by slug
 router.get("/:slug", getProduct);
+
+// Admin routes
 router.post("/", protect, admin, createProduct);
 router.put("/:id", protect, admin, updateProduct);
 router.delete("/:id", protect, admin, deleteProduct);

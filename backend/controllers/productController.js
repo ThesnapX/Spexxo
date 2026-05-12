@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
-
+import Category from "../models/Category.js";
+import Brand from "../models/Brand.js";
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
@@ -28,37 +29,72 @@ export const getProducts = async (req, res) => {
 
     const query = { isActive: true };
 
-    // Filters
+    // Search
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
-        { shortDescription: { $regex: search, $options: "i" } },
+        { sku: { $regex: search, $options: "i" } },
       ];
     }
-    if (category) query.category = category;
-    if (brand) query.brand = brand;
-    if (gender) query.gender = gender;
-    if (productType) query.productType = productType;
-    if (frameShape) query.frameShape = frameShape;
-    if (frameColor) query.frameColor = { $regex: frameColor, $options: "i" };
-    if (lensType) query.lensType = lensType;
-    if (isFeatured) query.isFeatured = true;
-    if (isTrending) query.isTrending = true;
-    if (isNewArrival) query.isNewArrival = true;
-    if (isBestSeller) query.isBestSeller = true;
 
-    // Price filter
+    // Category filter - match by slug
+    if (category) {
+      const cat = await Category.findOne({ slug: category });
+      if (cat) {
+        query.category = cat._id;
+      }
+    }
+
+    // Brand filter - match by slug (for multiple)
+    if (brand) {
+      const brandSlugs = brand.split(",");
+      const brands = await Brand.find({ slug: { $in: brandSlugs } });
+      if (brands.length > 0) {
+        query.brand = { $in: brands.map((b) => b._id) };
+      }
+    }
+
+    // Gender filter
+    if (gender) {
+      const genders = gender.split(",");
+      query.gender = { $in: genders };
+    }
+
+    // Product type
+    if (productType) {
+      query.productType = productType;
+    }
+
+    // Frame shape
+    if (frameShape) {
+      const shapes = frameShape.split(",");
+      query.frameShape = { $in: shapes };
+    }
+
+    // Lens type
+    if (lensType) {
+      const types = lensType.split(",");
+      query.lensType = { $in: types };
+    }
+
+    // Price range
     if (minPrice || maxPrice) {
       query.price = {};
       if (minPrice) query.price.$gte = Number(minPrice);
       if (maxPrice) query.price.$lte = Number(maxPrice);
     }
 
-    // Rating filter
+    // Rating
     if (rating) {
       query["ratings.average"] = { $gte: Number(rating) };
     }
+
+    // Flags
+    if (isFeatured) query.isFeatured = true;
+    if (isTrending) query.isTrending = true;
+    if (isNewArrival) query.isNewArrival = true;
+    if (isBestSeller) query.isBestSeller = true;
 
     // Sort
     let sortOption = {};
@@ -84,6 +120,9 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
+    console.log("Query:", JSON.stringify(query));
+    console.log("Sort:", sortOption);
+
     const [products, total] = await Promise.all([
       Product.find(query)
         .populate("category", "name slug")
@@ -105,6 +144,7 @@ export const getProducts = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Get products error:", error);
     res.status(400).json({
       success: false,
       message: error.message,

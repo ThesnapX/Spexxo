@@ -78,7 +78,7 @@ const ProductCarousel = ({
             1024: { slidesPerView: 4 },
             1280: { slidesPerView: 5 },
           }}
-          className="product-carousel"
+          className="product-carousel !overflow-visible !px-1 !py-2"
         >
           {products.map((product) => (
             <SwiperSlide key={product._id}>

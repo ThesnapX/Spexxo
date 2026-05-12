@@ -469,17 +469,30 @@ const Products = () => {
 
                       {/* Stock */}
                       <td className="p-4">
-                        <span
-                          className={`text-sm font-medium ${
-                            (product.stock || 0) > 10
-                              ? "text-green-600"
-                              : (product.stock || 0) > 0
-                                ? "text-orange-600"
-                                : "text-red-600"
-                          }`}
-                        >
-                          {product.stock || 0}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span
+                            className={`text-sm font-medium ${
+                              (product.stock || 0) > 10
+                                ? "text-green-600"
+                                : (product.stock || 0) > 0
+                                  ? "text-orange-600"
+                                  : "text-red-600"
+                            }`}
+                          >
+                            {product.stock || 0}
+                          </span>
+                          {(product.stock || 0) === 0 && (
+                            <span className="text-xs text-red-500 font-medium">
+                              Out of Stock!
+                            </span>
+                          )}
+                          {(product.stock || 0) > 0 &&
+                            (product.stock || 0) <= 3 && (
+                              <span className="text-xs text-orange-500 font-medium">
+                                Low Stock!
+                              </span>
+                            )}
+                        </div>
                       </td>
 
                       {/* Actions */}
