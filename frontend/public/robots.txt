@@ -2,4 +2,12 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /account
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+
 Sitemap: https://spexxo.com/sitemap.xml
+
+# Crawl delay
+Crawl-delay: 10

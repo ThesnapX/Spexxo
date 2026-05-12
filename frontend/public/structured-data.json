@@ -1,0 +1,26 @@
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Spexxo",
+  "url": "https://spexxo.com",
+  "logo": "https://spexxo.com/images/logo.png",
+  "description": "Premium eyeglasses, sunglasses & contact lenses online store",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Chaitanya Nagar, I.I.T Market, Powai",
+    "addressLocality": "Mumbai",
+    "addressRegion": "Maharashtra",
+    "postalCode": "400076",
+    "addressCountry": "IN"
+  },
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+91-9969538739",
+    "contactType": "customer service",
+    "email": "satyapatanakar5@gmail.com"
+  },
+  "sameAs": [
+    "https://www.instagram.com/spexxo",
+    "https://www.facebook.com/spexxo"
+  ]
+}

@@ -21,6 +21,7 @@ import popupRoutes from "./routes/popupRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
+import generateSitemap from "./utils/sitemapGenerator.js";
 
 dotenv.config();
 
@@ -29,9 +30,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Middleware
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://spexxo.vercel.app",
+  "https://spexxo.com",
+  "https://www.spexxo.com",
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
   }),
 );
@@ -124,4 +140,14 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 API available at http://localhost:${PORT}/api`);
+});
+
+// Generate sitemap
+app.get("/api/sitemap", async (req, res) => {
+  try {
+    await generateSitemap();
+    res.json({ success: true, message: "Sitemap generated" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
