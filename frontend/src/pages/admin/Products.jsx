@@ -147,34 +147,31 @@ const Products = () => {
             )}
 
             {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-text-light">Product Name</p>
-                <p className="font-medium text-text">{product.name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-light">SKU</p>
-                <p className="font-medium text-text">{product.sku || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-light">Category</p>
-                <p className="font-medium text-text">{categoryName}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-light">Brand</p>
-                <p className="font-medium text-text">{brandName}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-light">Product Type</p>
-                <p className="font-medium text-text capitalize">
-                  {product.productType}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-text-light">Gender</p>
-                <p className="font-medium text-text capitalize">
-                  {product.gender}
-                </p>
+            <div>
+              <p className="text-xs text-text-light mb-2">Frame Details</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <span className="text-xs text-text-light">Shape: </span>
+                  <span className="text-sm">
+                    {product.frameShape?.split(",").join(", ") || "N/A"}
+                  </span>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <span className="text-xs text-text-light">Material: </span>
+                  <span className="text-sm">
+                    {product.frameMaterial?.split(",").join(", ") || "N/A"}
+                  </span>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <span className="text-xs text-text-light">Color: </span>
+                  <span className="text-sm">{product.frameColor || "N/A"}</span>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <span className="text-xs text-text-light">Lens: </span>
+                  <span className="text-sm">
+                    {product.lensType?.split(",").join(", ") || "N/A"}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -205,7 +202,7 @@ const Products = () => {
             </div>
 
             {/* Frame Details */}
-            <div>
+            {/* <div>
               <p className="text-xs text-text-light mb-2">Frame Details</p>
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-gray-50 p-2 rounded-lg">
@@ -231,13 +228,13 @@ const Products = () => {
                   </span>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Specifications */}
             {product.specifications?.length > 0 && (
               <div>
                 <p className="text-xs text-text-light mb-2">Dimensions</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                   {product.specifications.map((spec, i) => (
                     <div
                       key={i}

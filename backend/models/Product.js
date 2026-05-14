@@ -36,9 +36,7 @@ const productSchema = new mongoose.Schema(
       type: String,
     },
     category: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Category",
-      required: true,
+      type: String, // Now stores comma-separated IDs like "id1,id2,id3"
     },
     brand: {
       type: mongoose.Schema.Types.ObjectId,
@@ -56,28 +54,15 @@ const productSchema = new mongoose.Schema(
     },
     frameShape: {
       type: String,
-      enum: [
-        "rectangle",
-        "round",
-        "cat-eye",
-        "square",
-        "oval",
-        "aviator",
-        "wayfarer",
-        "rimless",
-        "other",
-      ],
+      // Supports multiple values like "Rectangle,Round,Cat Eye"
     },
     frameMaterial: {
       type: String,
-      enum: [
-        "metal",
-        "plastic",
-        "acetate",
-        "titanium",
-        "stainless-steel",
-        "other",
-      ],
+      // Supports multiple values like "Metal,Acetate,Titanium"
+    },
+    lensType: {
+      type: String,
+      // Supports multiple values like "Blue Cut,UV Protection,Polarized"
     },
     frameWidth: {
       type: Number,
@@ -93,18 +78,6 @@ const productSchema = new mongoose.Schema(
     },
     frameColor: {
       type: String,
-    },
-    lensType: {
-      type: String,
-      enum: [
-        "single-vision",
-        "bifocal",
-        "progressive",
-        "blue-cut",
-        "photochromic",
-        "polarized",
-        "none",
-      ],
     },
     lensMaterial: {
       type: String,

@@ -18,13 +18,7 @@ const Categories = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    productType: "",
-    gender: "",
-    sortOrder: "0",
-  });
+  const [form, setForm] = useState({ name: "" });
   const queryClient = useQueryClient();
 
   const { data: categories, isLoading } = useQuery({
@@ -83,13 +77,7 @@ const Categories = () => {
   });
 
   const resetForm = () => {
-    setForm({
-      name: "",
-      description: "",
-      productType: "",
-      gender: "",
-      sortOrder: "0",
-    });
+    setForm({ name: "" });
     setImageFile(null);
     setImagePreview(null);
     setEditCategory(null);
@@ -108,13 +96,7 @@ const Categories = () => {
 
   const handleEdit = (cat) => {
     setEditCategory(cat);
-    setForm({
-      name: cat.name,
-      description: cat.description || "",
-      productType: cat.productType || "",
-      gender: cat.gender || "",
-      sortOrder: cat.sortOrder?.toString() || "0",
-    });
+    setForm({ name: cat.name });
     setImagePreview(cat.image?.url || null);
     setShowForm(true);
   };
@@ -138,11 +120,8 @@ const Categories = () => {
       }
     }
 
-    const payload = {
-      ...form,
-      sortOrder: Number(form.sortOrder),
-      image: imageData,
-    };
+    const payload = { name: form.name, image: imageData };
+
     if (editCategory) {
       updateMutation.mutate({ id: editCategory._id, data: payload });
     } else {
@@ -164,13 +143,13 @@ const Categories = () => {
             resetForm();
             setShowForm(!showForm);
           }}
-          className="btn-primary flex  items-center gap-2 text-sm"
+          className="btn-primary text-sm"
         >
-          <PlusIcon className="w-5 h-5" />
-          <p>Add Category</p>
+          <PlusIcon className="w-5 h-5" /> Add Category
         </button>
       </div>
 
+      {/* Add/Edit Form */}
       {showForm && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
@@ -181,132 +160,30 @@ const Categories = () => {
               <XMarkIcon className="w-6 h-6 text-gray-400" />
             </button>
           </div>
-          <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          >
+          <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+            {/* Category Name */}
             <div>
-              <label className="block text-sm font-medium mb-1">Name *</label>
+              <label className="block text-sm font-medium mb-1">
+                Category Name *
+              </label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
+                placeholder="e.g. Men Eyeglasses"
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Sort Order
-              </label>
-              <input
-                type="number"
-                value={form.sortOrder}
-                onChange={(e) =>
-                  setForm({ ...form, sortOrder: e.target.value })
-                }
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Product Type *
-              </label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {[
-                  { value: "eyeglasses", label: "Eyeglasses" },
-                  { value: "sunglasses", label: "Sunglasses" },
-                  { value: "contactlens", label: "Contact Lens" },
-                ].map((type) => (
-                  <label
-                    key={type.value}
-                    className={`px-4 py-2 rounded-full text-sm cursor-pointer border-2 transition-all select-none ${
-                      form.productType?.includes(type.value)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={form.productType?.includes(type.value) || false}
-                      onChange={(e) => {
-                        const currentTypes = form.productType
-                          ? form.productType.split(",")
-                          : [];
-                        let newTypes;
-                        if (e.target.checked) {
-                          newTypes = [...currentTypes, type.value];
-                        } else {
-                          newTypes = currentTypes.filter(
-                            (t) => t !== type.value,
-                          );
-                        }
-                        setForm({ ...form, productType: newTypes.join(",") });
-                      }}
-                    />
-                    {type.label}
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-text-light mt-2">
-                Select all applicable types for this category
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Gender *</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {[
-                  { value: "men", label: "Men", icon: "" },
-                  { value: "women", label: "Women", icon: "" },
-                  { value: "kids", label: "Kids", icon: "" },
-                  { value: "unisex", label: "Unisex", icon: "" },
-                ].map((gender) => (
-                  <label
-                    key={gender.value}
-                    className={`px-4 py-2 rounded-full text-sm cursor-pointer border-2 transition-all select-none ${
-                      form.gender?.includes(gender.value)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={form.gender?.includes(gender.value) || false}
-                      onChange={(e) => {
-                        const currentGenders = form.gender
-                          ? form.gender.split(",")
-                          : [];
-                        let newGenders;
-                        if (e.target.checked) {
-                          newGenders = [...currentGenders, gender.value];
-                        } else {
-                          newGenders = currentGenders.filter(
-                            (g) => g !== gender.value,
-                          );
-                        }
-                        setForm({ ...form, gender: newGenders.join(",") });
-                      }}
-                    />
-                    {/* <span className="mr-1">{gender.icon}</span> */}
-                    {gender.label}
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-text-light mt-2">
-                Select all applicable genders for this category
-              </p>
-            </div>
 
-            {/* Image Upload */}
-            <div className="md:col-span-2">
+            {/* Category Image */}
+            <div>
               <label className="block text-sm font-medium mb-2">
                 Category Image
               </label>
               <div className="flex items-center gap-4">
                 {imagePreview ? (
-                  <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200">
+                  <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-gray-200">
                     <img
                       src={imagePreview}
                       alt="Preview"
@@ -318,14 +195,14 @@ const Categories = () => {
                         setImagePreview(null);
                         setImageFile(null);
                       }}
-                      className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center rounded-bl-lg"
+                      className="absolute top-1 right-1 bg-red-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs"
                     >
-                      <XMarkIcon className="w-3 h-3" />
+                      ×
                     </button>
                   </div>
                 ) : (
-                  <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#3D96EB] hover:bg-[#EBF4FC] transition">
-                    <PhotoIcon className="w-6 h-6 text-gray-400" />
+                  <label className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-[#3D96EB] hover:bg-[#EBF4FC] transition">
+                    <PhotoIcon className="w-8 h-8 text-gray-400" />
                     <span className="text-xs text-gray-400 mt-1">Upload</span>
                     <input
                       type="file"
@@ -347,28 +224,23 @@ const Categories = () => {
                   </label>
                 )}
               </div>
+              <p className="text-xs text-text-light mt-2">
+                Recommended size: 400×400 px (Square)
+              </p>
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">
-                Description
-              </label>
-              <textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
-                rows="2"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-              />
-            </div>
-            <div className="md:col-span-2 flex gap-3">
+            {/* Buttons */}
+            <div className="flex gap-3 pt-2">
               <button
                 type="submit"
                 disabled={uploading}
                 className="btn-primary text-sm"
               >
-                {editCategory ? "Update" : "Create"}
+                {uploading
+                  ? "Uploading..."
+                  : editCategory
+                    ? "Update Category"
+                    : "Create Category"}
               </button>
               <button
                 type="button"
@@ -383,7 +255,7 @@ const Categories = () => {
       )}
 
       {/* Categories Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {isLoading ? (
           <div className="col-span-full text-center p-8">Loading...</div>
         ) : categories?.length === 0 ? (
@@ -396,42 +268,41 @@ const Categories = () => {
           categories?.map((cat) => (
             <div
               key={cat._id}
-              className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md transition"
+              className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition group"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden flex-shrink-0">
-                  {cat.image?.url ? (
-                    <img
-                      src={cat.image.url}
-                      alt={cat.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-2xl">
-                      {cat.gender === "men"
-                        ? "👨"
-                        : cat.gender === "women"
-                          ? "👩"
-                          : cat.gender === "kids"
-                            ? "👶"
-                            : "🕶️"}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-text truncate">
-                    {cat.name}
-                  </h3>
-                  <p className="text-xs text-text-light capitalize">
-                    {cat.productType?.split(",").join(" • ")} |{" "}
-                    {cat.gender?.split(",").join(" • ")}
-                  </p>
-                  <p className="text-xs text-[#3D96EB] mt-1">
-                    {productsCount?.[cat._id] || 0} products
-                  </p>
-                </div>
+              {/* Category Image */}
+              <div className="aspect-square bg-gray-50 overflow-hidden">
+                {cat.image?.url ? (
+                  <img
+                    src={cat.image.url}
+                    alt={cat.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-5xl opacity-30">
+                    {cat.name?.includes("Men")
+                      ? "👨"
+                      : cat.name?.includes("Women")
+                        ? "👩"
+                        : cat.name?.includes("Kid")
+                          ? "👶"
+                          : "🕶️"}
+                  </div>
+                )}
               </div>
-              <div className="flex justify-end gap-2 mt-3 pt-3 border-t">
+
+              {/* Info */}
+              <div className="p-3">
+                <h3 className="font-semibold text-text text-sm truncate">
+                  {cat.name}
+                </h3>
+                <p className="text-xs text-[#3D96EB] mt-1">
+                  {productsCount?.[cat._id] || 0} products
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-1 p-2 border-t">
                 <button
                   onClick={() => handleEdit(cat)}
                   className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
