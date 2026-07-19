@@ -46,7 +46,14 @@ const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 
+// Maintenance Mode
+import MaintenanceMode from "./components/common/MaintenanceMode";
+
 function App() {
+  const isMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === "true";
+  if (isMaintenance) {
+    return <MaintenanceMode />;
+  }
   return (
     <Suspense fallback={<Loading />}>
       <Routes>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import SEO from "../components/common/SEO";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 const Register = () => {
   const [form, setForm] = useState({
@@ -10,7 +11,9 @@ const Register = () => {
     email: "",
     password: "",
     phone: "",
+    username: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -36,13 +39,18 @@ const Register = () => {
       <SEO title="Register" />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-md">
-          <h1 className="text-3xl font-bold text-text text-center mb-8">
+          <h1 className="text-3xl font-bold text-text text-center mb-2">
             Create Account
           </h1>
+          <p className="text-text-light text-center mb-8">
+            Join Spexxo for the best eyewear deals
+          </p>
+
           <form
             onSubmit={handleSubmit}
-            className="bg-white p-8 rounded-2xl border border-gray-100 space-y-4"
+            className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-4"
           >
+            {/* Name Fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-text mb-1">
@@ -53,7 +61,7 @@ const Register = () => {
                   name="firstName"
                   value={form.firstName}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
                   required
                 />
               </div>
@@ -66,32 +74,34 @@ const Register = () => {
                   name="lastName"
                   value={form.lastName}
                   onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
                   required
                 />
               </div>
             </div>
+
+            {/* Username */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">
-                Username (Optional)
+                Username{" "}
+                <span className="text-text-light text-xs">(Optional)</span>
               </label>
               <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                   @
-                </div>
+                </span>
                 <input
                   type="text"
                   name="username"
                   value={form.username}
                   onChange={handleChange}
-                  className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
                   placeholder="your_username"
                 />
               </div>
-              <p className="text-xs text-text-light mt-1">
-                You can use this to login instead of email
-              </p>
             </div>
+
+            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">
                 Email
@@ -101,10 +111,12 @@ const Register = () => {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
                 required
               />
             </div>
+
+            {/* Phone */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">
                 Phone
@@ -114,34 +126,56 @@ const Register = () => {
                 name="phone"
                 value={form.phone}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
               />
             </div>
+
+            {/* Password with Eye Icon */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">
                 Password
               </label>
-              <input
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 pr-11 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
+                  placeholder="Min 6 characters"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="w-5 h-5" />
+                  ) : (
+                    <EyeIcon className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
             </div>
+
+            {/* Submit */}
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full py-3"
+              className="btn-primary w-full py-3 text-base"
             >
               {loading ? "Creating Account..." : "Create Account"}
             </button>
-            <div className="text-center text-sm text-text-light">
+
+            {/* Login Link */}
+            <div className="text-center text-sm text-text-light pt-2">
               Already have an account?{" "}
               <Link
                 to="/login"
-                className="text-primary font-medium hover:underline"
+                className="text-[#3D96EB] font-medium hover:underline"
               >
                 Login
               </Link>
