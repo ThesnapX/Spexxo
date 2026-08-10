@@ -6,8 +6,6 @@ import {
   StarIcon,
   HeartIcon,
   ShoppingBagIcon,
-  TruckIcon,
-  ShieldCheckIcon,
   ChevronRightIcon,
   ChevronDownIcon,
   XMarkIcon,
@@ -23,6 +21,7 @@ import {
   StarIcon as StarSolid,
 } from "@heroicons/react/24/solid";
 import SEO from "../components/common/SEO";
+import AuthPopup from "../components/common/AuthPopup";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import { useAuth } from "../context/AuthContext";
@@ -37,6 +36,7 @@ const ProductDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [showZoom, setShowZoom] = useState(false);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [openAccordion, setOpenAccordion] = useState("description");
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
@@ -50,9 +50,8 @@ const ProductDetail = () => {
 
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // Fetch Product
   const { data, isLoading } = useQuery({
     queryKey: ["product", slug],
     queryFn: async () => {
@@ -62,9 +61,7 @@ const ProductDetail = () => {
   });
 
   const product = data?.product;
-  const relatedProducts = data?.relatedProducts || [];
 
-  // Fetch Reviews
   const { data: reviewsData, refetch: refetchReviews } = useQuery({
     queryKey: ["reviews", product?._id],
     queryFn: async () => {
@@ -81,7 +78,6 @@ const ProductDetail = () => {
 
   const reviews = reviewsData || [];
 
-  // Smart Related Products
   const { data: smartRelated } = useQuery({
     queryKey: [
       "smart-related",
@@ -89,23 +85,17 @@ const ProductDetail = () => {
       product?.brand?._id,
       product?.frameShape,
       product?.lensType,
-      product?.category?._id,
     ],
     queryFn: async () => {
       if (!product?._id) return [];
       const params = new URLSearchParams({ limit: 8 });
-
-      // Priority: same frame shape + lens type
       if (product.frameShape) params.set("frameShape", product.frameShape);
       if (product.lensType) params.set("lensType", product.lensType);
       if (product.brand?._id) params.set("brand", product.brand._id);
-      if (product.category?._id) params.set("category", product.category._id);
-
       try {
         const { data } = await axios.get(
           `${API_URL}/products?${params.toString()}`,
         );
-        // Filter out current product
         return (data.products || [])
           .filter((p) => p._id !== product._id)
           .slice(0, 6);
@@ -117,16 +107,25 @@ const ProductDetail = () => {
   });
 
   const displayRelated =
-    smartRelated?.length > 0 ? smartRelated : relatedProducts;
+    smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
 
   const handleAddToCart = () => {
     addToCart(product._id, quantity);
-    toast.success("Added to cart!", { icon: "🛒" });
   };
 
   const handleBuyNow = () => {
     addToCart(product._id, quantity);
     navigate("/checkout");
+  };
+
+  const handleWishlistClick = () => {
+    if (!isAuthenticated) {
+      setShowAuthPopup(true);
+      return;
+    }
+    isInWishlist(product._id)
+      ? removeFromWishlist(product._id)
+      : addToWishlist(product._id);
   };
 
   const handleReviewImageChange = (e) => {
@@ -155,15 +154,11 @@ const ProductDetail = () => {
     try {
       let uploadedImages = [];
       if (reviewImages.length > 0) {
-        const formData = new FormData();
-        reviewImages.forEach((file) => formData.append("images", file));
-        const { data } = await axios.post(
-          `${API_URL}/upload/multiple`,
-          formData,
-        );
+        const fd = new FormData();
+        reviewImages.forEach((f) => fd.append("images", f));
+        const { data } = await axios.post(`${API_URL}/upload/multiple`, fd);
         uploadedImages = data.images;
       }
-
       await axios.post(`${API_URL}/reviews/${product._id}`, {
         ...reviewForm,
         images: uploadedImages,
@@ -191,24 +186,14 @@ const ProductDetail = () => {
     return (
       <div className="pt-24">
         <div className="container-custom">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 animate-pulse">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
             <div>
               <div className="aspect-square bg-gray-200 rounded-2xl"></div>
-              <div className="flex gap-3 mt-4">
-                {[...Array(4)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-20 h-20 bg-gray-200 rounded-lg"
-                  ></div>
-                ))}
-              </div>
             </div>
             <div className="space-y-4">
               <div className="h-4 bg-gray-200 rounded w-1/4"></div>
               <div className="h-8 bg-gray-200 rounded w-3/4"></div>
               <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-              <div className="h-20 bg-gray-200 rounded"></div>
-              <div className="h-12 bg-gray-200 rounded w-1/2"></div>
             </div>
           </div>
         </div>
@@ -224,9 +209,6 @@ const ProductDetail = () => {
           <h2 className="text-2xl font-bold text-text mb-2">
             Product Not Found
           </h2>
-          <p className="text-text-light mb-6">
-            The product you're looking for doesn't exist or has been removed.
-          </p>
           <Link to="/shop" className="btn-primary">
             Browse Products
           </Link>
@@ -247,34 +229,32 @@ const ProductDetail = () => {
       <div className="pt-20 md:pt-24 pb-16">
         <div className="container-custom">
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-2 text-sm text-text-light mb-6 overflow-x-auto whitespace-nowrap pb-2">
-            <Link to="/" className="hover:text-primary transition">
+          <nav className="flex items-center gap-2 text-sm text-text-light mb-6">
+            <Link to="/" className="hover:text-primary">
               Home
             </Link>
-            <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
-            <Link to="/shop" className="hover:text-primary transition">
+            <ChevronRightIcon className="w-4 h-4" />
+            <Link to="/shop" className="hover:text-primary">
               Shop
             </Link>
-            <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
+            <ChevronRightIcon className="w-4 h-4" />
             {product.category && (
               <>
                 <Link
                   to={`/shop?category=${product.category.slug}`}
-                  className="hover:text-primary transition"
+                  className="hover:text-primary"
                 >
                   {product.category.name}
                 </Link>
-                <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
+                <ChevronRightIcon className="w-4 h-4" />
               </>
             )}
             <span className="text-text truncate">{product.name}</span>
           </nav>
 
-          {/* Main Product Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 mb-16">
             {/* Image Gallery */}
             <div>
-              {/* Main Image */}
               <div
                 className="relative bg-gray-50 rounded-2xl overflow-hidden group cursor-zoom-in"
                 onClick={() => setShowZoom(!showZoom)}
@@ -287,21 +267,15 @@ const ProductDetail = () => {
                   alt={product.name}
                   className={`w-full aspect-square object-cover transition-transform duration-300 ${showZoom ? "scale-150" : "group-hover:scale-105"}`}
                 />
-
-                {/* Zoom Icon */}
-                <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition">
+                <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition">
                   <ArrowsPointingOutIcon className="w-5 h-5 text-text" />
                 </button>
-
-                {/* Discount Badge */}
                 {discountPercent > 0 && (
                   <span className="absolute top-4 left-4 bg-red-500 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
                     {discountPercent}% OFF
                   </span>
                 )}
               </div>
-
-              {/* Thumbnail Gallery */}
               {product.images?.length > 1 && (
                 <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
                   {product.images.map((img, index) => (
@@ -311,11 +285,7 @@ const ProductDetail = () => {
                         setSelectedImage(index);
                         setShowZoom(false);
                       }}
-                      className={`w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${
-                        selectedImage === index
-                          ? "border-primary ring-2 ring-primary/20"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
+                      className={`w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${selectedImage === index ? "border-primary ring-2 ring-primary/20" : "border-gray-200 hover:border-gray-300"}`}
                     >
                       <img
                         src={img.url}
@@ -330,26 +300,20 @@ const ProductDetail = () => {
 
             {/* Product Info */}
             <div>
-              {/* Brand */}
               {product.brand?.name && (
                 <p className="text-sm font-medium text-primary mb-2">
                   {product.brand.name}
                 </p>
               )}
-
-              {/* Title */}
               <h1 className="text-2xl md:text-3xl font-bold text-text mb-3 leading-tight">
                 {product.name}
               </h1>
 
-              {/* Price & Rating Row */}
+              {/* Price & Rating */}
               <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl md:text-3xl font-bold text-text">
-                    ₹
-                    {product.comparePrice
-                      ? product.comparePrice.toLocaleString()
-                      : product.price?.toLocaleString()}
+                    ₹{(product.comparePrice || product.price)?.toLocaleString()}
                   </span>
                   {product.comparePrice && (
                     <span className="text-lg text-gray-400 line-through">
@@ -362,8 +326,6 @@ const ProductDetail = () => {
                     </span>
                   )}
                 </div>
-
-                {/* Rating */}
                 <div className="flex items-center gap-1">
                   <div className="flex">
                     {[...Array(5)].map((_, i) =>
@@ -384,44 +346,7 @@ const ProductDetail = () => {
                 </div>
               </div>
 
-              {/* Short Description */}
-              {product.shortDescription && (
-                <p className="text-text-light mb-6 leading-relaxed">
-                  {product.shortDescription}
-                </p>
-              )}
-
-              {/* Frame Size Selector */}
-              {/* {product.specifications?.length > 0 && (
-                <div className="mb-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-text">
-                      Frame Size
-                    </label>
-                    <button
-                      onClick={() => setShowSizeGuide(true)}
-                      className="text-xs text-primary hover:underline font-medium"
-                    >
-                      Size Guide
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    {product.specifications.map((spec, i) => (
-                      <div
-                        key={i}
-                        className="px-3 py-2 bg-gray-50 rounded-lg text-xs text-text-light"
-                      >
-                        <span className="font-medium text-text">
-                          {spec.value}
-                        </span>{" "}
-                        {spec.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )} */}
-
-              {/* Frame Size Display */}
+              {/* Frame Size */}
               {product.specifications?.length > 0 && (
                 <div className="mb-5">
                   <label className="text-sm font-medium text-text mb-2 block">
@@ -443,13 +368,13 @@ const ProductDetail = () => {
                 </div>
               )}
 
-              {/* Quantity Selector */}
+              {/* Quantity */}
               <div className="flex items-center gap-4 mb-6">
                 <span className="text-sm font-medium text-text">Quantity:</span>
                 <div className="flex items-center border border-gray-200 rounded-lg">
                   <button
                     onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 transition rounded-l-lg disabled:opacity-50"
+                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 rounded-l-lg"
                     disabled={quantity <= 1}
                   >
                     <MinusIcon className="w-4 h-4" />
@@ -458,17 +383,16 @@ const ProductDetail = () => {
                     type="number"
                     value={quantity}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      if (val > 0 && val <= (product.stock || 99))
-                        setQuantity(val);
+                      const v = parseInt(e.target.value);
+                      if (v > 0 && v <= (product.stock || 99)) setQuantity(v);
                     }}
-                    className="w-14 text-center text-sm font-medium border-x border-gray-200 py-2 focus:outline-none"
+                    className="w-14 text-center text-sm font-medium border-x py-2 focus:outline-none"
                     min="1"
                     max={product.stock || 99}
                   />
                   <button
                     onClick={() => setQuantity(quantity + 1)}
-                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 transition rounded-r-lg"
+                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 rounded-r-lg"
                   >
                     <PlusIcon className="w-4 h-4" />
                   </button>
@@ -489,16 +413,8 @@ const ProductDetail = () => {
                   <ShoppingBagIcon className="w-5 h-5" /> Add to Cart
                 </button>
                 <button
-                  onClick={() =>
-                    isInWishlist(product._id)
-                      ? removeFromWishlist(product._id)
-                      : addToWishlist(product._id)
-                  }
-                  className={`w-12 h-12 flex items-center justify-center border-2 rounded-xl transition flex-shrink-0 ${
-                    isInWishlist(product._id)
-                      ? "border-red-500 bg-red-50 text-red-500"
-                      : "border-gray-200 hover:border-primary hover:text-primary"
-                  }`}
+                  onClick={handleWishlistClick}
+                  className={`w-12 h-12 flex items-center justify-center border-2 rounded-xl transition flex-shrink-0 ${isInWishlist(product._id) ? "border-red-500 bg-red-50 text-red-500" : "border-gray-200 hover:border-primary hover:text-primary"}`}
                 >
                   {isInWishlist(product._id) ? (
                     <HeartSolid className="w-5 h-5" />
@@ -515,18 +431,6 @@ const ProductDetail = () => {
                 <BoltIcon className="w-5 h-5" /> Buy Now
               </button>
 
-              {/* Features
-              <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 rounded-xl mb-6">
-                <div className="flex items-center gap-2 text-sm">
-                  <TruckIcon className="w-5 h-5 text-primary flex-shrink-0" />
-                  <span className="text-text-light">Free Shipping</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <ShieldCheckIcon className="w-5 h-5 text-primary flex-shrink-0" />
-                  <span className="text-text-light">COD Available</span>
-                </div>
-              </div> */}
-
               {/* WhatsApp Order */}
               <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                 <p className="text-sm font-medium text-green-800 mb-1">
@@ -537,9 +441,7 @@ const ProductDetail = () => {
                   the rest.
                 </p>
                 <a
-                  href={`https://wa.me/919969538739?text=${encodeURIComponent(
-                    `Hi Spexxo, I want to order:\n\n*Product:* ${product.name}\n*SKU:* ${product.sku || "N/A"}\n*Price:* ₹${product.comparePrice ? product.comparePrice.toLocaleString() : product.price?.toLocaleString()}\n\nPlease confirm availability.`,
-                  )}`}
+                  href={`https://wa.me/919969538739?text=${encodeURIComponent(`Hi Spexxo, I want to order:\n\n*Product:* ${product.name}\n*SKU:* ${product.sku || "N/A"}\n*Price:* ₹${(product.comparePrice || product.price)?.toLocaleString()}\n\nPlease confirm availability.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition"
@@ -555,9 +457,7 @@ const ProductDetail = () => {
             <h2 className="text-xl font-bold text-text mb-6">
               Product Details
             </h2>
-
             <div className="space-y-3">
-              {/* Description Accordion */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -580,8 +480,6 @@ const ProductDetail = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Specifications Accordion */}
               {product.specifications?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <button
@@ -600,28 +498,24 @@ const ProductDetail = () => {
                   <div
                     className={`overflow-hidden transition-all duration-300 ${openAccordion === "specs" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
                   >
-                    <div className="px-5 pb-5">
-                      <div className="grid grid-cols-2 gap-2">
-                        {product.specifications.map((spec, i) => (
-                          <div
-                            key={i}
-                            className="flex justify-between p-3 bg-gray-50 rounded-lg"
-                          >
-                            <span className="text-sm text-text-light">
-                              {spec.name}
-                            </span>
-                            <span className="text-sm font-medium text-text">
-                              {spec.value}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+                      {product.specifications.map((spec, i) => (
+                        <div
+                          key={i}
+                          className="flex justify-between p-3 bg-gray-50 rounded-lg"
+                        >
+                          <span className="text-sm text-text-light">
+                            {spec.name}
+                          </span>
+                          <span className="text-sm font-medium text-text">
+                            {spec.value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* FAQ Accordion */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -641,15 +535,15 @@ const ProductDetail = () => {
                     {[
                       {
                         q: "What is the return policy?",
-                        a: "We offer a 7-day return policy for unused items in original packaging.",
+                        a: "7-day return for unused items in original packaging.",
                       },
                       {
                         q: "Does it come with a warranty?",
-                        a: "All frames come with a 6-month manufacturing warranty against defects.",
+                        a: "6-month manufacturing warranty against defects.",
                       },
                       {
                         q: "Can I add prescription lenses?",
-                        a: "Yes! Order via WhatsApp and send us your prescription for custom lenses.",
+                        a: "Yes! Order via WhatsApp and send us your prescription.",
                       },
                     ].map((faq, i) => (
                       <div key={i} className="p-3 bg-gray-50 rounded-lg">
@@ -665,25 +559,18 @@ const ProductDetail = () => {
             </div>
           </div>
 
-          {/* Related Products - BEFORE Reviews */}
+          {/* Related Products */}
           {displayRelated.length > 0 && (
             <section className="mb-16">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-text">
-                    Related Products
-                  </h2>
-                  <p className="text-sm text-text-light mt-1">
-                    You might also like these
-                  </p>
-                </div>
-              </div>
+              <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
+                Related Products
+              </h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {displayRelated.slice(0, 5).map((rp) => (
                   <Link
                     key={rp._id}
                     to={`/product/${rp.slug}`}
-                    className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02]"
+                    className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition hover:scale-[1.02]"
                   >
                     <div className="bg-gray-50">
                       <img
@@ -691,7 +578,7 @@ const ProductDetail = () => {
                           rp.images?.[0]?.url || "https://picsum.photos/400/400"
                         }
                         alt={rp.name}
-                        className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full aspect-square object-cover group-hover:scale-105 transition"
                         loading="lazy"
                       />
                     </div>
@@ -699,20 +586,11 @@ const ProductDetail = () => {
                       <p className="text-xs text-text-light truncate">
                         {rp.brand?.name || ""}
                       </p>
-                      <h3 className="font-medium text-sm text-text line-clamp-1 group-hover:text-primary transition-colors">
+                      <h3 className="font-medium text-sm text-text line-clamp-1 group-hover:text-primary">
                         {rp.name}
                       </h3>
                       <p className="text-sm font-bold text-text mt-1">
-                        {rp.comparePrice ? (
-                          <>
-                            <span>₹{rp.comparePrice?.toLocaleString()}</span>
-                            <span className="text-xs text-gray-400 line-through ml-2">
-                              ₹{rp.price?.toLocaleString()}
-                            </span>
-                          </>
-                        ) : (
-                          <span>₹{rp.price?.toLocaleString()}</span>
-                        )}
+                        ₹{(rp.comparePrice || rp.price)?.toLocaleString()}
                       </p>
                     </div>
                   </Link>
@@ -721,21 +599,17 @@ const ProductDetail = () => {
             </section>
           )}
 
-          {/* Reviews Section */}
+          {/* Reviews */}
           <section className="max-w-3xl">
             <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
               Customer Reviews ({product.ratings?.count || 0})
             </h2>
-
-            {/* Review Form */}
             {isAuthenticated ? (
               <form
                 onSubmit={handleSubmitReview}
                 className="bg-white rounded-xl border border-gray-100 p-5 mb-6"
               >
                 <h3 className="font-semibold text-text mb-4">Write a Review</h3>
-
-                {/* Star Rating */}
                 <div className="flex items-center gap-1 mb-4">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -754,123 +628,100 @@ const ProductDetail = () => {
                     </button>
                   ))}
                 </div>
-
-                <div className="mb-3">
-                  <input
-                    type="text"
-                    placeholder="Review title (optional)"
-                    value={reviewForm.title}
-                    onChange={(e) =>
-                      setReviewForm({ ...reviewForm, title: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary text-sm"
-                    maxLength="100"
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <textarea
-                    rows="4"
-                    placeholder="Share your experience with this product..."
-                    value={reviewForm.comment}
-                    onChange={(e) =>
-                      setReviewForm({ ...reviewForm, comment: e.target.value })
-                    }
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary text-sm resize-none"
-                    required
-                    maxLength="500"
-                  />
-                  <p className="text-xs text-text-light text-right mt-1">
-                    {reviewForm.comment.length}/500
-                  </p>
-                </div>
-
-                {/* Review Images */}
-                <div className="mb-4">
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {reviewPreviews.map((preview, i) => (
-                      <div
-                        key={i}
-                        className="relative w-16 h-16 rounded-lg overflow-hidden border"
-                      >
-                        <img
-                          src={preview}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeReviewImage(i)}
-                          className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 flex items-center justify-center text-xs"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    <label className="w-16 h-16 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:border-primary transition">
-                      <PhotoIcon className="w-5 h-5 text-gray-400" />
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={handleReviewImageChange}
-                        className="hidden"
+                <input
+                  type="text"
+                  placeholder="Review title (optional)"
+                  value={reviewForm.title}
+                  onChange={(e) =>
+                    setReviewForm({ ...reviewForm, title: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm mb-3"
+                  maxLength={100}
+                />
+                <textarea
+                  rows="4"
+                  placeholder="Share your experience..."
+                  value={reviewForm.comment}
+                  onChange={(e) =>
+                    setReviewForm({ ...reviewForm, comment: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm resize-none mb-3"
+                  required
+                  maxLength={500}
+                />
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {reviewPreviews.map((p, i) => (
+                    <div
+                      key={i}
+                      className="relative w-16 h-16 rounded-lg overflow-hidden border"
+                    >
+                      <img
+                        src={p}
+                        alt=""
+                        className="w-full h-full object-cover"
                       />
-                    </label>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => removeReviewImage(i)}
+                        className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 flex items-center justify-center text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <label className="w-16 h-16 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center cursor-pointer hover:border-primary">
+                    <PhotoIcon className="w-5 h-5 text-gray-400" />
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleReviewImageChange}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-
                 <button
                   type="submit"
                   disabled={submittingReview || !reviewForm.comment.trim()}
-                  className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary text-sm disabled:opacity-50"
                 >
                   {submittingReview ? "Submitting..." : "Submit Review"}
                 </button>
               </form>
             ) : (
-              <div className="bg-gray-50 rounded-xl p-6 text-center mb-6 border border-gray-100">
+              <div className="bg-gray-50 rounded-xl p-6 text-center mb-6 border">
                 <p className="text-text-light mb-3">
                   Please log in to write a review
                 </p>
-                <Link to="/login" className="btn-primary text-sm">
+                <button
+                  onClick={() => setShowAuthPopup(true)}
+                  className="btn-primary text-sm"
+                >
                   Login to Review
-                </Link>
+                </button>
               </div>
             )}
-
-            {/* Reviews List */}
             {reviews.length === 0 ? (
-              <div className="text-center py-10 bg-white rounded-xl border border-gray-100">
+              <div className="text-center py-10 bg-white rounded-xl border">
                 <StarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-text-light">
-                  No reviews yet. Be the first to review!
-                </p>
+                <p className="text-text-light">No reviews yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {reviews.map((review) => (
                   <div
                     key={review._id}
-                    className="bg-white rounded-xl border border-gray-100 p-5"
+                    className="bg-white rounded-xl border p-5"
                   >
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-10 h-10 bg-primary/10 text-primary rounded-full flex items-center justify-center font-semibold text-sm">
                         {review.user?.firstName?.[0]}
                         {review.user?.lastName?.[0]}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm text-text">
-                            {review.user?.firstName} {review.user?.lastName}
-                          </p>
-                          {review.isVerified && (
-                            <span className="flex items-center gap-1 text-xs text-green-600">
-                              <CheckBadgeIcon className="w-3.5 h-3.5" />{" "}
-                              Verified Purchase
-                            </span>
-                          )}
-                        </div>
+                      <div>
+                        <p className="font-medium text-sm">
+                          {review.user?.firstName} {review.user?.lastName}
+                        </p>
                         <div className="flex items-center gap-1">
                           {[...Array(5)].map((_, i) =>
                             i < review.rating ? (
@@ -899,23 +750,9 @@ const ProductDetail = () => {
                       </div>
                     </div>
                     {review.title && (
-                      <p className="font-medium text-sm text-text mb-1">
-                        {review.title}
-                      </p>
+                      <p className="font-medium text-sm mb-1">{review.title}</p>
                     )}
                     <p className="text-sm text-text-light">{review.comment}</p>
-                    {review.images?.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {review.images.map((img, i) => (
-                          <img
-                            key={i}
-                            src={img.url}
-                            alt=""
-                            className="w-16 h-16 rounded-lg object-cover border"
-                          />
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -924,62 +761,12 @@ const ProductDetail = () => {
         </div>
       </div>
 
-      {/* Size Guide Modal */}
-      {showSizeGuide && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowSizeGuide(false)}
-        >
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-text">Frame Size Guide</h3>
-              <button
-                onClick={() => setShowSizeGuide(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition"
-              >
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Size Diagram */}
-            <div className="bg-gray-50 rounded-xl p-6 mb-6 text-center">
-              <div className="w-40 h-32 mx-auto border-2 border-gray-300 rounded-lg relative mb-4">
-                <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-text-light">
-                  Frame Width
-                </span>
-                <span className="absolute -left-16 top-1/2 -translate-y-1/2 text-xs text-text-light">
-                  Lens Width
-                </span>
-                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-xs text-text-light">
-                  Bridge
-                </span>
-              </div>
-              <p className="text-xs text-text-light">
-                Illustrative diagram - not to scale
-              </p>
-            </div>
-
-            {/* Measurements Table */}
-            <div className="space-y-2">
-              {product.specifications?.map((spec, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                >
-                  <span className="text-sm text-text-light">{spec.name}</span>
-                  <span className="text-sm font-semibold text-text">
-                    {spec.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Auth Popup */}
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={() => setShowAuthPopup(false)}
+        mode="login"
+      />
     </>
   );
 };

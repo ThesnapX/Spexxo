@@ -56,6 +56,7 @@ export const register = async (req, res) => {
       token,
       user: {
         _id: user._id,
+        customerId: user.customerId, // ADD THIS
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,
@@ -116,6 +117,7 @@ export const login = async (req, res) => {
       token,
       user: {
         _id: user._id,
+        customerId: user.customerId, // ADD THIS LINE
         firstName: user.firstName,
         lastName: user.lastName,
         username: user.username,

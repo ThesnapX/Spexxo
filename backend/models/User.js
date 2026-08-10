@@ -3,6 +3,11 @@ import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
+    customerId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     firstName: {
       type: String,
       required: [true, "First name is required"],
@@ -16,7 +21,7 @@ const userSchema = new mongoose.Schema(
     username: {
       type: String,
       unique: true,
-      sparse: true, // Allows null/undefined values without duplicate errors
+      sparse: true,
       trim: true,
       minlength: 3,
       maxlength: 30,
@@ -51,8 +56,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    // Default delivery address
-    // Default delivery address
     defaultAddress: {
       fullName: String,
       phone: String,
@@ -66,6 +69,7 @@ const userSchema = new mongoose.Schema(
     },
     addresses: [
       {
+        name: { type: String, default: "Home" },
         fullName: String,
         phone: String,
         addressLine1: String,
@@ -75,34 +79,31 @@ const userSchema = new mongoose.Schema(
         city: String,
         state: String,
         pincode: String,
-        isDefault: {
-          type: Boolean,
-          default: false,
-        },
+        isDefault: { type: Boolean, default: false },
       },
     ],
-    wishlist: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Product",
-      },
-    ],
+    wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     resetPasswordToken: String,
     resetPasswordExpire: Date,
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
+    createdAt: { type: Date, default: Date.now },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+// Generate customer ID before saving
+userSchema.pre("save", async function (next) {
+  if (this.isNew && !this.customerId) {
+    const count = await mongoose.model("User").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(4, "0");
+    this.customerId = `SPX${nextNumber}`;
+  }
   next();
 });
 
