@@ -11,9 +11,22 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   PencilIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon,
+  HomeIcon,
+  BriefcaseIcon,
+  HeartIcon as HeartOutlineIcon,
 } from "@heroicons/react/24/outline";
+import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+const addressIcons = [
+  { id: "home", icon: HomeIcon, label: "Home" },
+  { id: "work", icon: BriefcaseIcon, label: "Work" },
+  { id: "other", icon: MapPinIcon, label: "Other" },
+];
 
 const Profile = () => {
   const { user, updateProfile, logout } = useAuth();
@@ -21,6 +34,24 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
+
+  // Address management
+  const [addresses, setAddresses] = useState([]);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addressForm, setAddressForm] = useState({
+    name: "Home",
+    fullName: "",
+    phone: "",
+    addressLine1: "",
+    addressLine2: "",
+    landmark: "",
+    area: "",
+    city: "",
+    state: "Maharashtra",
+    pincode: "",
+    isDefault: false,
+  });
 
   const [profileForm, setProfileForm] = useState({
     firstName: "",
@@ -36,22 +67,10 @@ const Profile = () => {
     confirmPassword: "",
   });
 
-  const [addressForm, setAddressForm] = useState({
-    fullName: "",
-    phone: "",
-    addressLine1: "",
-    addressLine2: "",
-    landmark: "",
-    area: "",
-    city: "",
-    state: "",
-    pincode: "",
-  });
-
   const [editProfile, setEditProfile] = useState(false);
   const [editPassword, setEditPassword] = useState(false);
-  const [editAddress, setEditAddress] = useState(false);
 
+  // Load user data and addresses
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -61,21 +80,23 @@ const Profile = () => {
         email: user.email || "",
         phone: user.phone || "",
       });
-      if (user.defaultAddress) {
-        setAddressForm({
-          fullName: user.defaultAddress.fullName || "",
-          phone: user.defaultAddress.phone || user.phone || "",
-          addressLine1: user.defaultAddress.addressLine1 || "",
-          addressLine2: user.defaultAddress.addressLine2 || "",
-          landmark: user.defaultAddress.landmark || "",
-          area: user.defaultAddress.area || "",
-          city: user.defaultAddress.city || "",
-          state: user.defaultAddress.state || "",
-          pincode: user.defaultAddress.pincode || "",
-        });
+      if (user.addresses) {
+        setAddresses(user.addresses);
       }
     }
   }, [user]);
+
+  // Fetch fresh user data
+  const refreshUser = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/auth/me`);
+      if (data.user.addresses) {
+        setAddresses(data.user.addresses);
+      }
+    } catch (error) {
+      console.log("Failed to refresh user data");
+    }
+  };
 
   const checkUsername = async (username) => {
     if (!username || username.length < 3) {
@@ -147,38 +168,113 @@ const Profile = () => {
     }
   };
 
+  // ============ ADDRESS FUNCTIONS ============
+  const resetAddressForm = () => {
+    setAddressForm({
+      name: "Home",
+      fullName: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      landmark: "",
+      area: "",
+      city: "",
+      state: "Maharashtra",
+      pincode: "",
+      isDefault: false,
+    });
+    setEditingAddressId(null);
+    setShowAddressForm(false);
+  };
+
+  const handleEditAddress = (addr) => {
+    setAddressForm({
+      name: addr.name || "Home",
+      fullName: addr.fullName || "",
+      phone: addr.phone || "",
+      addressLine1: addr.addressLine1 || "",
+      addressLine2: addr.addressLine2 || "",
+      landmark: addr.landmark || "",
+      area: addr.area || "",
+      city: addr.city || "",
+      state: addr.state || "Maharashtra",
+      pincode: addr.pincode || "",
+      isDefault: addr.isDefault || false,
+    });
+    setEditingAddressId(addr._id);
+    setShowAddressForm(true);
+  };
+
   const handleSaveAddress = async (e) => {
     e.preventDefault();
+    if (
+      !addressForm.fullName ||
+      !addressForm.addressLine1 ||
+      !addressForm.city ||
+      !addressForm.pincode
+    ) {
+      toast.error("Please fill all required fields");
+      return;
+    }
     setSaving(true);
     try {
-      const { data } = await axios.put(
-        `${API_URL}/auth/delivery-address`,
-        addressForm,
-      );
-      updateProfile({ ...user, defaultAddress: data.defaultAddress });
-      toast.success("Delivery address updated!");
-      setEditAddress(false);
+      if (editingAddressId) {
+        await axios.put(
+          `${API_URL}/users/address/${editingAddressId}`,
+          addressForm,
+        );
+        toast.success("Address updated!");
+      } else {
+        await axios.post(`${API_URL}/users/address`, addressForm);
+        toast.success("Address added!");
+      }
+      await refreshUser();
+      resetAddressForm();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to update address");
+      toast.error(error.response?.data?.message || "Failed to save address");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAddress = async (addressId) => {
+    if (!window.confirm("Delete this address?")) return;
+    try {
+      await axios.delete(`${API_URL}/users/address/${addressId}`);
+      toast.success("Address deleted!");
+      await refreshUser();
+    } catch (error) {
+      toast.error("Failed to delete address");
+    }
+  };
+
+  const handleSetDefault = async (addressId) => {
+    try {
+      await axios.put(`${API_URL}/users/address/${addressId}`, {
+        isDefault: true,
+      });
+      toast.success("Default address updated!");
+      await refreshUser();
+    } catch (error) {
+      toast.error("Failed to update");
     }
   };
 
   const tabs = [
     { id: "profile", label: "Profile", icon: UserIcon },
     { id: "password", label: "Password", icon: LockClosedIcon },
-    { id: "address", label: "Delivery Address", icon: MapPinIcon },
+    { id: "addresses", label: "Addresses", icon: MapPinIcon },
   ];
 
   return (
     <>
       <SEO title="My Account" />
       <div className="pt-24 pb-16">
-        <div className="container-custom max-w-4xl">
+        <div className="container-custom max-w-5xl">
           <h1 className="text-2xl md:text-3xl font-bold text-text mb-8">
             My Account
           </h1>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Sidebar */}
             <div className="md:col-span-1">
@@ -516,248 +612,342 @@ const Profile = () => {
                 </div>
               )}
 
-              {/* Address Tab */}
-              {activeTab === "address" && (
-                <div className="bg-white rounded-xl border border-gray-100 p-6">
-                  <div className="flex items-center justify-between mb-6">
+              {/* Addresses Tab */}
+              {activeTab === "addresses" && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-text">
-                      Delivery Address
+                      My Addresses
                     </h2>
-                    {!editAddress && (
-                      <button
-                        onClick={() => setEditAddress(true)}
-                        className="text-sm text-primary hover:underline flex items-center gap-1"
-                      >
-                        <PencilIcon className="w-4 h-4" /> Edit
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        resetAddressForm();
+                        setShowAddressForm(true);
+                      }}
+                      className="btn-primary text-sm flex items-center gap-1"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Add Address
+                    </button>
                   </div>
-                  {!editAddress ? (
-                    user?.defaultAddress?.addressLine1 ? (
-                      <div className="bg-gray-50 p-5 rounded-xl space-y-2">
-                        <p className="font-medium text-text text-lg">
-                          {user.defaultAddress.fullName}
-                        </p>
-                        <p className="text-sm text-text">
-                          {user.defaultAddress.addressLine1}
-                        </p>
-                        {user.defaultAddress.addressLine2 && (
-                          <p className="text-sm text-text">
-                            {user.defaultAddress.addressLine2}
-                          </p>
-                        )}
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-light">
-                          {user.defaultAddress.landmark && (
-                            <span>📍 {user.defaultAddress.landmark}</span>
-                          )}
-                          {user.defaultAddress.area && (
-                            <span>🏘️ {user.defaultAddress.area}</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-text-light">
-                          {user.defaultAddress.city},{" "}
-                          {user.defaultAddress.state} -{" "}
-                          {user.defaultAddress.pincode}
-                        </p>
-                        <p className="text-sm text-text-light">
-                          📞 {user.defaultAddress.phone}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 bg-gray-50 rounded-xl">
-                        <MapPinIcon className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                        <p className="text-text-light text-sm">
-                          No delivery address set
-                        </p>
-                        <button
-                          onClick={() => setEditAddress(true)}
-                          className="text-primary text-sm hover:underline mt-2"
-                        >
-                          Add Address
+
+                  {/* Address Form Popup */}
+                  {showAddressForm && (
+                    <div className="bg-white rounded-xl border border-gray-100 p-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-semibold">
+                          {editingAddressId
+                            ? "Edit Address"
+                            : "Add New Address"}
+                        </h3>
+                        <button onClick={resetAddressForm}>
+                          <XMarkIcon className="w-5 h-5 text-gray-400" />
                         </button>
                       </div>
-                    )
+                      <form onSubmit={handleSaveAddress} className="space-y-4">
+                        {/* Address Type */}
+                        <div>
+                          <label className="block text-sm font-medium mb-2">
+                            Address Type
+                          </label>
+                          <div className="flex gap-3">
+                            {addressIcons.map((type) => (
+                              <button
+                                key={type.id}
+                                type="button"
+                                onClick={() =>
+                                  setAddressForm({
+                                    ...addressForm,
+                                    name: type.label,
+                                  })
+                                }
+                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition ${addressForm.name === type.label ? "border-primary bg-[#EBF4FC] text-primary" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
+                              >
+                                <type.icon className="w-4 h-4" /> {type.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Full Name *
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.fullName}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  fullName: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Phone *
+                            </label>
+                            <input
+                              type="tel"
+                              value={addressForm.phone}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  phone: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Address Line 1 *
+                          </label>
+                          <input
+                            type="text"
+                            value={addressForm.addressLine1}
+                            onChange={(e) =>
+                              setAddressForm({
+                                ...addressForm,
+                                addressLine1: e.target.value,
+                              })
+                            }
+                            placeholder="House/Flat No., Building, Street"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            Address Line 2 (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={addressForm.addressLine2}
+                            onChange={(e) =>
+                              setAddressForm({
+                                ...addressForm,
+                                addressLine2: e.target.value,
+                              })
+                            }
+                            placeholder="Colony, Apartment Name"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Landmark
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.landmark}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  landmark: e.target.value,
+                                })
+                              }
+                              placeholder="Nearby landmark"
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Area / Locality
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.area}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  area: e.target.value,
+                                })
+                              }
+                              placeholder="Locality"
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              City *
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.city}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  city: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              State *
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.state}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  state: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-1">
+                              Pincode *
+                            </label>
+                            <input
+                              type="text"
+                              value={addressForm.pincode}
+                              onChange={(e) =>
+                                setAddressForm({
+                                  ...addressForm,
+                                  pincode: e.target.value,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                              required
+                              maxLength={6}
+                            />
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={addressForm.isDefault}
+                            onChange={(e) =>
+                              setAddressForm({
+                                ...addressForm,
+                                isDefault: e.target.checked,
+                              })
+                            }
+                            className="w-4 h-4 text-primary rounded"
+                          />
+                          <span className="text-sm">
+                            Set as default address
+                          </span>
+                        </label>
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            type="submit"
+                            disabled={saving}
+                            className="btn-primary text-sm"
+                          >
+                            {saving
+                              ? "Saving..."
+                              : editingAddressId
+                                ? "Update Address"
+                                : "Save Address"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetAddressForm}
+                            className="btn-outline text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Address List */}
+                  {addresses.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
+                      <MapPinIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-text-light">No saved addresses</p>
+                      <button
+                        onClick={() => setShowAddressForm(true)}
+                        className="text-primary text-sm hover:underline mt-2"
+                      >
+                        Add your first address
+                      </button>
+                    </div>
                   ) : (
-                    <form onSubmit={handleSaveAddress} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Full Name *
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.fullName}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                fullName: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Phone *
-                          </label>
-                          <input
-                            type="tel"
-                            value={addressForm.phone}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                phone: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Address Line 1 *
-                        </label>
-                        <input
-                          type="text"
-                          value={addressForm.addressLine1}
-                          onChange={(e) =>
-                            setAddressForm({
-                              ...addressForm,
-                              addressLine1: e.target.value,
-                            })
-                          }
-                          placeholder="House/Flat No., Building, Street"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">
-                          Address Line 2 (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={addressForm.addressLine2}
-                          onChange={(e) =>
-                            setAddressForm({
-                              ...addressForm,
-                              addressLine2: e.target.value,
-                            })
-                          }
-                          placeholder="Colony, Apartment Name"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Landmark
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.landmark}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                landmark: e.target.value,
-                              })
-                            }
-                            placeholder="Nearby landmark"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Area / Locality
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.area}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                area: e.target.value,
-                              })
-                            }
-                            placeholder="Locality"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            City *
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.city}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                city: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            State *
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.state}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                state: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Pincode *
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.pincode}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                pincode: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                            maxLength={6}
-                            pattern="[0-9]{6}"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-3 pt-2">
-                        <button
-                          type="submit"
-                          disabled={saving}
-                          className="btn-primary text-sm"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {addresses.map((addr) => (
+                        <div
+                          key={addr._id}
+                          className={`bg-white rounded-xl border-2 p-5 relative ${addr.isDefault ? "border-primary" : "border-gray-100"}`}
                         >
-                          {saving ? "Saving..." : "Save Address"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditAddress(false)}
-                          className="btn-outline text-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
+                          {addr.isDefault && (
+                            <span className="absolute top-3 right-3 bg-primary text-white text-xs px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                          <div className="flex items-center gap-2 mb-3">
+                            {addr.name === "Home" ? (
+                              <HomeIcon className="w-5 h-5 text-gray-500" />
+                            ) : addr.name === "Work" ? (
+                              <BriefcaseIcon className="w-5 h-5 text-gray-500" />
+                            ) : (
+                              <MapPinIcon className="w-5 h-5 text-gray-500" />
+                            )}
+                            <span className="font-semibold text-text">
+                              {addr.name}
+                            </span>
+                          </div>
+                          <p className="font-medium text-text">
+                            {addr.fullName}
+                          </p>
+                          <p className="text-sm text-text-light">
+                            {addr.addressLine1}
+                          </p>
+                          {addr.addressLine2 && (
+                            <p className="text-sm text-text-light">
+                              {addr.addressLine2}
+                            </p>
+                          )}
+                          <p className="text-sm text-text-light">
+                            {addr.landmark && `${addr.landmark}, `}
+                            {addr.area && `${addr.area}, `}
+                            {addr.city}, {addr.state} - {addr.pincode}
+                          </p>
+                          <p className="text-sm text-text-light">
+                            📞 {addr.phone}
+                          </p>
+                          <div className="flex gap-2 mt-3 pt-3 border-t">
+                            <button
+                              onClick={() => handleEditAddress(addr)}
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              <PencilIcon className="w-3 h-3" /> Edit
+                            </button>
+                            {!addr.isDefault && (
+                              <button
+                                onClick={() => handleSetDefault(addr._id)}
+                                className="text-xs text-gray-500 hover:underline"
+                              >
+                                Set as Default
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteAddress(addr._id)}
+                              className="text-xs text-red-500 hover:underline ml-auto flex items-center gap-1"
+                            >
+                              <TrashIcon className="w-3 h-3" /> Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
