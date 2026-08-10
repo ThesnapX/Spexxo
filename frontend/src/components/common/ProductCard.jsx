@@ -4,7 +4,6 @@ import { HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
 import { useAuth } from "../../context/AuthContext";
-import toast from "react-hot-toast";
 
 const PlaceholderImage = ({ className = "" }) => (
   <div
@@ -48,18 +47,15 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
     e.preventDefault();
     e.stopPropagation();
     addToCart(product._id, 1);
-    toast.success("Added to cart!");
   };
 
   const handleWishlist = (e) => {
     e.preventDefault();
     e.stopPropagation();
-
     if (!isAuthenticated) {
       if (onRequireAuth) onRequireAuth();
       return;
     }
-
     isInWishlist(product._id)
       ? removeFromWishlist(product._id)
       : addToWishlist(product._id);
@@ -80,13 +76,11 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             <PlaceholderImage className="w-full h-56 md:h-64" />
           )}
         </Link>
-
         {showSaleBadge && discount > 0 && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
             {discount}% OFF
           </span>
         )}
-
         <button
           onClick={handleWishlist}
           className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all z-10"
@@ -98,7 +92,6 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           )}
         </button>
       </div>
-
       <div className="p-4">
         {product.brand?.name && (
           <p className="text-xs text-text-light mb-1 truncate">

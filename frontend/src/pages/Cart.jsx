@@ -61,82 +61,106 @@ const Cart = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
-              {cart.items.map((item) => (
-                <div
-                  key={item._id}
-                  className="flex gap-4 p-4 bg-white rounded-xl border border-gray-100"
-                >
-                  <Link
-                    to={`/product/${item.product?.slug}`}
-                    className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0"
+              {cart.items.map((item) => {
+                const productSlug = item.product?.slug;
+                const productName =
+                  item.product?.name || item.name || "Product";
+                const productImage =
+                  item.product?.images?.[0]?.url ||
+                  item.image ||
+                  "/images/products/placeholder.jpg";
+
+                return (
+                  <div
+                    key={item._id}
+                    className="flex gap-4 p-4 bg-white rounded-xl border border-gray-100"
                   >
-                    <img
-                      src={
-                        item.product?.images?.[0]?.url ||
-                        "/images/products/placeholder.jpg"
-                      }
-                      alt={item.product?.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </Link>
-                  <div className="flex-1">
-                    <Link
-                      to={`/product/${item.product?.slug}`}
-                      className="font-medium text-text hover:text-primary transition"
-                    >
-                      {item.product?.name || "Product"}
-                    </Link>
-                    {item.variant && (
-                      <p className="text-xs text-text-light mt-1">
-                        {item.variant.name}
-                      </p>
+                    {productSlug ? (
+                      <Link
+                        to={`/product/${productSlug}`}
+                        className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0"
+                      >
+                        <img
+                          src={productImage}
+                          alt={productName}
+                          className="w-full h-full object-cover"
+                        />
+                      </Link>
+                    ) : (
+                      <div className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
+                        <img
+                          src={productImage}
+                          alt={productName}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
                     )}
-                    <p className="text-primary font-semibold mt-2">
-                      ₹{item.price?.toLocaleString()}
-                    </p>
-                    <div className="flex items-center gap-4 mt-3">
-                      <div className="flex items-center border border-gray-200 rounded-lg">
-                        <button
-                          onClick={() =>
-                            item.quantity > 1 &&
-                            updateQuantity(item._id, item.quantity - 1)
-                          }
-                          className="p-1 hover:bg-gray-50"
+                    <div className="flex-1 min-w-0">
+                      {productSlug ? (
+                        <Link
+                          to={`/product/${productSlug}`}
+                          className="font-medium text-text hover:text-primary transition line-clamp-1"
                         >
-                          <MinusIcon className="w-4 h-4" />
-                        </button>
-                        <span className="px-3 font-medium text-sm">
-                          {item.quantity}
+                          {productName}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-text">
+                          {productName}
                         </span>
+                      )}
+                      {item.variant?.name && (
+                        <p className="text-xs text-text-light mt-1">
+                          {item.variant.name}
+                        </p>
+                      )}
+                      <p className="text-primary font-semibold mt-2">
+                        ₹{(item.price || 0)?.toLocaleString()}
+                      </p>
+                      <div className="flex items-center gap-4 mt-3">
+                        <div className="flex items-center border border-gray-200 rounded-lg">
+                          <button
+                            onClick={() =>
+                              item.quantity > 1 &&
+                              updateQuantity(item._id, item.quantity - 1)
+                            }
+                            className="p-1.5 hover:bg-gray-50"
+                          >
+                            <MinusIcon className="w-4 h-4" />
+                          </button>
+                          <span className="px-3 font-medium text-sm">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() =>
+                              updateQuantity(item._id, item.quantity + 1)
+                            }
+                            className="p-1.5 hover:bg-gray-50"
+                          >
+                            <PlusIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                         <button
-                          onClick={() =>
-                            updateQuantity(item._id, item.quantity + 1)
-                          }
-                          className="p-1 hover:bg-gray-50"
+                          onClick={() => removeFromCart(item._id)}
+                          className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
                         >
-                          <PlusIcon className="w-4 h-4" />
+                          <TrashIcon className="w-4 h-4" /> Remove
                         </button>
                       </div>
-                      <button
-                        onClick={() => removeFromCart(item._id)}
-                        className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
-                      >
-                        <TrashIcon className="w-4 h-4" /> Remove
-                      </button>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="font-semibold text-text">
+                        ₹
+                        {(
+                          (item.price || 0) * (item.quantity || 1)
+                        ).toLocaleString()}
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-text">
-                      ₹{(item.price * item.quantity).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Order Summary */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-28">
                 <h2 className="text-lg font-semibold text-text mb-4">
