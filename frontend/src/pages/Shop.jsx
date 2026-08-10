@@ -328,7 +328,7 @@ const Shop = () => {
         <button
           onClick={() => {
             addToCart(product._id, 1);
-            toast.success("Added to cart!");
+            // toast.success("Added to cart!");
           }}
           className="w-full mt-3 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary hover:text-white transition flex items-center justify-center gap-2"
         >
