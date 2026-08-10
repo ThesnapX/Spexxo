@@ -1,6 +1,7 @@
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
+import Coupon from "../models/Coupon.js";
 import sendEmail from "../utils/sendEmail.js";
 
 // @desc    Create order
@@ -25,7 +26,6 @@ export const createOrder = async (req, res) => {
     for (const item of cart.items) {
       const product = item.product;
       if (!product) continue;
-
       if (product.stock < item.quantity) {
         return res.status(400).json({
           success: false,
@@ -57,7 +57,7 @@ export const createOrder = async (req, res) => {
 
       subtotal += itemSubtotal;
 
-      // Reduce stock - ONE TIME only
+      // Reduce stock
       await Product.findByIdAndUpdate(product._id, {
         $inc: { stock: -quantity },
       });
@@ -71,7 +71,66 @@ export const createOrder = async (req, res) => {
     }
 
     const shippingCost = subtotal >= 999 ? 0 : 99;
-    const total = subtotal + shippingCost;
+
+    // ============ COUPON HANDLING ============
+    let discount = 0;
+    let couponData = null;
+
+    if (couponCode) {
+      try {
+        const coupon = await Coupon.findOne({
+          code: couponCode.toUpperCase(),
+          isActive: true,
+          startDate: { $lte: new Date() },
+          endDate: { $gte: new Date() },
+        });
+
+        if (coupon) {
+          // Check total usage limit
+          if (
+            coupon.totalUsageLimit &&
+            coupon.usedCount >= coupon.totalUsageLimit
+          ) {
+            // Don't block the order, just skip the coupon
+            console.log("Coupon usage limit reached");
+          } else {
+            // Determine discount base
+            let discountBase = subtotal;
+            if (coupon.discountOn === "delivery") {
+              discountBase = shippingCost;
+            }
+
+            // Calculate discount
+            if (coupon.discountType === "percentage") {
+              discount = (discountBase * coupon.discountValue) / 100;
+              if (coupon.maxDiscount) {
+                discount = Math.min(discount, coupon.maxDiscount);
+              }
+            } else {
+              discount = Math.min(coupon.discountValue, discountBase);
+            }
+
+            discount = Math.round(discount * 100) / 100;
+
+            // Update coupon usage
+            coupon.usedCount = (coupon.usedCount || 0) + 1;
+            await coupon.save();
+
+            couponData = {
+              code: coupon.code,
+              discount: discount,
+              discountType: coupon.discountType,
+              discountValue: coupon.discountValue,
+              discountOn: coupon.discountOn,
+            };
+          }
+        }
+      } catch (e) {
+        console.log("Coupon processing error:", e.message);
+      }
+    }
+
+    const total = Math.max(0, subtotal - discount + shippingCost);
 
     const orderData = {
       user: req.user._id,
@@ -90,7 +149,8 @@ export const createOrder = async (req, res) => {
       subtotal: Number(subtotal),
       shippingCost: Number(shippingCost),
       tax: 0,
-      discount: 0,
+      discount: Number(discount),
+      coupon: couponData,
       total: Number(total),
       paymentMethod: "cod",
       paymentStatus: "pending",
@@ -98,15 +158,50 @@ export const createOrder = async (req, res) => {
       codAmount: Number(total),
       orderStatus: "pending",
       statusHistory: [
-        { status: "pending", note: "Order placed", date: new Date() },
+        {
+          status: "pending",
+          note: couponData
+            ? `Coupon ${couponData.code} applied - Saved ₹${discount}`
+            : "Order placed",
+          date: new Date(),
+        },
       ],
     };
 
     const order = await Order.create(orderData);
 
-    // Clear cart AFTER successful order
+    // Clear cart
     cart.items = [];
     await cart.save();
+
+    // Send confirmation email
+    try {
+      const emailHTML = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #0B1C39;">Order Confirmed! 🎉</h1>
+          <p>Thank you for your order, <strong>${shippingAddress?.fullName || "Customer"}</strong>!</p>
+          <div style="background: #EBF4FC; padding: 20px; border-radius: 12px; margin: 20px 0;">
+            <p style="font-size: 18px;">Order Number: <strong style="color: #3D96EB;">${order.orderNumber}</strong></p>
+            <p style="font-size: 24px; font-weight: bold; color: #0B1C39;">Total: ₹${total.toLocaleString()}</p>
+            ${couponData ? `<p style="color: #10B981;">Coupon ${couponData.code} applied - You saved ₹${discount.toLocaleString()}!</p>` : ""}
+            <p>Payment Method: <strong>Cash on Delivery</strong></p>
+          </div>
+          <p>We'll notify you when your order ships.</p>
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" 
+             style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">
+            Track Your Order
+          </a>
+        </div>
+      `;
+
+      await sendEmail({
+        email: req.user.email,
+        subject: `Order Confirmed - ${order.orderNumber} | Spexxo`,
+        html: emailHTML,
+      });
+    } catch (emailError) {
+      console.log("Email failed:", emailError.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -131,15 +226,9 @@ export const getOrders = async (req, res) => {
       .sort("-createdAt")
       .populate("items.product", "name slug images");
 
-    res.status(200).json({
-      success: true,
-      orders,
-    });
+    res.status(200).json({ success: true, orders });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -152,42 +241,6 @@ export const getOrder = async (req, res) => {
       "items.product",
       "name slug images",
     );
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    if (
-      order.user.toString() !== req.user._id.toString() &&
-      req.user.role !== "admin"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      order,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Cancel order
-// @route   PUT /api/orders/:id/cancel
-// @access  Private
-export const cancelOrder = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
 
     if (!order) {
       return res
@@ -204,19 +257,53 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     }
 
+    res.status(200).json({ success: true, order });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Cancel order
+// @route   PUT /api/orders/:id/cancel
+// @access  Private
+export const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    if (
+      order.user.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Not authorized" });
+    }
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending or confirmed orders can be cancelled",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Only pending or confirmed orders can be cancelled",
+        });
     }
 
-    // ONLY restore stock if order wasn't already cancelled
+    // Restore stock
     if (order.orderStatus !== "cancelled") {
       for (const item of order.items) {
         await Product.findByIdAndUpdate(item.product, {
           $inc: { stock: item.quantity },
         });
+      }
+      // Restore coupon usage
+      if (order.coupon?.code) {
+        await Coupon.findOneAndUpdate(
+          { code: order.coupon.code },
+          { $inc: { usedCount: -1 } },
+        );
       }
     }
 
@@ -228,11 +315,13 @@ export const cancelOrder = async (req, res) => {
     });
     await order.save();
 
-    res.status(200).json({
-      success: true,
-      order,
-      message: "Order cancelled. Stock restored.",
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        order,
+        message: "Order cancelled. Stock restored.",
+      });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -270,10 +359,7 @@ export const getAllOrders = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -288,12 +374,10 @@ export const updateOrderStatus = async (req, res) => {
       "email firstName",
     );
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
 
     const oldStatus = order.orderStatus;
     order.orderStatus = status;
@@ -309,7 +393,6 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    // Send status update email
     try {
       const statusEmails = {
         confirmed: "Order Confirmed ✅",
@@ -337,19 +420,18 @@ export const updateOrderStatus = async (req, res) => {
         html: emailHTML,
       });
     } catch (emailError) {
-      console.log("Status email failed to send:", emailError.message);
+      console.log("Status email failed:", emailError.message);
     }
 
-    res.status(200).json({
-      success: true,
-      order,
-      message: `Order status updated to ${status}`,
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        order,
+        message: `Order status updated to ${status}`,
+      });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -363,21 +445,13 @@ export const updateOrder = async (req, res) => {
       runValidators: true,
     }).populate("user", "firstName lastName email");
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
 
-    res.status(200).json({
-      success: true,
-      order,
-    });
+    res.status(200).json({ success: true, order });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };

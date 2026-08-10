@@ -16,6 +16,7 @@ export const useCart = () => {
 export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState({ items: [] });
   const [loading, setLoading] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -94,7 +95,6 @@ export const CartProvider = ({ children }) => {
         throw error;
       }
     } else {
-      // Guest - use localStorage with product fetch
       try {
         const currentCart = { ...cart };
         if (!currentCart.items) currentCart.items = [];
@@ -208,6 +208,16 @@ export const CartProvider = ({ children }) => {
       setCart({ items: [] });
       localStorage.removeItem("guestCart");
     }
+    setAppliedCoupon(null);
+  };
+
+  // Coupon functions
+  const applyCoupon = (couponData) => {
+    setAppliedCoupon(couponData);
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
   };
 
   const cartCount =
@@ -223,6 +233,9 @@ export const CartProvider = ({ children }) => {
     loading,
     cartCount,
     cartTotal,
+    appliedCoupon,
+    applyCoupon,
+    removeCoupon,
     addToCart,
     updateQuantity,
     removeFromCart,

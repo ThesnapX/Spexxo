@@ -14,11 +14,12 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Checkout = () => {
-  const { cart, cartTotal, clearCart } = useCart();
+  const { cart, cartTotal, clearCart, appliedCoupon } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [useSavedAddress, setUseSavedAddress] = useState(true);
+
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -52,6 +53,28 @@ const Checkout = () => {
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
+  const shippingCost = cartTotal >= 999 ? 0 : 99;
+
+  // Calculate coupon discount from context
+  const calculateCouponDiscount = () => {
+    if (!appliedCoupon) return 0;
+    let discountBase = cartTotal;
+    if (appliedCoupon.discountOn === "delivery") discountBase = shippingCost;
+    let discount = 0;
+    if (appliedCoupon.discountType === "percentage") {
+      discount = (discountBase * appliedCoupon.discountValue) / 100;
+      if (appliedCoupon.maxDiscount)
+        discount = Math.min(discount, appliedCoupon.maxDiscount);
+    } else {
+      discount = Math.min(appliedCoupon.discountValue, discountBase);
+    }
+    return Math.round(discount * 100) / 100;
+  };
+
+  const couponDiscount = calculateCouponDiscount();
+  const couponCode = appliedCoupon?.code || "";
+  const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (
@@ -66,7 +89,10 @@ const Checkout = () => {
     }
     setLoading(true);
     try {
-      await axios.post(`${API_URL}/orders`, { shippingAddress: form });
+      await axios.post(`${API_URL}/orders`, {
+        shippingAddress: form,
+        couponCode: couponCode || undefined,
+      });
       await clearCart();
       toast.success("Order placed successfully!");
       navigate("/account/orders");
@@ -90,9 +116,6 @@ const Checkout = () => {
       </div>
     );
   }
-
-  const shippingCost = cartTotal >= 999 ? 0 : 99;
-  const grandTotal = cartTotal + shippingCost;
 
   return (
     <>
@@ -322,27 +345,45 @@ const Checkout = () => {
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-                {cart.items.map((item) => (
-                  <div
-                    key={item._id}
-                    className="flex justify-between text-sm py-2"
-                  >
-                    <span>
-                      {item.product?.name} x {item.quantity}
-                    </span>
-                    <span>
-                      ₹{(item.price * item.quantity).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
+                {cart.items.map((item) => {
+                  const name = item.product?.name || item.name || "Product";
+                  const price =
+                    item.price ||
+                    item.product?.comparePrice ||
+                    item.product?.price ||
+                    0;
+                  return (
+                    <div
+                      key={item._id}
+                      className="flex justify-between text-sm py-2"
+                    >
+                      <span className="truncate mr-2">
+                        {name} × {item.quantity}
+                      </span>
+                      <span className="flex-shrink-0">
+                        ₹{(price * item.quantity).toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
                 <div className="border-t mt-4 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
                     <span>₹{cartTotal.toLocaleString()}</span>
                   </div>
+                  {couponDiscount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>
+                        Discount{couponCode ? ` (${couponCode})` : ""}
+                      </span>
+                      <span>-₹{couponDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span>Shipping</span>
-                    <span className="text-green-600">
+                    <span
+                      className={shippingCost === 0 ? "text-green-600" : ""}
+                    >
                       {shippingCost === 0 ? "FREE" : `₹${shippingCost}`}
                     </span>
                   </div>
@@ -352,6 +393,11 @@ const Checkout = () => {
                       ₹{grandTotal.toLocaleString()}
                     </span>
                   </div>
+                  {couponDiscount > 0 && (
+                    <p className="text-xs text-green-600">
+                      You save ₹{couponDiscount.toLocaleString()}!
+                    </p>
+                  )}
                 </div>
                 <div className="mt-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
                   💵 Cash on Delivery Available
