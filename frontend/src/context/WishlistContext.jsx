@@ -37,12 +37,19 @@ export const WishlistProvider = ({ children }) => {
   };
 
   const addToWishlist = async (productId) => {
+    if (!isAuthenticated) {
+      // Return a special flag to indicate login is needed
+      return { requiresAuth: true };
+    }
+
     try {
       const { data } = await axios.post(`${API_URL}/wishlist/${productId}`);
       setWishlist(data.wishlist);
       toast.success("Added to wishlist!");
+      return { success: true };
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to add to wishlist");
+      return { success: false };
     }
   };
 

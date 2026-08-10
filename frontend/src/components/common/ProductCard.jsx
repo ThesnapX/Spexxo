@@ -3,6 +3,7 @@ import { HeartIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
+import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
 
 const PlaceholderImage = ({ className = "" }) => (
@@ -25,9 +26,10 @@ const PlaceholderImage = ({ className = "" }) => (
   </div>
 );
 
-const ProductCard = ({ product, showSaleBadge = false }) => {
+const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
+  const { isAuthenticated } = useAuth();
 
   if (!product) return null;
 
@@ -52,6 +54,12 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
   const handleWishlist = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!isAuthenticated) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
     isInWishlist(product._id)
       ? removeFromWishlist(product._id)
       : addToWishlist(product._id);
@@ -59,7 +67,6 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
 
   return (
     <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-      {/* Image */}
       <div className="relative overflow-hidden bg-gray-50">
         <Link to={`/product/${product.slug}`}>
           {product.images?.[0]?.url ? (
@@ -74,14 +81,12 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
           )}
         </Link>
 
-        {/* Sale Badge */}
         {showSaleBadge && discount > 0 && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
             {discount}% OFF
           </span>
         )}
 
-        {/* Wishlist Button */}
         <button
           onClick={handleWishlist}
           className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all z-10"
@@ -94,23 +99,17 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
         </button>
       </div>
 
-      {/* Info */}
       <div className="p-4">
-        {/* Brand */}
         {product.brand?.name && (
           <p className="text-xs text-text-light mb-1 truncate">
             {product.brand.name}
           </p>
         )}
-
-        {/* Title */}
         <Link to={`/product/${product.slug}`}>
           <h3 className="font-medium text-sm text-text mb-2 line-clamp-1 hover:text-primary transition">
             {product.name}
           </h3>
         </Link>
-
-        {/* Price */}
         <div className="flex items-center gap-2 mb-3">
           <span className="font-bold text-text">
             ₹{displayPrice?.toLocaleString()}
@@ -126,8 +125,6 @@ const ProductCard = ({ product, showSaleBadge = false }) => {
             </span>
           )}
         </div>
-
-        {/* Add to Cart */}
         <button
           onClick={handleAddToCart}
           className="w-full py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary hover:text-white transition flex items-center justify-center gap-2"

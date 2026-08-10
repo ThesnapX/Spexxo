@@ -117,19 +117,49 @@ const Register = () => {
             </div>
 
             {/* Phone */}
+            {/* Phone */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">
-                Phone
+                Phone Number
               </label>
-              <input
-                type="tel"
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
+                  +91
+                </span>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={form.phone}
+                  onChange={(e) => {
+                    // Only allow numbers
+                    const value = e.target.value.replace(/\D/g, "");
+                    if (value.length <= 10) {
+                      setForm({ ...form, phone: value });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    // Prevent non-numeric keys
+                    if (
+                      !/[0-9]/.test(e.key) &&
+                      e.key !== "Backspace" &&
+                      e.key !== "Delete" &&
+                      e.key !== "ArrowLeft" &&
+                      e.key !== "ArrowRight" &&
+                      e.key !== "Tab"
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="w-full pl-12 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB] focus:ring-1 focus:ring-[#3D96EB]/20 transition"
+                  placeholder="Enter 10-digit number"
+                  maxLength={10}
+                  inputMode="numeric"
+                />
+              </div>
+              <p className="text-xs text-text-light mt-1">
+                We'll send order updates to this number
+              </p>
             </div>
-
             {/* Password with Eye Icon */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">

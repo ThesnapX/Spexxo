@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import {
@@ -15,16 +15,17 @@ import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
 import LiveSearch from "../common/LiveSearch";
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Navigation = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  // const [searchQuery, setSearchQuery] = useState("");
   const [activeMegaMenu, setActiveMegaMenu] = useState(null);
   const megaMenuTimeout = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { isAuthenticated } = useAuth();
   const { cartCount } = useCart();
@@ -36,15 +37,6 @@ const Navigation = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // const handleSearch = (e) => {
-  //   e.preventDefault();
-  //   if (searchQuery.trim()) {
-  //     navigate(`/shop?search=${searchQuery}`);
-  //     setSearchQuery("");
-  //     setMobileSearchOpen(false);
-  //   }
-  // };
-
   const handleMegaMenuEnter = (menu) => {
     if (megaMenuTimeout.current) clearTimeout(megaMenuTimeout.current);
     setActiveMegaMenu(menu);
@@ -54,6 +46,24 @@ const Navigation = () => {
     megaMenuTimeout.current = setTimeout(() => {
       setActiveMegaMenu(null);
     }, 200);
+  };
+
+  // Check if a mega menu section is active
+  const isMegaMenuActive = (type) => {
+    const params = new URLSearchParams(location.search);
+    const typeMap = {
+      eyeglasses: "eyeglasses",
+      sunglasses: "sunglasses",
+      "contact-lens": "contactlens",
+    };
+    const mappedType = typeMap[type] || type;
+
+    // Check path match
+    const pathMatch = location.pathname === `/shop/${type}`;
+    // Check query param match
+    const paramMatch = params.get("productType") === mappedType;
+
+    return pathMatch || paramMatch;
   };
 
   return (
@@ -87,7 +97,7 @@ const Navigation = () => {
               <img
                 src="/images/logo-black.png"
                 alt="Spexxo"
-                className="h-8 md:h-12 w-auto "
+                className="h-8 md:h-12 w-auto"
                 onError={(e) => {
                   e.target.style.display = "none";
                   e.target.nextSibling.style.display = "block";
@@ -108,7 +118,7 @@ const Navigation = () => {
 
               {/* Nav Links */}
               <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Shop - All Products */}
+                {/* Shop */}
                 <NavLink
                   to="/shop"
                   end
@@ -131,13 +141,11 @@ const Navigation = () => {
                 >
                   <NavLink
                     to="/shop/eyeglasses"
-                    className={({ isActive }) =>
-                      `flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? "text-[#3D96EB] bg-[#EBF4FC]"
-                          : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-                      }`
-                    }
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      isMegaMenuActive("eyeglasses")
+                        ? "text-[#3D96EB] bg-[#EBF4FC]"
+                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
+                    }`}
                   >
                     Eyeglasses
                     <ChevronDownIcon className="w-3.5 h-3.5" />
@@ -152,13 +160,11 @@ const Navigation = () => {
                 >
                   <NavLink
                     to="/shop/sunglasses"
-                    className={({ isActive }) =>
-                      `flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? "text-[#3D96EB] bg-[#EBF4FC]"
-                          : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-                      }`
-                    }
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      isMegaMenuActive("sunglasses")
+                        ? "text-[#3D96EB] bg-[#EBF4FC]"
+                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
+                    }`}
                   >
                     Sunglasses
                     <ChevronDownIcon className="w-3.5 h-3.5" />
@@ -173,38 +179,21 @@ const Navigation = () => {
                 >
                   <NavLink
                     to="/shop/contact-lens"
-                    className={({ isActive }) =>
-                      `flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? "text-[#3D96EB] bg-[#EBF4FC]"
-                          : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-                      }`
-                    }
+                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                      isMegaMenuActive("contact-lens")
+                        ? "text-[#3D96EB] bg-[#EBF4FC]"
+                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
+                    }`}
                   >
                     Contact Lens
                     <ChevronDownIcon className="w-3.5 h-3.5" />
                   </NavLink>
                 </div>
-
-                {/* Contact Us
-                <NavLink
-                  to="/contact"
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                      isActive
-                        ? "text-[#3D96EB] bg-[#EBF4FC]"
-                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-                    }`
-                  }
-                >
-                  Contact Us
-                </NavLink> */}
               </div>
             </div>
 
             {/* Icons */}
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-              {/* Mobile Search Toggle */}
               <button
                 onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
                 className="lg:hidden text-text hover:text-[#3D96EB]"
@@ -212,7 +201,6 @@ const Navigation = () => {
                 <MagnifyingGlassIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
 
-              {/* Wishlist */}
               <Link
                 to="/account/wishlist"
                 className="relative text-text hover:text-[#3D96EB] transition"
@@ -225,7 +213,6 @@ const Navigation = () => {
                 )}
               </Link>
 
-              {/* Cart */}
               <Link
                 to="/cart"
                 className="relative text-text hover:text-[#3D96EB] transition"
@@ -238,7 +225,6 @@ const Navigation = () => {
                 )}
               </Link>
 
-              {/* Account */}
               <Link
                 to={isAuthenticated ? "/account" : "/login"}
                 className="text-text hover:text-[#3D96EB] transition"
@@ -246,7 +232,6 @@ const Navigation = () => {
                 <UserIcon className="w-5 h-5 md:w-6 md:h-6" />
               </Link>
 
-              {/* Mobile Menu Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden text-text"
@@ -280,31 +265,6 @@ const Navigation = () => {
           </div>
         )}
 
-        {/* Mobile Search Bar */}
-        {/* {mobileSearchOpen && (
-          <div className="lg:hidden border-t bg-white px-4 py-3">
-            <form
-              onSubmit={handleSearch}
-              className="flex items-center relative"
-            >
-              <input
-                type="text"
-                placeholder="Search for eyewear..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-[#3D96EB]"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-[#3D96EB] text-white p-1.5 rounded-full"
-              >
-                <MagnifyingGlassIcon className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
-        )} */}
-
         {/* Mobile Search */}
         {mobileSearchOpen && (
           <div className="lg:hidden border-t bg-white px-4 py-3">
@@ -317,47 +277,53 @@ const Navigation = () => {
           <div className="lg:hidden bg-white border-t max-h-[70vh] overflow-y-auto">
             <div className="container-custom py-4 space-y-1">
               <MobileMenuLink
+                to="/shop"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                🛍️ Shop
+              </MobileMenuLink>
+              <MobileMenuLink
                 to="/shop/eyeglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Eyeglasses
+                👓 Eyeglasses
               </MobileMenuLink>
               <MobileMenuLink
                 to="/shop/sunglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Sunglasses
+                🕶️ Sunglasses
               </MobileMenuLink>
               <MobileMenuLink
                 to="/shop/contact-lens"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Contact Lens
+                🔵 Contact Lens
               </MobileMenuLink>
               <div className="border-t my-3"></div>
               <MobileMenuLink
                 to="/contact"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Contact Us
+                📞 Contact Us
               </MobileMenuLink>
               <MobileMenuLink
                 to="/about"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                About Us
+                ℹ️ About Us
               </MobileMenuLink>
               <MobileMenuLink
                 to="/blog"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Blog
+                📝 Blog
               </MobileMenuLink>
               <MobileMenuLink
                 to="/faq"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                FAQ
+                ❓ FAQ
               </MobileMenuLink>
             </div>
           </div>
@@ -370,7 +336,7 @@ const Navigation = () => {
   );
 };
 
-// Mobile Menu Link Component
+// Mobile Menu Link
 const MobileMenuLink = ({ to, onClick, children }) => (
   <NavLink
     to={to}
@@ -387,7 +353,7 @@ const MobileMenuLink = ({ to, onClick, children }) => (
   </NavLink>
 );
 
-// Mega Menu Content Component
+// Mega Menu Content
 const MegaMenuContent = ({ type, onClose }) => {
   const { data: categories } = useQuery({
     queryKey: ["categories", type],
@@ -435,11 +401,7 @@ const MegaMenuContent = ({ type, onClose }) => {
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.style.display = "none";
-                    e.target.parentElement.innerHTML = `
-              <div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                <span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span>
-              </div>
-            `;
+                    e.target.parentElement.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center"><span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span></div>`;
                   }}
                 />
               </div>
@@ -508,21 +470,21 @@ const MegaMenuContent = ({ type, onClose }) => {
           ) : (
             <>
               <Link
-                to={`/shop?productType=contactlens`}
+                to="/shop?productType=contactlens"
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >
                 Daily Disposable
               </Link>
               <Link
-                to={`/shop?productType=contactlens`}
+                to="/shop?productType=contactlens"
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >
                 Monthly Lenses
               </Link>
               <Link
-                to={`/shop?productType=contactlens`}
+                to="/shop?productType=contactlens"
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >

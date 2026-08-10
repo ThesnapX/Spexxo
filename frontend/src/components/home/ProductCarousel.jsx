@@ -17,6 +17,7 @@ const ProductCarousel = ({
   apiParams,
   linkTo,
   showSaleBadge = false,
+  onRequireAuth,
 }) => {
   const { data, isLoading } = useQuery({
     queryKey: [queryKey],
@@ -82,7 +83,11 @@ const ProductCarousel = ({
         >
           {products.map((product) => (
             <SwiperSlide key={product._id}>
-              <ProductCard product={product} showSaleBadge={showSaleBadge} />
+              <ProductCard
+                product={product}
+                showSaleBadge={showSaleBadge}
+                onRequireAuth={onRequireAuth}
+              />
             </SwiperSlide>
           ))}
         </Swiper>

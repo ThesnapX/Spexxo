@@ -1,3 +1,5 @@
+import { useAuth } from "../context/AuthContext";
+import AuthPopup from "../components/common/AuthPopup";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -23,6 +25,8 @@ const Shop = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [sortBy, setSortBy] = useState(searchParams.get("sort") || "newest");
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const { user } = useAuth();
 
   // LOCAL STATE for inputs (prevents cursor jumping)
   const [searchInput, setSearchInput] = useState(
@@ -264,11 +268,17 @@ const Shop = () => {
           </span>
         )}
         <button
-          onClick={() =>
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!user) {
+              setShowAuthPopup(true);
+              return;
+            }
             isInWishlist(product._id)
               ? removeFromWishlist(product._id)
-              : addToWishlist(product._id)
-          }
+              : addToWishlist(product._id);
+          }}
           className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all z-10"
         >
           {isInWishlist(product._id) ? (
@@ -610,7 +620,11 @@ const Shop = () => {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     {data.products.map((product) => (
-                      <ProductCard key={product._id} product={product} />
+                      <ProductCard
+                        key={product._id}
+                        product={product}
+                        onRequireAuth={() => setShowAuthPopup(true)}
+                      />
                     ))}
                   </div>
                   {data?.pagination?.pages > 1 && (
@@ -648,7 +662,6 @@ const Shop = () => {
           </div>
         </div>
       </div>
-
       {/* Mobile Filter Drawer */}
       {mobileFilterOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -676,6 +689,13 @@ const Shop = () => {
           </div>
         </div>
       )}
+
+      {/* Auth Popup */}
+      <AuthPopup
+        isOpen={showAuthPopup}
+        onClose={() => setShowAuthPopup(false)}
+        mode="login"
+      />
     </>
   );
 };
