@@ -17,7 +17,6 @@ export const getProducts = async (req, res) => {
       gender,
       productType,
       frameShape,
-      frameColor,
       lensType,
       minPrice,
       maxPrice,
@@ -39,65 +38,62 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // Category filter - handle comma-separated string
+    // Category filter
     if (category) {
       const cat = await Category.findOne({ slug: category });
       if (cat) {
-        // Match if category field contains this ID (works for both single and comma-separated)
-        query.category = { $regex: cat._id.toString() };
+        query.category = { $regex: cat._id.toString(), $options: "i" };
+      } else {
+        query.category = { $regex: "nonexistent" };
       }
     }
 
     // Brand filter
     if (brand) {
-      const brandSlugs = brand.split(",");
+      const brandSlugs = brand.split(",").filter(Boolean);
       const brands = await Brand.find({ slug: { $in: brandSlugs } });
       if (brands.length > 0) {
         const brandIds = brands.map((b) => b._id.toString());
-        if (brandSlugs.length === 1) {
-          query.brand = { $regex: brandIds[0] };
-        } else {
-          query.$or = brandIds.map((id) => ({ brand: { $regex: id } }));
-        }
+        query.brand = { $in: brandIds };
+      } else {
+        query.brand = { $in: [] };
       }
     }
 
     // Gender filter
     if (gender) {
-      const genders = gender.split(",");
-      query.gender = { $in: genders };
+      const genders = gender.split(",").filter(Boolean);
+      if (genders.length > 0) query.gender = { $in: genders };
     }
 
     // Product type
-    if (productType) {
-      query.productType = productType;
-    }
+    if (productType) query.productType = productType;
 
     // Frame shape
     if (frameShape) {
-      const shapes = frameShape.split(",");
-      const shapeConditions = shapes.map((shape) => ({
-        frameShape: { $regex: shape, $options: "i" },
-      }));
-      if (shapeConditions.length === 1) {
-        query.frameShape = shapeConditions[0].frameShape;
-      } else {
+      const shapes = frameShape.split(",").filter(Boolean);
+      if (shapes.length === 1) {
+        query.frameShape = { $regex: shapes[0], $options: "i" };
+      } else if (shapes.length > 1) {
         query.$and = query.$and || [];
-        query.$and.push({ $or: shapeConditions });
+        query.$and.push({
+          $or: shapes.map((s) => ({
+            frameShape: { $regex: s, $options: "i" },
+          })),
+        });
       }
     }
 
     // Lens type
     if (lensType) {
-      const types = lensType.split(",");
-      const lensConditions = types.map((type) => ({
-        lensType: { $regex: type, $options: "i" },
-      }));
-      if (lensConditions.length === 1) {
-        query.lensType = lensConditions[0].lensType;
-      } else {
+      const types = lensType.split(",").filter(Boolean);
+      if (types.length === 1) {
+        query.lensType = { $regex: types[0], $options: "i" };
+      } else if (types.length > 1) {
         query.$and = query.$and || [];
-        query.$and.push({ $or: lensConditions });
+        query.$and.push({
+          $or: types.map((t) => ({ lensType: { $regex: t, $options: "i" } })),
+        });
       }
     }
 
@@ -109,9 +105,7 @@ export const getProducts = async (req, res) => {
     }
 
     // Rating
-    if (rating) {
-      query["ratings.average"] = { $gte: Number(rating) };
-    }
+    if (rating) query["ratings.average"] = { $gte: Number(rating) };
 
     // Flags
     if (isFeatured) query.isFeatured = true;
@@ -120,7 +114,7 @@ export const getProducts = async (req, res) => {
     if (isBestSeller) query.isBestSeller = true;
 
     // Sort
-    let sortOption = {};
+    let sortOption = { createdAt: -1 };
     switch (sort) {
       case "price-low":
         sortOption = { price: 1 };
@@ -131,14 +125,9 @@ export const getProducts = async (req, res) => {
       case "rating":
         sortOption = { "ratings.average": -1 };
         break;
-      case "newest":
-        sortOption = { createdAt: -1 };
-        break;
       case "popular":
         sortOption = { "ratings.count": -1 };
         break;
-      default:
-        sortOption = { createdAt: -1 };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -159,7 +148,7 @@ export const getProducts = async (req, res) => {
       categoryMap[cat._id.toString()] = cat;
     });
 
-    // Attach category names to products
+    // Attach category names
     const productsWithCategories = products.map((product) => {
       const productObj = product.toObject();
       if (productObj.category) {
@@ -172,7 +161,6 @@ export const getProducts = async (req, res) => {
               : null;
           })
           .filter(Boolean);
-        // Keep first category as primary for backward compatibility
         productObj.category = productObj.categories[0] || null;
       }
       return productObj;
@@ -190,10 +178,7 @@ export const getProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Get products error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -203,22 +188,22 @@ export const getProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const { slug } = req.params;
-
-    // Try to find by slug first, then by ID
-    let product = await Product.findOne({ slug, isActive: true });
-
+    let product = await Product.findOne({ slug, isActive: true }).populate(
+      "brand",
+      "name slug logo",
+    );
     if (!product && slug.match(/^[0-9a-fA-F]{24}$/)) {
-      // If slug looks like a MongoDB ID, try finding by ID
-      product = await Product.findById(slug);
+      product = await Product.findById(slug).populate(
+        "brand",
+        "name slug logo",
+      );
     }
-
     if (!product) {
       return res
         .status(404)
         .json({ success: false, message: "Product not found" });
     }
 
-    // Get category names
     const productObj = product.toObject();
     if (productObj.category) {
       const categoryIds = productObj.category.split(",").filter(Boolean);
@@ -227,7 +212,6 @@ export const getProduct = async (req, res) => {
       productObj.category = categories[0] || null;
     }
 
-    // Get related products
     const relatedProducts = await Product.find({
       _id: { $ne: product._id },
       isActive: true,
@@ -241,11 +225,9 @@ export const getProduct = async (req, res) => {
       .limit(6)
       .populate("brand", "name slug");
 
-    res.status(200).json({
-      success: true,
-      product: productObj,
-      relatedProducts,
-    });
+    res
+      .status(200)
+      .json({ success: true, product: productObj, relatedProducts });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
