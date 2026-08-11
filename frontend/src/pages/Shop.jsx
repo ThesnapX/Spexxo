@@ -120,7 +120,7 @@ const Shop = () => {
     }, 500);
   };
 
-  // Update filter
+  // Update filte
   const updateFilter = (key, value) => {
     const params = new URLSearchParams(searchParams);
     if (value) {
