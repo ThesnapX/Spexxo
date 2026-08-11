@@ -100,13 +100,12 @@ const Shop = () => {
   // Page title
   const getPageTitle = () => {
     if (productType) {
-      return (
-        {
-          eyeglasses: "Eyeglasses",
-          sunglasses: "Sunglasses",
-          contactlens: "Contact Lenses",
-        }[productType] || "All Products"
-      );
+      const typeLabels = {
+        eyeglasses: "Eyeglasses",
+        sunglasses: "Sunglasses",
+        contactlens: "Contact Lenses",
+      };
+      return typeLabels[productType] || "All Products";
     }
     return "All Products";
   };

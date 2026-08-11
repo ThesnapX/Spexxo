@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import {
@@ -10,6 +10,12 @@ import {
   Bars3Icon,
   XMarkIcon,
   ChevronDownIcon,
+  PhoneIcon,
+  InformationCircleIcon,
+  DocumentTextIcon,
+  QuestionMarkCircleIcon,
+  ShoppingCartIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
@@ -24,7 +30,6 @@ const Navigation = () => {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [activeMegaMenu, setActiveMegaMenu] = useState(null);
   const megaMenuTimeout = useRef(null);
-  const navigate = useNavigate();
   const location = useLocation();
 
   const { isAuthenticated } = useAuth();
@@ -48,23 +53,29 @@ const Navigation = () => {
     }, 200);
   };
 
-  // Check if a mega menu section is active
-  const isMegaMenuActive = (type) => {
-    const params = new URLSearchParams(location.search);
-    const typeMap = {
-      eyeglasses: "eyeglasses",
-      sunglasses: "sunglasses",
-      "contact-lens": "contactlens",
-    };
-    const mappedType = typeMap[type] || type;
+  // Get current filters from URL
+  const params = new URLSearchParams(location.search);
+  const currentProductType = params.get("productType") || "";
+  const currentFrameShape = params.get("frameShape") || "";
+  const currentCategory = params.get("category") || "";
+  const currentBrand = params.get("brand") || "";
+  const currentGender = params.get("gender") || "";
 
-    // Check path match
-    const pathMatch = location.pathname === `/shop/${type}`;
-    // Check query param match
-    const paramMatch = params.get("productType") === mappedType;
-
-    return pathMatch || paramMatch;
+  // Determine which mega menu type is active based on URL
+  const getActiveMegaType = () => {
+    if (location.pathname === "/shop/eyeglasses") return "eyeglasses";
+    if (location.pathname === "/shop/sunglasses") return "sunglasses";
+    if (location.pathname === "/shop/contact-lens") return "contactlens";
+    if (currentProductType === "eyeglasses") return "eyeglasses";
+    if (currentProductType === "sunglasses") return "sunglasses";
+    if (currentProductType === "contactlens") return "contactlens";
+    return "";
   };
+
+  const activeMegaType = getActiveMegaType();
+
+  // Shop is active ONLY when no mega menu is active and we're on /shop
+  const isShopActive = location.pathname === "/shop" && !activeMegaType;
 
   return (
     <>
@@ -92,7 +103,6 @@ const Navigation = () => {
       >
         <div className="container-custom">
           <div className="flex items-center justify-between py-3 gap-4">
-            {/* Logo */}
             <Link to="/" className="flex-shrink-0">
               <img
                 src="/images/logo-black.png"
@@ -108,27 +118,22 @@ const Navigation = () => {
               </span>
             </Link>
 
-            {/* Desktop Navigation + Search */}
             <div className="hidden lg:flex items-center gap-3 flex-1 justify-center">
-              {/* Live Search */}
               <LiveSearch
                 className="w-full max-w-lg"
                 placeholder="Search for eyeglasses, sunglasses, contact lenses..."
               />
 
-              {/* Nav Links */}
               <div className="flex items-center gap-1 flex-shrink-0">
                 {/* Shop */}
                 <NavLink
                   to="/shop"
                   end
-                  className={({ isActive }) =>
-                    `px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                      isActive
-                        ? "text-[#3D96EB] bg-[#EBF4FC]"
-                        : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-                    }`
-                  }
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                    isShopActive
+                      ? "text-[#3D96EB] bg-[#EBF4FC]"
+                      : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
+                  }`}
                 >
                   Shop
                 </NavLink>
@@ -142,7 +147,7 @@ const Navigation = () => {
                   <NavLink
                     to="/shop/eyeglasses"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                      isMegaMenuActive("eyeglasses")
+                      activeMegaType === "eyeglasses"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
                         : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
                     }`}
@@ -161,7 +166,7 @@ const Navigation = () => {
                   <NavLink
                     to="/shop/sunglasses"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                      isMegaMenuActive("sunglasses")
+                      activeMegaType === "sunglasses"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
                         : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
                     }`}
@@ -180,7 +185,7 @@ const Navigation = () => {
                   <NavLink
                     to="/shop/contact-lens"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                      isMegaMenuActive("contact-lens")
+                      activeMegaType === "contactlens"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
                         : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
                     }`}
@@ -192,7 +197,6 @@ const Navigation = () => {
               </div>
             </div>
 
-            {/* Icons */}
             <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
               <button
                 onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
@@ -200,7 +204,6 @@ const Navigation = () => {
               >
                 <MagnifyingGlassIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
-
               <Link
                 to="/account/wishlist"
                 className="relative text-text hover:text-[#3D96EB] transition"
@@ -212,7 +215,6 @@ const Navigation = () => {
                   </span>
                 )}
               </Link>
-
               <Link
                 to="/cart"
                 className="relative text-text hover:text-[#3D96EB] transition"
@@ -224,14 +226,12 @@ const Navigation = () => {
                   </span>
                 )}
               </Link>
-
               <Link
                 to={isAuthenticated ? "/account" : "/login"}
                 className="text-text hover:text-[#3D96EB] transition"
               >
                 <UserIcon className="w-5 h-5 md:w-6 md:h-6" />
               </Link>
-
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden text-text"
@@ -265,14 +265,12 @@ const Navigation = () => {
           </div>
         )}
 
-        {/* Mobile Search */}
         {mobileSearchOpen && (
           <div className="lg:hidden border-t bg-white px-4 py-3">
             <LiveSearch placeholder="Search eyewear..." />
           </div>
         )}
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="lg:hidden bg-white border-t max-h-[70vh] overflow-y-auto">
             <div className="container-custom py-4 space-y-1">
@@ -280,88 +278,90 @@ const Navigation = () => {
                 to="/shop"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🛍️ Shop
+                <ShoppingCartIcon className="w-5 h-5" /> Shop
               </MobileMenuLink>
               <MobileMenuLink
                 to="/shop/eyeglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                👓 Eyeglasses
+                <EyeIcon className="w-5 h-5" /> Eyeglasses
               </MobileMenuLink>
               <MobileMenuLink
                 to="/shop/sunglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🕶️ Sunglasses
+                <EyeIcon className="w-5 h-5" /> Sunglasses
               </MobileMenuLink>
               <MobileMenuLink
                 to="/shop/contact-lens"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🔵 Contact Lens
+                <EyeIcon className="w-5 h-5" /> Contact Lens
               </MobileMenuLink>
               <div className="border-t my-3"></div>
               <MobileMenuLink
                 to="/contact"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                📞 Contact Us
+                <PhoneIcon className="w-5 h-5" /> Contact Us
               </MobileMenuLink>
               <MobileMenuLink
                 to="/about"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                ℹ️ About Us
+                <InformationCircleIcon className="w-5 h-5" /> About Us
               </MobileMenuLink>
               <MobileMenuLink
                 to="/blog"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                📝 Blog
+                <DocumentTextIcon className="w-5 h-5" /> Blog
               </MobileMenuLink>
               <MobileMenuLink
                 to="/faq"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                ❓ FAQ
+                <QuestionMarkCircleIcon className="w-5 h-5" /> FAQ
               </MobileMenuLink>
             </div>
           </div>
         )}
       </header>
 
-      {/* Spacer for fixed header */}
       <div className="h-[56px] md:h-[64px]"></div>
     </>
   );
 };
 
-// Mobile Menu Link
 const MobileMenuLink = ({ to, onClick, children }) => (
   <NavLink
     to={to}
     onClick={onClick}
     className={({ isActive }) =>
-      `block px-4 py-3 rounded-lg text-base font-medium transition ${
-        isActive
-          ? "text-[#3D96EB] bg-[#EBF4FC]"
-          : "text-text hover:text-[#3D96EB] hover:bg-gray-50"
-      }`
+      `flex items-center gap-2 px-4 py-3 rounded-lg text-base font-medium transition ${isActive ? "text-[#3D96EB] bg-[#EBF4FC]" : "text-text hover:text-[#3D96EB] hover:bg-gray-50"}`
     }
   >
     {children}
   </NavLink>
 );
 
-// Mega Menu Content
+// Mega Menu Content - now uses its own useLocation
 const MegaMenuContent = ({ type, onClose }) => {
+  const location = useLocation();
+  const urlParams = new URLSearchParams(location.search);
+  const currentProductType = urlParams.get("productType") || "";
+  const currentFrameShape = urlParams.get("frameShape") || "";
+  const currentCategory = urlParams.get("category") || "";
+  const currentBrand = urlParams.get("brand") || "";
+  const currentGender = urlParams.get("gender") || "";
+
   const { data: categories } = useQuery({
     queryKey: ["categories", type],
     queryFn: async () => {
       const { data } = await axios.get(
         `${API_URL}/categories?productType=${type}`,
       );
-      return data.categories;
+      return data.categories || [];
     },
   });
 
@@ -369,7 +369,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     queryKey: ["brands"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/brands`);
-      return data.brands;
+      return data.brands || [];
     },
   });
 
@@ -378,6 +378,37 @@ const MegaMenuContent = ({ type, onClose }) => {
     sunglasses: "Sunglasses",
     contactlens: "Contact Lenses",
   };
+
+  // Map type to productType value
+  const typeMap = {
+    eyeglasses: "eyeglasses",
+    sunglasses: "sunglasses",
+    contactlens: "contactlens",
+  };
+  const myProductType = typeMap[type] || type;
+
+  // Check if THIS mega menu is the one currently active
+  const isMyMenuActive = () => {
+    if (currentProductType && currentProductType === myProductType) return true;
+    if (!currentProductType) {
+      if (type === "eyeglasses" && location.pathname === "/shop/eyeglasses")
+        return true;
+      if (type === "sunglasses" && location.pathname === "/shop/sunglasses")
+        return true;
+      if (type === "contactlens" && location.pathname === "/shop/contact-lens")
+        return true;
+    }
+    return false;
+  };
+
+  const isActiveShape = (shape) =>
+    isMyMenuActive() &&
+    currentFrameShape === shape.toLowerCase().replace(" ", "-");
+  const isActiveCategory = (slug) =>
+    isMyMenuActive() && currentCategory === slug;
+  const isActiveBrand = (slug) => isMyMenuActive() && currentBrand === slug;
+  const isActiveGender = (gender) =>
+    isMyMenuActive() && currentGender === gender;
 
   return (
     <div className="grid grid-cols-12 gap-8">
@@ -394,18 +425,22 @@ const MegaMenuContent = ({ type, onClose }) => {
               className="group text-center"
               onClick={onClose}
             >
-              <div className="aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden mb-2 border-2 border-transparent group-hover:border-[#3D96EB] transition-all">
+              <div
+                className={`aspect-[3/4] bg-gray-100 rounded-xl overflow-hidden mb-2 border-2 transition-all ${isActiveGender(gender) ? "border-[#3D96EB] ring-2 ring-[#3D96EB]/20" : "border-transparent group-hover:border-[#3D96EB]"}`}
+              >
                 <img
                   src={`/images/mega-menu/${type}-${gender}.jpg`}
-                  alt={`${typeLabels[type]} for ${gender}`}
+                  alt=""
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.style.display = "none";
-                    e.target.parentElement.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center"><span class="text-4xl">${gender === "men" ? "👨" : gender === "women" ? "👩" : "👶"}</span></div>`;
+                    e.target.parentElement.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center"><svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg></div>`;
                   }}
                 />
               </div>
-              <p className="text-sm font-medium text-text group-hover:text-[#3D96EB] transition capitalize">
+              <p
+                className={`text-sm font-medium transition capitalize ${isActiveGender(gender) ? "text-[#3D96EB]" : "text-text group-hover:text-[#3D96EB]"}`}
+              >
                 {gender}
               </p>
             </Link>
@@ -418,14 +453,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Categories
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {categories?.length > 0 ? (
             categories.slice(0, 6).map((cat) => (
               <Link
                 key={cat._id}
                 to={`/shop?category=${cat.slug}`}
                 onClick={onClose}
-                className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
+                className={`block px-3 py-2 rounded-lg transition text-sm ${isActiveCategory(cat.slug) ? "bg-[#EBF4FC] text-[#3D96EB] font-medium" : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"}`}
               >
                 {cat.name}
               </Link>
@@ -438,7 +473,7 @@ const MegaMenuContent = ({ type, onClose }) => {
             onClick={onClose}
             className="block px-3 py-2 text-[#3D96EB] font-medium text-sm hover:underline mt-2"
           >
-            View All {typeLabels[type]} →
+            View All →
           </Link>
         </div>
       </div>
@@ -448,7 +483,7 @@ const MegaMenuContent = ({ type, onClose }) => {
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Frame Shape
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {type !== "contactlens" ? (
             [
               "Rectangle",
@@ -457,16 +492,19 @@ const MegaMenuContent = ({ type, onClose }) => {
               "Square",
               "Aviator",
               "Wayfarer",
-            ].map((shape) => (
-              <Link
-                key={shape}
-                to={`/shop?productType=${type}&frameShape=${shape.toLowerCase().replace(" ", "-")}`}
-                onClick={onClose}
-                className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
-              >
-                {shape}
-              </Link>
-            ))
+            ].map((shape) => {
+              const shapeSlug = shape.toLowerCase().replace(" ", "-");
+              return (
+                <Link
+                  key={shape}
+                  to={`/shop?productType=${type}&frameShape=${shapeSlug}`}
+                  onClick={onClose}
+                  className={`block px-3 py-2 rounded-lg transition text-sm ${isActiveShape(shape) ? "bg-[#EBF4FC] text-[#3D96EB] font-medium" : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"}`}
+                >
+                  {shape}
+                </Link>
+              );
+            })
           ) : (
             <>
               <Link
@@ -500,14 +538,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Top Brands
         </h3>
-        <div className="space-y-2">
+        <div className="space-y-1">
           {brands?.length > 0 ? (
             brands.slice(0, 5).map((brand) => (
               <Link
                 key={brand._id}
                 to={`/shop?brand=${brand.slug}`}
                 onClick={onClose}
-                className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
+                className={`block px-3 py-2 rounded-lg transition text-sm ${isActiveBrand(brand.slug) ? "bg-[#EBF4FC] text-[#3D96EB] font-medium" : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"}`}
               >
                 {brand.name}
               </Link>
