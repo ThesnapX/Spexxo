@@ -17,13 +17,14 @@ const LiveSearch = ({
   const searchRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Live search query - debounced
+  // Live search query - searches across all fields
   const { data, isLoading } = useQuery({
     queryKey: ["live-search", query],
     queryFn: async () => {
       if (!query || query.length < 2) return { products: [] };
+      // Search across name, category, brand, gender, lens type, frame shape, material, color
       const { data } = await axios.get(
-        `${API_URL}/products?search=${query}&limit=5`,
+        `${API_URL}/products?search=${encodeURIComponent(query)}&limit=6`,
       );
       return data;
     },
@@ -85,11 +86,9 @@ const LiveSearch = ({
 
   const highlightMatch = (text, searchTerm) => {
     if (!searchTerm || !text) return text;
-    const regex = new RegExp(
-      `(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-      "gi",
-    );
-    const parts = text.split(regex);
+    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escapedTerm})`, "gi");
+    const parts = String(text).split(regex);
     return parts.map((part, i) =>
       regex.test(part) ? (
         <span key={i} className="text-primary font-semibold">
@@ -171,9 +170,20 @@ const LiveSearch = ({
                     <p className="text-sm text-text line-clamp-1">
                       {highlightMatch(product.name, query)}
                     </p>
-                    <p className="text-xs text-text-light">
-                      {product.brand?.name || "Spexxo"}
-                    </p>
+                    <div className="flex items-center gap-2 text-xs text-text-light">
+                      {product.brand?.name && <span>{product.brand.name}</span>}
+                      {product.brand?.name && product.productType && (
+                        <span>•</span>
+                      )}
+                      {product.productType && (
+                        <span className="capitalize">
+                          {product.productType}
+                        </span>
+                      )}
+                      {product.frameShape && (
+                        <span>• {product.frameShape.split(",")[0]}</span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-semibold text-text">
@@ -209,7 +219,7 @@ const LiveSearch = ({
                 No products found for "{query}"
               </p>
               <p className="text-xs text-text-light mt-1">
-                Try different keywords
+                Try different keywords or browse categories
               </p>
             </div>
           )}

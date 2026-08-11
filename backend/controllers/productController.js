@@ -29,22 +29,31 @@ export const getProducts = async (req, res) => {
 
     const query = { isActive: true };
 
-    // Search
+    // Search - must use $and to combine with other filters
     if (search) {
-      query.$or = [
+      const searchTerms = [
         { name: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
         { sku: { $regex: search, $options: "i" } },
+        { frameShape: { $regex: search, $options: "i" } },
+        { frameMaterial: { $regex: search, $options: "i" } },
+        { frameColor: { $regex: search, $options: "i" } },
+        { lensType: { $regex: search, $options: "i" } },
+        { gender: { $regex: search, $options: "i" } },
+        { productType: { $regex: search, $options: "i" } },
       ];
+      query.$and = [{ $or: searchTerms }];
     }
 
     // Category filter
     if (category) {
       const cat = await Category.findOne({ slug: category });
       if (cat) {
-        query.category = { $regex: cat._id.toString(), $options: "i" };
+        const catId = cat._id.toString();
+        query.$and = query.$and || [];
+        query.$and.push({ category: { $regex: catId, $options: "i" } });
       } else {
-        query.category = { $regex: "nonexistent" };
+        query._id = { $in: [] }; // Force empty result
       }
     }
 
@@ -54,27 +63,32 @@ export const getProducts = async (req, res) => {
       const brands = await Brand.find({ slug: { $in: brandSlugs } });
       if (brands.length > 0) {
         const brandIds = brands.map((b) => b._id.toString());
-        query.brand = { $in: brandIds };
+        query.$and = query.$and || [];
+        query.$and.push({ brand: { $in: brandIds } });
       } else {
-        query.brand = { $in: [] };
+        query._id = { $in: [] };
       }
     }
 
     // Gender filter
     if (gender) {
       const genders = gender.split(",").filter(Boolean);
-      if (genders.length > 0) query.gender = { $in: genders };
+      if (genders.length > 0) {
+        query.$and = query.$and || [];
+        query.$and.push({ gender: { $in: genders } });
+      }
     }
 
     // Product type
-    if (productType) query.productType = productType;
+    if (productType) {
+      query.$and = query.$and || [];
+      query.$and.push({ productType });
+    }
 
     // Frame shape
     if (frameShape) {
       const shapes = frameShape.split(",").filter(Boolean);
-      if (shapes.length === 1) {
-        query.frameShape = { $regex: shapes[0], $options: "i" };
-      } else if (shapes.length > 1) {
+      if (shapes.length > 0) {
         query.$and = query.$and || [];
         query.$and.push({
           $or: shapes.map((s) => ({
@@ -87,9 +101,7 @@ export const getProducts = async (req, res) => {
     // Lens type
     if (lensType) {
       const types = lensType.split(",").filter(Boolean);
-      if (types.length === 1) {
-        query.lensType = { $regex: types[0], $options: "i" };
-      } else if (types.length > 1) {
+      if (types.length > 0) {
         query.$and = query.$and || [];
         query.$and.push({
           $or: types.map((t) => ({ lensType: { $regex: t, $options: "i" } })),
@@ -132,6 +144,8 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
+    console.log("MongoDB Query:", JSON.stringify(query, null, 2));
+
     const [products, total] = await Promise.all([
       Product.find(query)
         .populate("brand", "name slug logo")
@@ -148,7 +162,6 @@ export const getProducts = async (req, res) => {
       categoryMap[cat._id.toString()] = cat;
     });
 
-    // Attach category names
     const productsWithCategories = products.map((product) => {
       const productObj = product.toObject();
       if (productObj.category) {
@@ -181,7 +194,6 @@ export const getProducts = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
-
 // @desc    Get single product
 // @route   GET /api/products/:slug
 // @access  Public
