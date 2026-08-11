@@ -25,7 +25,7 @@ const Categories = () => {
     queryKey: ["categories-manage"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/categories`);
-      return data.categories;
+      return data.categories || [];
     },
   });
 
@@ -35,8 +35,29 @@ const Categories = () => {
       const { data } = await axios.get(`${API_URL}/products?limit=1000`);
       const counts = {};
       data.products?.forEach((p) => {
-        const catId = p.category?._id || p.category;
-        if (catId) counts[catId] = (counts[catId] || 0) + 1;
+        // Check if backend returned categories array first
+        if (p.categories && Array.isArray(p.categories)) {
+          p.categories.forEach((cat) => {
+            if (cat && cat._id) {
+              counts[cat._id] = (counts[cat._id] || 0) + 1;
+            }
+          });
+        }
+        // Fallback: check category field (could be string or object)
+        else if (p.category) {
+          if (typeof p.category === "string") {
+            // Comma-separated IDs
+            p.category
+              .split(",")
+              .filter(Boolean)
+              .forEach((catId) => {
+                counts[catId] = (counts[catId] || 0) + 1;
+              });
+          } else if (typeof p.category === "object" && p.category._id) {
+            // Single category object
+            counts[p.category._id] = (counts[p.category._id] || 0) + 1;
+          }
+        }
       });
       return counts;
     },
@@ -104,29 +125,23 @@ const Categories = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
-
     let imageData = editCategory?.image || null;
-
     if (imageFile) {
-      const formData = new FormData();
-      formData.append("image", imageFile);
+      const fd = new FormData();
+      fd.append("image", imageFile);
       try {
-        const { data } = await axios.post(`${API_URL}/upload/single`, formData);
+        const { data } = await axios.post(`${API_URL}/upload/single`, fd);
         imageData = { url: data.image.url, alt: form.name };
-      } catch (error) {
+      } catch {
         toast.error("Image upload failed");
         setUploading(false);
         return;
       }
     }
-
     const payload = { name: form.name, image: imageData };
-
-    if (editCategory) {
+    if (editCategory)
       updateMutation.mutate({ id: editCategory._id, data: payload });
-    } else {
-      createMutation.mutate(payload);
-    }
+    else createMutation.mutate(payload);
     setUploading(false);
   };
 
@@ -149,7 +164,6 @@ const Categories = () => {
         </button>
       </div>
 
-      {/* Add/Edit Form */}
       {showForm && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 mb-8">
           <div className="flex justify-between items-center mb-6">
@@ -161,7 +175,6 @@ const Categories = () => {
             </button>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-            {/* Category Name */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Category Name *
@@ -170,20 +183,18 @@ const Categories = () => {
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
                 placeholder="e.g. Men Eyeglasses"
                 required
               />
             </div>
-
-            {/* Category Image */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 Category Image
               </label>
               <div className="flex items-center gap-4">
                 {imagePreview ? (
-                  <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-gray-200">
+                  <div className="relative w-32 h-32 rounded-xl overflow-hidden border">
                     <img
                       src={imagePreview}
                       alt="Preview"
@@ -228,8 +239,6 @@ const Categories = () => {
                 Recommended size: 400×400 px (Square)
               </p>
             </div>
-
-            {/* Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
@@ -254,7 +263,6 @@ const Categories = () => {
         </div>
       )}
 
-      {/* Categories Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {isLoading ? (
           <div className="col-span-full text-center p-8">Loading...</div>
@@ -270,7 +278,6 @@ const Categories = () => {
               key={cat._id}
               className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition group"
             >
-              {/* Category Image */}
               <div className="aspect-square bg-gray-50 overflow-hidden">
                 {cat.image?.url ? (
                   <img
@@ -290,8 +297,6 @@ const Categories = () => {
                   </div>
                 )}
               </div>
-
-              {/* Info */}
               <div className="p-3">
                 <h3 className="font-semibold text-text text-sm truncate">
                   {cat.name}
@@ -300,8 +305,6 @@ const Categories = () => {
                   {productsCount?.[cat._id] || 0} products
                 </p>
               </div>
-
-              {/* Actions */}
               <div className="flex justify-end gap-1 p-2 border-t">
                 <button
                   onClick={() => handleEdit(cat)}

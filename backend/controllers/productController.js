@@ -1,6 +1,7 @@
 import Product from "../models/Product.js";
 import Category from "../models/Category.js";
 import Brand from "../models/Brand.js";
+
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Public
@@ -38,20 +39,26 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // Category filter - match by slug
+    // Category filter - handle comma-separated string
     if (category) {
       const cat = await Category.findOne({ slug: category });
       if (cat) {
-        query.category = cat._id;
+        // Match if category field contains this ID (works for both single and comma-separated)
+        query.category = { $regex: cat._id.toString() };
       }
     }
 
-    // Brand filter - match by slug (for multiple)
+    // Brand filter
     if (brand) {
       const brandSlugs = brand.split(",");
       const brands = await Brand.find({ slug: { $in: brandSlugs } });
       if (brands.length > 0) {
-        query.brand = { $in: brands.map((b) => b._id) };
+        const brandIds = brands.map((b) => b._id.toString());
+        if (brandSlugs.length === 1) {
+          query.brand = { $regex: brandIds[0] };
+        } else {
+          query.$or = brandIds.map((id) => ({ brand: { $regex: id } }));
+        }
       }
     }
 
@@ -69,13 +76,29 @@ export const getProducts = async (req, res) => {
     // Frame shape
     if (frameShape) {
       const shapes = frameShape.split(",");
-      query.frameShape = { $in: shapes };
+      const shapeConditions = shapes.map((shape) => ({
+        frameShape: { $regex: shape, $options: "i" },
+      }));
+      if (shapeConditions.length === 1) {
+        query.frameShape = shapeConditions[0].frameShape;
+      } else {
+        query.$and = query.$and || [];
+        query.$and.push({ $or: shapeConditions });
+      }
     }
 
     // Lens type
     if (lensType) {
       const types = lensType.split(",");
-      query.lensType = { $in: types };
+      const lensConditions = types.map((type) => ({
+        lensType: { $regex: type, $options: "i" },
+      }));
+      if (lensConditions.length === 1) {
+        query.lensType = lensConditions[0].lensType;
+      } else {
+        query.$and = query.$and || [];
+        query.$and.push({ $or: lensConditions });
+      }
     }
 
     // Price range
@@ -120,12 +143,8 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    console.log("Query:", JSON.stringify(query));
-    console.log("Sort:", sortOption);
-
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate("category", "name slug")
         .populate("brand", "name slug logo")
         .sort(sortOption)
         .skip(skip)
@@ -133,9 +152,35 @@ export const getProducts = async (req, res) => {
       Product.countDocuments(query),
     ]);
 
+    // Get all categories for name lookup
+    const allCategories = await Category.find({});
+    const categoryMap = {};
+    allCategories.forEach((cat) => {
+      categoryMap[cat._id.toString()] = cat;
+    });
+
+    // Attach category names to products
+    const productsWithCategories = products.map((product) => {
+      const productObj = product.toObject();
+      if (productObj.category) {
+        const categoryIds = productObj.category.split(",").filter(Boolean);
+        productObj.categories = categoryIds
+          .map((id) => {
+            const cat = categoryMap[id];
+            return cat
+              ? { _id: cat._id, name: cat.name, slug: cat.slug }
+              : null;
+          })
+          .filter(Boolean);
+        // Keep first category as primary for backward compatibility
+        productObj.category = productObj.categories[0] || null;
+      }
+      return productObj;
+    });
+
     res.status(200).json({
       success: true,
-      products,
+      products: productsWithCategories,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -157,39 +202,52 @@ export const getProducts = async (req, res) => {
 // @access  Public
 export const getProduct = async (req, res) => {
   try {
-    const product = await Product.findOne({
-      slug: req.params.slug,
-      isActive: true,
-    })
-      .populate("category", "name slug")
-      .populate("brand", "name slug logo");
+    const { slug } = req.params;
+
+    // Try to find by slug first, then by ID
+    let product = await Product.findOne({ slug, isActive: true });
+
+    if (!product && slug.match(/^[0-9a-fA-F]{24}$/)) {
+      // If slug looks like a MongoDB ID, try finding by ID
+      product = await Product.findById(slug);
+    }
 
     if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    }
+
+    // Get category names
+    const productObj = product.toObject();
+    if (productObj.category) {
+      const categoryIds = productObj.category.split(",").filter(Boolean);
+      const categories = await Category.find({ _id: { $in: categoryIds } });
+      productObj.categories = categories;
+      productObj.category = categories[0] || null;
     }
 
     // Get related products
     const relatedProducts = await Product.find({
       _id: { $ne: product._id },
-      category: product.category,
       isActive: true,
+      $or: [
+        { productType: product.productType },
+        ...(productObj.category
+          ? [{ category: { $regex: productObj.category._id.toString() } }]
+          : []),
+      ],
     })
       .limit(6)
-      .populate("category", "name slug");
+      .populate("brand", "name slug");
 
     res.status(200).json({
       success: true,
-      product,
+      product: productObj,
       relatedProducts,
     });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -199,15 +257,9 @@ export const getProduct = async (req, res) => {
 export const createProduct = async (req, res) => {
   try {
     const product = await Product.create(req.body);
-    res.status(201).json({
-      success: true,
-      product,
-    });
+    res.status(201).json({ success: true, product });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -220,23 +272,13 @@ export const updateProduct = async (req, res) => {
       new: true,
       runValidators: true,
     });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      product,
-    });
+    if (!product)
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    res.status(200).json({ success: true, product });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -246,22 +288,12 @@ export const updateProduct = async (req, res) => {
 export const deleteProduct = async (req, res) => {
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Product deleted successfully",
-    });
+    if (!product)
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
+    res.status(200).json({ success: true, message: "Product deleted" });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -8,7 +8,6 @@ import {
   PhotoIcon,
   XMarkIcon,
   ExclamationCircleIcon,
-  PlusCircleIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 
@@ -23,22 +22,11 @@ const EditProduct = () => {
   const [existingImages, setExistingImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [customShape, setCustomShape] = useState("");
-  const [customLensType, setCustomLensType] = useState("");
-  const [customMaterial, setCustomMaterial] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [brandSearch, setBrandSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllBrands, setShowAllBrands] = useState(false);
-  const [showCategoryPopup, setShowCategoryPopup] = useState(false);
-  const [showBrandPopup, setShowBrandPopup] = useState(false);
-  const [quickCategoryForm, setQuickCategoryForm] = useState({ name: "" });
-  const [quickBrandForm, setQuickBrandForm] = useState({
-    name: "",
-    description: "",
-  });
-  const [savingCategory, setSavingCategory] = useState(false);
-  const [savingBrand, setSavingBrand] = useState(false);
+  const [formInitialized, setFormInitialized] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -73,6 +61,7 @@ const EditProduct = () => {
       return data.categories || [];
     },
   });
+
   const { data: brands } = useQuery({
     queryKey: ["admin-brands"],
     queryFn: async () => {
@@ -84,21 +73,54 @@ const EditProduct = () => {
   const { data: productData, isLoading: productLoading } = useQuery({
     queryKey: ["product-edit", id],
     queryFn: async () => {
-      const { data } = await axios.get(`${API_URL}/products?limit=200`);
-      return data.products?.find((p) => p._id === id || p.slug === id) || null;
+      // Fetch single product directly by ID
+      const { data } = await axios.get(`${API_URL}/products/${id}`);
+      return data.product || null;
     },
     enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 
+  // Initialize form from product data - only once when data loads
   useEffect(() => {
-    if (productData) {
+    if (productData && !formInitialized) {
+      // Extract category - could be string "id1,id2", object {_id, name}, or null
+      let catStr = "";
+      if (productData.categories && Array.isArray(productData.categories)) {
+        catStr = productData.categories.map((c) => c._id).join(",");
+      } else if (productData.category) {
+        if (typeof productData.category === "string") {
+          catStr = productData.category;
+        } else if (
+          typeof productData.category === "object" &&
+          productData.category._id
+        ) {
+          catStr = productData.category._id;
+        }
+      }
+
+      // Extract brand
+      let brandStr = "";
+      if (productData.brand) {
+        if (typeof productData.brand === "string") {
+          brandStr = productData.brand;
+        } else if (
+          typeof productData.brand === "object" &&
+          productData.brand._id
+        ) {
+          brandStr = productData.brand._id;
+        }
+      }
+
       setForm({
         name: productData.name || "",
         description: productData.description || "",
         price: productData.price || "",
         discountedPrice: productData.comparePrice || "",
-        category: productData.category || "",
-        brand: productData.brand?._id || productData.brand || "",
+        category: catStr,
+        brand: brandStr,
         gender: productData.gender || "",
         productType: productData.productType || "eyeglasses",
         frameShape: productData.frameShape || "",
@@ -133,8 +155,9 @@ const EditProduct = () => {
         sku: productData.sku || "",
       });
       setExistingImages(productData.images || []);
+      setFormInitialized(true);
     }
-  }, [productData]);
+  }, [productData, formInitialized]);
 
   const filteredCategories =
     categories?.filter((cat) =>
@@ -161,46 +184,13 @@ const EditProduct = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      queryClient.removeQueries({ queryKey: ["product-edit", id] });
       toast.success("Product updated!");
       navigate("/admin/products");
     },
     onError: (error) =>
       toast.error(error.response?.data?.message || "Failed to update"),
   });
-
-  const handleQuickSaveCategory = async (e) => {
-    e.preventDefault();
-    if (!quickCategoryForm.name.trim()) return;
-    setSavingCategory(true);
-    try {
-      await axios.post(`${API_URL}/categories`, quickCategoryForm);
-      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
-      toast.success("Category added!");
-      setQuickCategoryForm({ name: "" });
-      setShowCategoryPopup(false);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed");
-    } finally {
-      setSavingCategory(false);
-    }
-  };
-
-  const handleQuickSaveBrand = async (e) => {
-    e.preventDefault();
-    if (!quickBrandForm.name.trim()) return;
-    setSavingBrand(true);
-    try {
-      await axios.post(`${API_URL}/brands`, quickBrandForm);
-      queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
-      toast.success("Brand added!");
-      setQuickBrandForm({ name: "", description: "" });
-      setShowBrandPopup(false);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed");
-    } finally {
-      setSavingBrand(false);
-    }
-  };
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -251,14 +241,6 @@ const EditProduct = () => {
     setForm({ ...form, [field]: updated.join(",") });
   };
 
-  const addCustomValue = (field, customValue, setCustomFn) => {
-    if (!customValue.trim()) return;
-    const current = form[field] ? form[field].split(",").filter(Boolean) : [];
-    if (!current.includes(customValue.trim()))
-      setForm({ ...form, [field]: [...current, customValue.trim()].join(",") });
-    setCustomFn("");
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
@@ -286,7 +268,6 @@ const EditProduct = () => {
         return;
       }
     }
-
     const specs = [];
     if (form.frameWidth)
       specs.push({ name: "Frame Width", value: `${form.frameWidth} mm` });
@@ -297,7 +278,6 @@ const EditProduct = () => {
     if (form.bridge) specs.push({ name: "Bridge", value: `${form.bridge} mm` });
     if (form.temple)
       specs.push({ name: "Temple Length", value: `${form.temple} mm` });
-
     const pd = {
       ...form,
       price: Number(form.price),
@@ -315,60 +295,6 @@ const EditProduct = () => {
 
   const inputClass = (field) =>
     `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-1 transition ${errors[field] ? "border-red-300 bg-red-50" : "border-gray-200 focus:border-[#3D96EB]"}`;
-
-  const MultiSelectWithCustom = ({
-    label,
-    options,
-    field,
-    customValue,
-    setCustomFn,
-    placeholder,
-  }) => {
-    const selected = form[field] ? form[field].split(",").filter(Boolean) : [];
-    return (
-      <div>
-        <label className="block text-sm font-medium mb-1">{label}</label>
-        <div className="flex flex-wrap gap-2 mt-2 mb-2">
-          {options.map((opt) => {
-            const val = typeof opt === "string" ? opt : opt.value;
-            const lab = typeof opt === "string" ? opt : opt.label;
-            return (
-              <button
-                key={val}
-                type="button"
-                onClick={() => toggleMultiSelect(field, val)}
-                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${selected.includes(val) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-              >
-                {lab}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={customValue}
-            onChange={(e) => setCustomFn(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addCustomValue(field, customValue, setCustomFn);
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => addCustomValue(field, customValue, setCustomFn)}
-            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   if (productLoading)
     return (
@@ -451,21 +377,11 @@ const EditProduct = () => {
             )}
           </div>
 
-          {/* Categories */}
           <div className="md:col-span-2">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">
-                Categories{" "}
-                <span className="text-gray-400 text-xs">(Multi Select)</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowCategoryPopup(true)}
-                className="text-xs text-[#3D96EB] hover:underline flex items-center gap-1"
-              >
-                <PlusCircleIcon className="w-4 h-4" /> Add
-              </button>
-            </div>
+            <label className="block text-sm font-medium mb-1">
+              Categories{" "}
+              <span className="text-gray-400 text-xs">(Multi Select)</span>
+            </label>
             <div className="relative mb-2">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -506,18 +422,8 @@ const EditProduct = () => {
             </div>
           </div>
 
-          {/* Brand */}
           <div className="md:col-span-2">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">Brand</label>
-              <button
-                type="button"
-                onClick={() => setShowBrandPopup(true)}
-                className="text-xs text-[#3D96EB] hover:underline flex items-center gap-1"
-              >
-                <PlusCircleIcon className="w-4 h-4" /> Add
-              </button>
-            </div>
+            <label className="block text-sm font-medium mb-1">Brand</label>
             <div className="relative mb-2">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -529,6 +435,13 @@ const EditProduct = () => {
               />
             </div>
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1">
+              <button
+                type="button"
+                onClick={() => handleChange("brand", "")}
+                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${!form.brand ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+              >
+                None
+              </button>
               {displayedBrands.map((b) => (
                 <button
                   key={b._id}
@@ -569,7 +482,6 @@ const EditProduct = () => {
               <option value="contactlens">Contact Lens</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">Gender</label>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -595,7 +507,6 @@ const EditProduct = () => {
               })}
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">
               Original Price (₹) <span className="text-red-500">*</span>
@@ -653,10 +564,12 @@ const EditProduct = () => {
             />
           </div>
 
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Frame Shape"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Frame Shape
+            </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Rectangle",
                 "Round",
                 "Cat Eye",
@@ -665,34 +578,51 @@ const EditProduct = () => {
                 "Aviator",
                 "Wayfarer",
                 "Rimless",
-                "Oversized",
-                "Geometric",
-              ]}
-              field="frameShape"
-              customValue={customShape}
-              setCustomFn={setCustomShape}
-              placeholder="Add custom..."
-            />
+              ].map((shape) => {
+                const sel = form.frameShape
+                  ? form.frameShape.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => toggleMultiSelect("frameShape", shape)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {shape}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Frame Material"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Frame Material
+            </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Metal",
                 "Plastic",
                 "Acetate",
                 "Titanium",
                 "Stainless Steel",
                 "TR90",
-                "Wood",
-                "Flexible",
-                "Beta-Titanium",
-              ]}
-              field="frameMaterial"
-              customValue={customMaterial}
-              setCustomFn={setCustomMaterial}
-              placeholder="Add custom..."
-            />
+              ].map((mat) => {
+                const sel = form.frameMaterial
+                  ? form.frameMaterial.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={mat}
+                    type="button"
+                    onClick={() => toggleMultiSelect("frameMaterial", mat)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(mat) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {mat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
@@ -705,10 +635,10 @@ const EditProduct = () => {
               className={inputClass("frameColor")}
             />
           </div>
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Lens Type"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">Lens Type</label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Single Vision",
                 "Bifocal",
                 "Progressive",
@@ -716,13 +646,22 @@ const EditProduct = () => {
                 "UV Protection",
                 "Polarized",
                 "Anti-Glare",
-                "HD Vision",
-              ]}
-              field="lensType"
-              customValue={customLensType}
-              setCustomFn={setCustomLensType}
-              placeholder="Add custom..."
-            />
+              ].map((lt) => {
+                const sel = form.lensType
+                  ? form.lensType.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={lt}
+                    type="button"
+                    onClick={() => toggleMultiSelect("lensType", lt)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lt) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {lt}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="md:col-span-2">
@@ -844,9 +783,7 @@ const EditProduct = () => {
               Product Flags
             </label>
             <p className="text-xs text-text-light mb-3">
-              🏷️ Flags control homepage sections: Featured=Flash Sales,
-              Trending=Customer Loved, New Arrival=New Arrivals, Best
-              Seller=Best Sellers.
+              🏷️ Flags control homepage sections.
             </p>
             <div className="flex flex-wrap gap-4">
               {[
@@ -893,112 +830,6 @@ const EditProduct = () => {
           </div>
         </form>
       </div>
-
-      {/* Quick Add Category Popup */}
-      {showCategoryPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowCategoryPopup(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Category</h3>
-              <button onClick={() => setShowCategoryPopup(false)}>
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleQuickSaveCategory} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name *</label>
-                <input
-                  type="text"
-                  value={quickCategoryForm.name}
-                  onChange={(e) =>
-                    setQuickCategoryForm({
-                      ...quickCategoryForm,
-                      name: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={savingCategory}
-                className="btn-primary text-sm w-full"
-              >
-                {savingCategory ? "Adding..." : "Add Category"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Quick Add Brand Popup */}
-      {showBrandPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowBrandPopup(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-md w-full p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Brand</h3>
-              <button onClick={() => setShowBrandPopup(false)}>
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleQuickSaveBrand} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Brand Name *
-                </label>
-                <input
-                  type="text"
-                  value={quickBrandForm.name}
-                  onChange={(e) =>
-                    setQuickBrandForm({
-                      ...quickBrandForm,
-                      name: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={quickBrandForm.description}
-                  onChange={(e) =>
-                    setQuickBrandForm({
-                      ...quickBrandForm,
-                      description: e.target.value,
-                    })
-                  }
-                  rows="2"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={savingBrand}
-                className="btn-primary text-sm w-full"
-              >
-                {savingBrand ? "Adding..." : "Add Brand"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

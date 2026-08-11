@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import {
@@ -8,7 +8,6 @@ import {
   PhotoIcon,
   XMarkIcon,
   ExclamationCircleIcon,
-  PlusCircleIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 
@@ -16,31 +15,16 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const AddProduct = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [customShape, setCustomShape] = useState("");
-  const [customLensType, setCustomLensType] = useState("");
-  const [customMaterial, setCustomMaterial] = useState("");
 
-  // Search states
+  // Search states for categories and brands
   const [categorySearch, setCategorySearch] = useState("");
   const [brandSearch, setBrandSearch] = useState("");
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllBrands, setShowAllBrands] = useState(false);
-
-  // Quick Add Popup states
-  const [showCategoryPopup, setShowCategoryPopup] = useState(false);
-  const [showBrandPopup, setShowBrandPopup] = useState(false);
-  const [quickCategoryForm, setQuickCategoryForm] = useState({ name: "" });
-  const [quickBrandForm, setQuickBrandForm] = useState({
-    name: "",
-    description: "",
-  });
-  const [savingCategory, setSavingCategory] = useState(false);
-  const [savingBrand, setSavingBrand] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -84,61 +68,21 @@ const AddProduct = () => {
     },
   });
 
-  // Filter categories by search
+  // Filter by search
   const filteredCategories =
     categories?.filter((cat) =>
       cat.name.toLowerCase().includes(categorySearch.toLowerCase()),
     ) || [];
-
-  // Filter brands by search
   const filteredBrands =
     brands?.filter((b) =>
       b.name.toLowerCase().includes(brandSearch.toLowerCase()),
     ) || [];
-
-  // Show limited or all
   const displayedCategories = showAllCategories
     ? filteredCategories
     : filteredCategories.slice(0, 6);
   const displayedBrands = showAllBrands
     ? filteredBrands
     : filteredBrands.slice(0, 8);
-
-  // Quick Save Category
-  const handleQuickSaveCategory = async (e) => {
-    e.preventDefault();
-    if (!quickCategoryForm.name.trim()) return;
-    setSavingCategory(true);
-    try {
-      await axios.post(`${API_URL}/categories`, quickCategoryForm);
-      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
-      toast.success("Category added!");
-      setQuickCategoryForm({ name: "" });
-      setShowCategoryPopup(false);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to add category");
-    } finally {
-      setSavingCategory(false);
-    }
-  };
-
-  // Quick Save Brand
-  const handleQuickSaveBrand = async (e) => {
-    e.preventDefault();
-    if (!quickBrandForm.name.trim()) return;
-    setSavingBrand(true);
-    try {
-      await axios.post(`${API_URL}/brands`, quickBrandForm);
-      queryClient.invalidateQueries({ queryKey: ["admin-brands"] });
-      toast.success("Brand added!");
-      setQuickBrandForm({ name: "", description: "" });
-      setShowBrandPopup(false);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to add brand");
-    } finally {
-      setSavingBrand(false);
-    }
-  };
 
   const createMutation = useMutation({
     mutationFn: async (productData) => {
@@ -179,11 +123,9 @@ const AddProduct = () => {
     if (form.discountedPrice) {
       const dp = Number(form.discountedPrice);
       const p = Number(form.price);
-      if (dp <= 0)
-        newErrors.discountedPrice = "Discounted price must be greater than 0";
+      if (dp <= 0) newErrors.discountedPrice = "Must be greater than 0";
       else if (dp >= p)
-        newErrors.discountedPrice =
-          "Discounted price must be less than original price";
+        newErrors.discountedPrice = "Must be less than original price";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -203,15 +145,6 @@ const AddProduct = () => {
       updated = [...current, value];
     }
     setForm({ ...form, [field]: updated.join(",") });
-  };
-
-  const addCustomValue = (field, customValue, setCustomFn) => {
-    if (!customValue.trim()) return;
-    const current = form[field] ? form[field].split(",").filter(Boolean) : [];
-    if (!current.includes(customValue.trim())) {
-      setForm({ ...form, [field]: [...current, customValue.trim()].join(",") });
-    }
-    setCustomFn("");
   };
 
   const handleSubmit = async (e) => {
@@ -283,68 +216,9 @@ const AddProduct = () => {
   const inputClass = (field) =>
     `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-1 transition ${
       errors[field]
-        ? "border-red-300 bg-red-50 focus:border-red-500"
+        ? "border-red-300 bg-red-50"
         : "border-gray-200 focus:border-[#3D96EB]"
     }`;
-
-  const MultiSelectWithCustom = ({
-    label,
-    options,
-    field,
-    customValue,
-    setCustomFn,
-    placeholder,
-  }) => {
-    const selected = form[field] ? form[field].split(",").filter(Boolean) : [];
-    return (
-      <div>
-        <label className="block text-sm font-medium mb-1">{label}</label>
-        <div className="flex flex-wrap gap-2 mt-2 mb-2">
-          {options.map((opt) => {
-            const value = typeof opt === "string" ? opt : opt.value;
-            const label = typeof opt === "string" ? opt : opt.label;
-            const isSelected = selected.includes(value);
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => toggleMultiSelect(field, value)}
-                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                  isSelected
-                    ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                    : "border-gray-200 text-gray-600 hover:border-gray-300"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={customValue}
-            onChange={(e) => setCustomFn(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addCustomValue(field, customValue, setCustomFn);
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => addCustomValue(field, customValue, setCustomFn)}
-            className="px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div>
@@ -416,24 +290,14 @@ const AddProduct = () => {
             )}
           </div>
 
-          {/* Category - Multi Select with Search + Quick Add */}
+          {/* Categories - Multi Select with Search */}
           <div className="md:col-span-2">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">
-                Categories{" "}
-                <span className="text-gray-400 text-xs">
-                  (Optional - Multi Select)
-                </span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowCategoryPopup(true)}
-                className="text-xs text-[#3D96EB] hover:underline flex items-center gap-1"
-              >
-                <PlusCircleIcon className="w-4 h-4" /> Add Category
-              </button>
-            </div>
-            {/* Search */}
+            <label className="block text-sm font-medium mb-1">
+              Categories{" "}
+              <span className="text-gray-400 text-xs">
+                (Optional - Multi Select)
+              </span>
+            </label>
             <div className="relative mb-2">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -441,10 +305,9 @@ const AddProduct = () => {
                 placeholder="Search categories..."
                 value={categorySearch}
                 onChange={(e) => setCategorySearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#3D96EB]"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
               />
             </div>
-            {/* Category Pills */}
             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
               {displayedCategories.map((cat) => {
                 const selected = form.category
@@ -455,11 +318,7 @@ const AddProduct = () => {
                     key={cat._id}
                     type="button"
                     onClick={() => toggleMultiSelect("category", cat._id)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                      selected.includes(cat._id)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${selected.includes(cat._id) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
                     {cat.name}
                   </button>
@@ -477,35 +336,13 @@ const AddProduct = () => {
                   : `Show All (${filteredCategories.length}) ↓`}
               </button>
             )}
-            {categorySearch && filteredCategories.length === 0 && (
-              <p className="text-xs text-text-light mt-1">
-                No categories found.{" "}
-                <button
-                  type="button"
-                  onClick={() => setShowCategoryPopup(true)}
-                  className="text-[#3D96EB] hover:underline"
-                >
-                  Add one?
-                </button>
-              </p>
-            )}
           </div>
 
-          {/* Brand - Search + Quick Add */}
+          {/* Brand - Single Select with Search */}
           <div className="md:col-span-2">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium">
-                Brand <span className="text-gray-400 text-xs">(Optional)</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowBrandPopup(true)}
-                className="text-xs text-[#3D96EB] hover:underline flex items-center gap-1"
-              >
-                <PlusCircleIcon className="w-4 h-4" /> Add Brand
-              </button>
-            </div>
-            {/* Search */}
+            <label className="block text-sm font-medium mb-1">
+              Brand <span className="text-gray-400 text-xs">(Optional)</span>
+            </label>
             <div className="relative mb-2">
               <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -513,11 +350,17 @@ const AddProduct = () => {
                 placeholder="Search brands..."
                 value={brandSearch}
                 onChange={(e) => setBrandSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#3D96EB]"
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
               />
             </div>
-            {/* Brand Pills */}
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1">
+              <button
+                type="button"
+                onClick={() => handleChange("brand", "")}
+                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${!form.brand ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+              >
+                None
+              </button>
               {displayedBrands.map((b) => (
                 <button
                   key={b._id}
@@ -525,11 +368,7 @@ const AddProduct = () => {
                   onClick={() =>
                     handleChange("brand", form.brand === b._id ? "" : b._id)
                   }
-                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                    form.brand === b._id
-                      ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                      : "border-gray-200 text-gray-600 hover:border-gray-300"
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${form.brand === b._id ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                 >
                   {b.name}
                 </button>
@@ -564,28 +403,27 @@ const AddProduct = () => {
             </select>
           </div>
 
-          {/* Gender - Multi Select */}
+          {/* Gender */}
           <div>
             <label className="block text-sm font-medium mb-1">Gender</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {[
-                { value: "men", label: "👨 Men" },
-                { value: "women", label: "👩 Women" },
-                { value: "kids", label: "👶 Kids" },
-                { value: "unisex", label: "👤 Unisex" },
+                { v: "men", l: "👨 Men" },
+                { v: "women", l: "👩 Women" },
+                { v: "kids", l: "👶 Kids" },
+                { v: "unisex", l: "👤 Unisex" },
               ].map((opt) => {
-                const selected = form.gender
+                const sel = form.gender
                   ? form.gender.split(",").filter(Boolean)
                   : [];
-                const isSelected = selected.includes(opt.value);
                 return (
                   <button
-                    key={opt.value}
+                    key={opt.v}
                     type="button"
-                    onClick={() => toggleMultiSelect("gender", opt.value)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${isSelected ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    onClick={() => toggleMultiSelect("gender", opt.v)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(opt.v) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
                   >
-                    {opt.label}
+                    {opt.l}
                   </button>
                 );
               })}
@@ -661,10 +499,12 @@ const AddProduct = () => {
           </div>
 
           {/* Frame Shape */}
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Frame Shape"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Frame Shape
+            </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Rectangle",
                 "Round",
                 "Cat Eye",
@@ -673,36 +513,53 @@ const AddProduct = () => {
                 "Aviator",
                 "Wayfarer",
                 "Rimless",
-                "Oversized",
-                "Geometric",
-              ]}
-              field="frameShape"
-              customValue={customShape}
-              setCustomFn={setCustomShape}
-              placeholder="Add custom frame shape..."
-            />
+              ].map((shape) => {
+                const sel = form.frameShape
+                  ? form.frameShape.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => toggleMultiSelect("frameShape", shape)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {shape}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Frame Material */}
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Frame Material"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Frame Material
+            </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Metal",
                 "Plastic",
                 "Acetate",
                 "Titanium",
                 "Stainless Steel",
                 "TR90",
-                "Wood",
-                "Flexible",
-                "Beta-Titanium",
-              ]}
-              field="frameMaterial"
-              customValue={customMaterial}
-              setCustomFn={setCustomMaterial}
-              placeholder="Add custom material..."
-            />
+              ].map((mat) => {
+                const sel = form.frameMaterial
+                  ? form.frameMaterial.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={mat}
+                    type="button"
+                    onClick={() => toggleMultiSelect("frameMaterial", mat)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(mat) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {mat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Frame Color */}
@@ -715,15 +572,15 @@ const AddProduct = () => {
               value={form.frameColor}
               onChange={(e) => handleChange("frameColor", e.target.value)}
               className={inputClass("frameColor")}
-              placeholder="e.g. Black, Gold, Tortoise"
+              placeholder="e.g. Black, Gold"
             />
           </div>
 
           {/* Lens Type */}
-          <div className="md:col-span-2">
-            <MultiSelectWithCustom
-              label="Lens Type"
-              options={[
+          <div>
+            <label className="block text-sm font-medium mb-1">Lens Type</label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
                 "Single Vision",
                 "Bifocal",
                 "Progressive",
@@ -731,13 +588,22 @@ const AddProduct = () => {
                 "UV Protection",
                 "Polarized",
                 "Anti-Glare",
-                "HD Vision",
-              ]}
-              field="lensType"
-              customValue={customLensType}
-              setCustomFn={setCustomLensType}
-              placeholder="Add custom lens type..."
-            />
+              ].map((lt) => {
+                const sel = form.lensType
+                  ? form.lensType.split(",").filter(Boolean)
+                  : [];
+                return (
+                  <button
+                    key={lt}
+                    type="button"
+                    onClick={() => toggleMultiSelect("lensType", lt)}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lt) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  >
+                    {lt}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Frame Dimensions */}
@@ -804,7 +670,7 @@ const AddProduct = () => {
               </div>
               <div>
                 <label className="block text-xs text-text-light mb-1">
-                  Temple Length
+                  Temple
                 </label>
                 <input
                   type="number"
@@ -817,9 +683,6 @@ const AddProduct = () => {
                 />
               </div>
             </div>
-            <p className="text-xs text-text-light mt-2">
-              All measurements in millimeters (mm)
-            </p>
           </div>
 
           {/* Product Images */}
@@ -867,29 +730,28 @@ const AddProduct = () => {
               Product Flags
             </label>
             <p className="text-xs text-text-light mb-3">
-              🏷️ <strong>Product Flags</strong> control where this product
-              appears on the homepage. Featured = Flash Sales, Trending =
-              Customer Loved, New Arrival = New Arrivals, Best Seller = Best
-              Sellers section.
+              🏷️ Flags control homepage sections: Featured=Flash Sales,
+              Trending=Customer Loved, New Arrival=New Arrivals, Best
+              Seller=Best Sellers.
             </p>
             <div className="flex flex-wrap gap-4">
               {[
-                { key: "isFeatured", label: "⭐ Featured" },
-                { key: "isTrending", label: "🔥 Trending" },
-                { key: "isNewArrival", label: "🆕 New Arrival" },
-                { key: "isBestSeller", label: "🏆 Best Seller" },
-              ].map((flag) => (
+                { k: "isFeatured", l: "⭐ Featured" },
+                { k: "isTrending", l: "🔥 Trending" },
+                { k: "isNewArrival", l: "🆕 New Arrival" },
+                { k: "isBestSeller", l: "🏆 Best Seller" },
+              ].map((f) => (
                 <label
-                  key={flag.key}
+                  key={f.k}
                   className="flex items-center gap-2 cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    checked={form[flag.key]}
-                    onChange={(e) => handleChange(flag.key, e.target.checked)}
+                    checked={form[f.k]}
+                    onChange={(e) => handleChange(f.k, e.target.checked)}
                     className="w-4 h-4 text-[#3D96EB] rounded"
                   />
-                  <span className="text-sm">{flag.label}</span>
+                  <span className="text-sm">{f.l}</span>
                 </label>
               ))}
             </div>
@@ -918,115 +780,6 @@ const AddProduct = () => {
           </div>
         </form>
       </div>
-
-      {/* ============ QUICK ADD CATEGORY POPUP ============ */}
-      {showCategoryPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowCategoryPopup(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Category</h3>
-              <button onClick={() => setShowCategoryPopup(false)}>
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleQuickSaveCategory} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Category Name *
-                </label>
-                <input
-                  type="text"
-                  value={quickCategoryForm.name}
-                  onChange={(e) =>
-                    setQuickCategoryForm({
-                      ...quickCategoryForm,
-                      name: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                  placeholder="e.g. Men Eyeglasses"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={savingCategory}
-                className="btn-primary text-sm w-full"
-              >
-                {savingCategory ? "Adding..." : "Add Category"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============ QUICK ADD BRAND POPUP ============ */}
-      {showBrandPopup && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-          onClick={() => setShowBrandPopup(false)}
-        >
-          <div
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Add Brand</h3>
-              <button onClick={() => setShowBrandPopup(false)}>
-                <XMarkIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleQuickSaveBrand} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Brand Name *
-                </label>
-                <input
-                  type="text"
-                  value={quickBrandForm.name}
-                  onChange={(e) =>
-                    setQuickBrandForm({
-                      ...quickBrandForm,
-                      name: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={quickBrandForm.description}
-                  onChange={(e) =>
-                    setQuickBrandForm({
-                      ...quickBrandForm,
-                      description: e.target.value,
-                    })
-                  }
-                  rows="2"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={savingBrand}
-                className="btn-primary text-sm w-full"
-              >
-                {savingBrand ? "Adding..." : "Add Brand"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
