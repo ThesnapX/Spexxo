@@ -152,17 +152,25 @@ export const createOrder = async (req, res) => {
       discount: Number(discount),
       coupon: couponData,
       total: Number(total),
-      paymentMethod: "cod",
-      paymentStatus: "pending",
-      isCOD: true,
-      codAmount: Number(total),
-      orderStatus: "pending",
+      paymentMethod: req.body.paymentMethod || "cod",
+      paymentStatus: req.body.paymentStatus || "pending",
+      isCOD: req.body.paymentMethod !== "online",
+      codAmount: req.body.paymentMethod !== "online" ? Number(total) : 0,
+      orderStatus: req.body.paymentStatus === "paid" ? "confirmed" : "pending",
+      paymentDetails: req.body.razorpay_payment_id
+        ? {
+            transactionId: req.body.razorpay_payment_id,
+            paymentGateway: "razorpay",
+            razorpayOrderId: req.body.razorpay_order_id,
+          }
+        : null,
       statusHistory: [
         {
-          status: "pending",
-          note: couponData
-            ? `Coupon ${couponData.code} applied - Saved ₹${discount}`
-            : "Order placed",
+          status: req.body.paymentStatus === "paid" ? "confirmed" : "pending",
+          note:
+            req.body.paymentStatus === "paid"
+              ? "Payment received via Razorpay"
+              : "Order placed",
           date: new Date(),
         },
       ],
@@ -283,12 +291,10 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     }
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Only pending or confirmed orders can be cancelled",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Only pending or confirmed orders can be cancelled",
+      });
     }
 
     // Restore stock
@@ -315,13 +321,11 @@ export const cancelOrder = async (req, res) => {
     });
     await order.save();
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        order,
-        message: "Order cancelled. Stock restored.",
-      });
+    res.status(200).json({
+      success: true,
+      order,
+      message: "Order cancelled. Stock restored.",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -423,13 +427,11 @@ export const updateOrderStatus = async (req, res) => {
       console.log("Status email failed:", emailError.message);
     }
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        order,
-        message: `Order status updated to ${status}`,
-      });
+    res.status(200).json({
+      success: true,
+      order,
+      message: `Order status updated to ${status}`,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

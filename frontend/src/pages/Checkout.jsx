@@ -19,6 +19,8 @@ const Checkout = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [useSavedAddress, setUseSavedAddress] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState("cod");
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -55,7 +57,6 @@ const Checkout = () => {
 
   const shippingCost = cartTotal >= 999 ? 0 : 99;
 
-  // Calculate coupon discount from context
   const calculateCouponDiscount = () => {
     if (!appliedCoupon) return 0;
     let discountBase = cartTotal;
@@ -87,19 +88,97 @@ const Checkout = () => {
       toast.error("Please fill all required fields");
       return;
     }
-    setLoading(true);
-    try {
-      await axios.post(`${API_URL}/orders`, {
-        shippingAddress: form,
-        couponCode: couponCode || undefined,
-      });
-      await clearCart();
-      toast.success("Order placed successfully!");
-      navigate("/account/orders");
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Order failed");
-    } finally {
-      setLoading(false);
+
+    if (paymentMethod === "online") {
+      // ONLINE PAYMENT - Create Razorpay order first, then create our order after payment
+      setLoading(true);
+      try {
+        // Calculate amount in paise
+        const amountInPaise = Math.round(grandTotal * 100);
+
+        // First, we need a Razorpay order ID without creating our order yet
+        // We'll pass the amount directly to Razorpay
+        // const key = import.meta.env.VITE_RAZORPAY_KEY_ID || paymentData?.key;
+
+        // Load Razorpay script
+        setProcessingPayment(true);
+
+        // For direct Razorpay integration without backend order creation first
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => {
+          const options = {
+            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+            amount: amountInPaise,
+            currency: "INR",
+            name: "Spexxo",
+            description: "Eyewear Purchase",
+            image: "/images/logo.png",
+            prefill: {
+              name: form.fullName,
+              email: user?.email || "customer@spexxo.com",
+              contact: form.phone || "9999999999",
+            },
+            theme: { color: "#3D96EB" },
+            modal: {
+              ondismiss: function () {
+                setProcessingPayment(false);
+                setLoading(false);
+                toast.error("Payment cancelled");
+              },
+            },
+            handler: async function (response) {
+              // Payment successful - now create the order
+              try {
+                setProcessingPayment(false);
+                const { data: orderData } = await axios.post(
+                  `${API_URL}/orders`,
+                  {
+                    shippingAddress: form,
+                    couponCode: couponCode || undefined,
+                    paymentMethod: "online",
+                    paymentStatus: "paid",
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                  },
+                );
+                await clearCart();
+                toast.success("Payment successful! Order placed!");
+                navigate("/account/orders");
+              } catch (error) {
+                toast.error(
+                  "Order creation failed after payment. Contact support.",
+                );
+              }
+            },
+          };
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        };
+        document.body.appendChild(script);
+      } catch (error) {
+        toast.error("Payment initiation failed");
+        setProcessingPayment(false);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // COD FLOW
+      setLoading(true);
+      try {
+        await axios.post(`${API_URL}/orders`, {
+          shippingAddress: form,
+          couponCode: couponCode || undefined,
+        });
+        await clearCart();
+        toast.success("Order placed successfully!");
+        navigate("/account/orders");
+      } catch (error) {
+        toast.error(error.response?.data?.message || "Order failed");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -109,6 +188,9 @@ const Checkout = () => {
         <div className="container-custom text-center py-20">
           <p className="text-6xl mb-4">🛒</p>
           <h2 className="text-2xl font-bold text-text mb-2">Cart is Empty</h2>
+          <p className="text-text-light mb-6">
+            Add some products before checking out
+          </p>
           <Link to="/shop" className="btn-primary">
             Shop Now
           </Link>
@@ -126,11 +208,13 @@ const Checkout = () => {
             Checkout
           </h1>
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            {/* Left Side - Address & Payment */}
             <div className="lg:col-span-3">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <MapPinIcon className="w-5 h-5 text-primary" /> Shipping Address
               </h2>
 
+              {/* Saved Address Option */}
               {user?.defaultAddress?.addressLine1 && (
                 <div className="mb-4">
                   <button
@@ -187,10 +271,11 @@ const Checkout = () => {
                 </div>
               )}
 
+              {/* New Address Form */}
               {(!user?.defaultAddress?.addressLine1 || !useSavedAddress) && (
                 <form
                   onSubmit={handleSubmit}
-                  className="space-y-4 bg-white p-5 rounded-xl border border-gray-100"
+                  className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6"
                 >
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -331,17 +416,66 @@ const Checkout = () => {
                 </form>
               )}
 
+              {/* Payment Method Selection */}
+              <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
+                <h3 className="font-semibold text-text mb-4">Payment Method</h3>
+                <div className="space-y-3">
+                  <label
+                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${paymentMethod === "cod" ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="cod"
+                      checked={paymentMethod === "cod"}
+                      onChange={() => setPaymentMethod("cod")}
+                      className="mt-0.5 text-primary"
+                    />
+                    <div>
+                      <p className="font-medium text-text">Cash on Delivery</p>
+                      <p className="text-xs text-text-light">
+                        Pay when you receive your order
+                      </p>
+                    </div>
+                  </label>
+                  <label
+                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${paymentMethod === "online" ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="online"
+                      checked={paymentMethod === "online"}
+                      onChange={() => setPaymentMethod("online")}
+                      className="mt-0.5 text-primary"
+                    />
+                    <div>
+                      <p className="font-medium text-text">Online Payment</p>
+                      <p className="text-xs text-text-light">
+                        Pay securely via UPI, Cards, NetBanking, Wallets
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Place Order Button */}
               <button
                 onClick={handleSubmit}
-                disabled={loading}
-                className="w-full mt-6 btn-primary py-4 text-base"
+                disabled={loading || processingPayment}
+                className="w-full btn-primary py-4 text-base"
               >
-                {loading
-                  ? "Placing Order..."
-                  : `Place Order - ₹${grandTotal.toLocaleString()}`}
+                {loading && !processingPayment
+                  ? "Creating Order..."
+                  : processingPayment
+                    ? "Complete Payment in Popup..."
+                    : paymentMethod === "online"
+                      ? `Pay ₹${grandTotal.toLocaleString()} Online`
+                      : `Place Order - ₹${grandTotal.toLocaleString()}`}
               </button>
             </div>
 
+            {/* Right Side - Order Summary */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
@@ -398,9 +532,6 @@ const Checkout = () => {
                       You save ₹{couponDiscount.toLocaleString()}!
                     </p>
                   )}
-                </div>
-                <div className="mt-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
-                  💵 Cash on Delivery Available
                 </div>
                 <Link
                   to="/cart"
