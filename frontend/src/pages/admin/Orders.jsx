@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   EyeIcon,
@@ -251,7 +252,20 @@ const Orders = () => {
                     className="flex justify-between py-2 border-b text-sm"
                   >
                     <span>
-                      {item.name} × {item.quantity}
+                      {item.product?.slug ? (
+                        <Link
+                          to={`/product/${item.product.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline font-medium"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {item.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{item.name}</span>
+                      )}{" "}
+                      × {item.quantity}
                     </span>
                     <span className="font-medium">
                       ₹{item.subtotal?.toLocaleString()}

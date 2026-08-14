@@ -81,6 +81,7 @@ export const CartProvider = ({ children }) => {
   // Add to cart
   const addToCart = async (productId, quantity = 1, variant = null) => {
     if (isAuthenticated) {
+      // LOGGED IN - Use API
       try {
         const { data } = await axios.post(`${API_URL}/cart`, {
           productId,
@@ -95,10 +96,12 @@ export const CartProvider = ({ children }) => {
         throw error;
       }
     } else {
+      // GUEST - Use localStorage
       try {
         const currentCart = { ...cart };
         if (!currentCart.items) currentCart.items = [];
 
+        // Fetch product info
         let product = null;
         try {
           const { data: allProducts } = await axios.get(
@@ -106,14 +109,28 @@ export const CartProvider = ({ children }) => {
           );
           product = allProducts?.products?.find((p) => p._id === productId);
         } catch (e) {
-          console.log("Could not fetch product details for guest cart");
+          console.log("Could not fetch product info for guest cart");
         }
 
+        // Check stock limit
+        if (product && product.stock !== undefined && product.stock !== null) {
+          const existingItem = currentCart.items.find(
+            (item) => (item.product?._id || item.product) === productId,
+          );
+          const currentQty = existingItem?.quantity || 0;
+          if (currentQty + quantity > product.stock) {
+            toast.error(`Only ${product.stock} items available in stock`);
+            return;
+          }
+        }
+
+        // Find existing item
         const existingIndex = currentCart.items.findIndex(
           (item) => (item.product?._id || item.product) === productId,
         );
 
         if (existingIndex > -1) {
+          // Update existing item
           currentCart.items[existingIndex].quantity += quantity;
           if (product) {
             currentCart.items[existingIndex].product = product;
@@ -123,6 +140,7 @@ export const CartProvider = ({ children }) => {
               product.images?.[0]?.url || "";
           }
         } else {
+          // Add new item
           currentCart.items.push({
             _id: Date.now().toString(),
             product: product || {
@@ -143,8 +161,11 @@ export const CartProvider = ({ children }) => {
         setCart(currentCart);
         saveToLocal(currentCart);
         toast.success("Added to cart! 🛒");
+        return { success: true, cart: currentCart };
       } catch (error) {
+        console.error("Guest add to cart error:", error);
         toast.error("Failed to add to cart");
+        return { success: false };
       }
     }
   };
@@ -152,6 +173,7 @@ export const CartProvider = ({ children }) => {
   // Update quantity
   const updateQuantity = async (itemId, quantity) => {
     if (isAuthenticated) {
+      // LOGGED IN - Use API
       try {
         const { data } = await axios.put(`${API_URL}/cart/${itemId}`, {
           quantity,
@@ -163,9 +185,18 @@ export const CartProvider = ({ children }) => {
         throw error;
       }
     } else {
+      // GUEST - Use localStorage
       const currentCart = { ...cart };
       const item = currentCart.items?.find((item) => item._id === itemId);
       if (item) {
+        // Check stock limit for guest
+        const product = item.product;
+        if (product && product.stock !== undefined && product.stock !== null) {
+          if (quantity > product.stock) {
+            toast.error(`Only ${product.stock} items available in stock`);
+            return;
+          }
+        }
         item.quantity = quantity;
         setCart(currentCart);
         saveToLocal(currentCart);
@@ -176,6 +207,7 @@ export const CartProvider = ({ children }) => {
   // Remove from cart
   const removeFromCart = async (itemId) => {
     if (isAuthenticated) {
+      // LOGGED IN - Use API
       try {
         const { data } = await axios.delete(`${API_URL}/cart/${itemId}`);
         setCart(data.cart);
@@ -186,6 +218,7 @@ export const CartProvider = ({ children }) => {
         throw error;
       }
     } else {
+      // GUEST - Use localStorage
       const currentCart = { ...cart };
       currentCart.items =
         currentCart.items?.filter((item) => item._id !== itemId) || [];
@@ -220,6 +253,7 @@ export const CartProvider = ({ children }) => {
     setAppliedCoupon(null);
   };
 
+  // Calculate totals
   const cartCount =
     cart?.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
   const cartTotal =

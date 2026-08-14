@@ -12,6 +12,9 @@ import {
   CheckIcon,
   XMarkIcon,
   PhotoIcon,
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  StarIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -25,10 +28,18 @@ const Products = () => {
   const [previewProduct, setPreviewProduct] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
+  // Search and Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [productTypeFilter, setProductTypeFilter] = useState("");
+  const [stockFilter, setStockFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
   const { data: productsData, isLoading } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
-      const { data } = await axios.get(`${API_URL}/products?limit=100`);
+      const { data } = await axios.get(`${API_URL}/products?limit=200`);
       return data;
     },
   });
@@ -60,10 +71,24 @@ const Products = () => {
     onError: (error) => toast.error(error.response?.data?.message || "Failed"),
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: async (id) => {
+      await axios.put(`${API_URL}/products/${id}/toggle`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      toast.success("Product status updated!");
+    },
+  });
+
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
       deleteMutation.mutate(id);
     }
+  };
+
+  const handleToggle = (id) => {
+    toggleMutation.mutate(id);
   };
 
   const handleCopyLink = (product) => {
@@ -82,13 +107,46 @@ const Products = () => {
       });
   };
 
-  const products = productsData?.products || [];
+  // Filter products
+  const products = (productsData?.products || []).filter((product) => {
+    if (searchQuery) {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch =
+        product.name?.toLowerCase().includes(searchLower) ||
+        product.sku?.toLowerCase().includes(searchLower) ||
+        product.description?.toLowerCase().includes(searchLower);
+      if (!matchesSearch) return false;
+    }
+    if (categoryFilter) {
+      const catIds = product.category
+        ? product.category.split(",").filter(Boolean)
+        : [];
+      if (!catIds.includes(categoryFilter)) return false;
+    }
+    if (brandFilter) {
+      const brandId =
+        typeof product.brand === "object" ? product.brand?._id : product.brand;
+      if (brandId !== brandFilter) return false;
+    }
+    if (productTypeFilter && product.productType !== productTypeFilter)
+      return false;
+    if (stockFilter === "in-stock" && (product.stock || 0) <= 0) return false;
+    if (stockFilter === "out-of-stock" && (product.stock || 0) > 0)
+      return false;
+    if (stockFilter === "low-stock" && (product.stock || 0) > 3) return false;
+    return true;
+  });
 
-  // Helper to get category names safely
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCategoryFilter("");
+    setBrandFilter("");
+    setProductTypeFilter("");
+    setStockFilter("");
+  };
+
   const getCategoryNames = (product) => {
     if (!product) return "N/A";
-
-    // First check if backend returned categories array
     if (
       product.categories &&
       Array.isArray(product.categories) &&
@@ -96,8 +154,6 @@ const Products = () => {
     ) {
       return product.categories.map((c) => c.name).join(", ");
     }
-
-    // Then check single category object
     if (
       product.category &&
       typeof product.category === "object" &&
@@ -106,8 +162,6 @@ const Products = () => {
     ) {
       return product.category.name;
     }
-
-    // Then check comma-separated string
     if (typeof product.category === "string" && product.category) {
       const ids = product.category.split(",").filter(Boolean);
       if (ids.length === 0) return "N/A";
@@ -120,7 +174,6 @@ const Products = () => {
           .join(", ") || "N/A"
       );
     }
-
     return "N/A";
   };
 
@@ -325,7 +378,7 @@ const Products = () => {
               )}
             </div>
           </div>
-          <div className="p-6 border-t sticky bottom-0 bg-white rounded-b-2xl flex gap-3">
+          <div className="p-6 border-t sticky bottom-0 bg-white rounded-b-2xl flex gap-3 flex-wrap">
             <button
               onClick={() => {
                 onClose();
@@ -340,6 +393,15 @@ const Products = () => {
               className="btn-outline text-sm"
             >
               <LinkIcon className="w-4 h-4" /> Copy Link
+            </button>
+            <button
+              onClick={() => {
+                onClose();
+                navigate(`/admin/products/reviews/${product._id}`);
+              }}
+              className="btn-outline text-sm"
+            >
+              <StarIcon className="w-4 h-4" /> Reviews
             </button>
           </div>
         </div>
@@ -356,13 +418,120 @@ const Products = () => {
             {products.length} products found
           </p>
         </div>
-        <button
-          onClick={() => navigate("/admin/products/add")}
-          className="btn-primary text-sm"
-        >
-          <PlusIcon className="w-5 h-5" /> Add Product
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="btn-outline text-sm flex items-center gap-1"
+          >
+            <FunnelIcon className="w-4 h-4" />{" "}
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </button>
+          <button
+            onClick={() => navigate("/admin/products/add")}
+            className="btn-primary text-sm"
+          >
+            <PlusIcon className="w-5 h-5" /> Add Product
+          </button>
+        </div>
       </div>
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+        <div className="relative">
+          <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by name, SKU, or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
+      </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-text-light mb-1">
+                Category
+              </label>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All Categories</option>
+                {categories?.map((cat) => (
+                  <option key={cat._id} value={cat._id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-text-light mb-1">
+                Brand
+              </label>
+              <select
+                value={brandFilter}
+                onChange={(e) => setBrandFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All Brands</option>
+                {brands?.map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-text-light mb-1">
+                Product Type
+              </label>
+              <select
+                value={productTypeFilter}
+                onChange={(e) => setProductTypeFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All Types</option>
+                <option value="eyeglasses">Eyeglasses</option>
+                <option value="sunglasses">Sunglasses</option>
+                <option value="contactlens">Contact Lens</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-text-light mb-1">
+                Stock Status
+              </label>
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All Stock</option>
+                <option value="in-stock">In Stock</option>
+                <option value="out-of-stock">Out of Stock</option>
+                <option value="low-stock">Low Stock (≤3)</option>
+              </select>
+            </div>
+          </div>
+          {(searchQuery ||
+            categoryFilter ||
+            brandFilter ||
+            productTypeFilter ||
+            stockFilter) && (
+            <button
+              onClick={clearFilters}
+              className="text-sm text-red-500 hover:underline mt-3"
+            >
+              Clear All Filters
+            </button>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -384,17 +553,25 @@ const Products = () => {
         <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
           <ShoppingBagIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-text mb-2">
-            No Products Yet
+            No Products Found
           </h3>
           <p className="text-text-light mb-6 text-sm">
-            Start adding products to your store inventory
+            {searchQuery || categoryFilter || brandFilter
+              ? "Try adjusting your search or filters"
+              : "Start adding products to your store"}
           </p>
-          <button
-            onClick={() => navigate("/admin/products/add")}
-            className="btn-primary text-sm"
-          >
-            Add Your First Product
-          </button>
+          {searchQuery || categoryFilter || brandFilter ? (
+            <button onClick={clearFilters} className="btn-outline text-sm">
+              Clear Filters
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/admin/products/add")}
+              className="btn-primary text-sm"
+            >
+              Add Your First Product
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -414,7 +591,7 @@ const Products = () => {
             return (
               <div
                 key={product._id}
-                className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300"
+                className={`group bg-white rounded-xl border overflow-hidden hover:shadow-xl transition-all duration-300 ${product.isActive ? "border-gray-100" : "border-red-200 opacity-60"}`}
               >
                 <div
                   className="relative bg-gray-50 cursor-pointer"
@@ -434,6 +611,11 @@ const Products = () => {
                   {discountPercent > 0 && (
                     <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                       {discountPercent}% OFF
+                    </span>
+                  )}
+                  {!product.isActive && (
+                    <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      Inactive
                     </span>
                   )}
                 </div>
@@ -537,6 +719,20 @@ const Products = () => {
                     title="Edit"
                   >
                     <PencilIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggle(product._id);
+                    }}
+                    className={`p-2 rounded-lg transition ${product.isActive ? "text-green-500 hover:bg-green-50" : "text-gray-400 hover:bg-gray-50"}`}
+                    title={product.isActive ? "Deactivate" : "Activate"}
+                  >
+                    {product.isActive ? (
+                      <CheckIcon className="w-4 h-4" />
+                    ) : (
+                      <XMarkIcon className="w-4 h-4" />
+                    )}
                   </button>
                   <button
                     onClick={(e) => {

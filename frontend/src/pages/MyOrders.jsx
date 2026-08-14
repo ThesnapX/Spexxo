@@ -1,20 +1,37 @@
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { XCircleIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const MyOrders = () => {
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ["my-orders"],
     queryFn: async () => {
       try {
         const { data } = await axios.get(`${API_URL}/orders/my-orders`);
         return data.orders;
-      } catch (error) {
+      } catch {
         return [];
       }
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async (orderId) => {
+      await axios.put(`${API_URL}/orders/${orderId}/cancel`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
+      toast.success("Order cancelled successfully!");
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to cancel order");
     },
   });
 
@@ -29,13 +46,25 @@ const MyOrders = () => {
     cancelled: "bg-red-100 text-red-700",
   };
 
+  const handleCancelOrder = (orderId) => {
+    if (
+      window.confirm(
+        "Are you sure you want to cancel this order? This action cannot be undone.",
+      )
+    ) {
+      cancelMutation.mutate(orderId);
+    }
+  };
+
   return (
     <>
       <SEO title="My Orders" />
-      <div className="pt-28 pb-16">
+      <div className="pt-24 pb-16">
         <div className="container-custom max-w-4xl">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-text">My Orders</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-text">
+              My Orders
+            </h1>
             <Link
               to="/account"
               className="text-primary hover:underline text-sm"
@@ -46,10 +75,10 @@ const MyOrders = () => {
 
           {isLoading ? (
             <div className="text-center py-12">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
             </div>
           ) : orders.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl border border-gray-100">
+            <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
               <p className="text-6xl mb-4">📦</p>
               <h2 className="text-xl font-semibold text-text mb-2">
                 No Orders Yet
@@ -64,12 +93,11 @@ const MyOrders = () => {
           ) : (
             <div className="space-y-4">
               {orders.map((order) => (
-                <Link
+                <div
                   key={order._id}
-                  to={`/account/orders/${order._id}`}
-                  className="block bg-white rounded-xl border border-gray-100 p-6 hover:shadow-lg transition"
+                  className="bg-white rounded-xl border border-gray-100 overflow-hidden"
                 >
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="p-4 border-b flex items-center justify-between flex-wrap gap-3">
                     <div>
                       <p className="text-sm text-text-light">
                         Order #{order.orderNumber}
@@ -82,26 +110,46 @@ const MyOrders = () => {
                         })}
                       </p>
                     </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.orderStatus] || "bg-gray-100 text-gray-700"}`}
-                    >
-                      {order.orderStatus}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.orderStatus] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {order.orderStatus}
+                      </span>
+                      {["pending", "confirmed"].includes(order.orderStatus) && (
+                        <button
+                          onClick={() => handleCancelOrder(order._id)}
+                          disabled={cancelMutation.isPending}
+                          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
+                        >
+                          <XCircleIcon className="w-4 h-4" /> Cancel Order
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="p-4 flex items-center justify-between flex-wrap gap-3">
                     <div>
                       <p className="font-medium text-text">
-                        {order.items?.length} item(s)
+                        {order.items?.length || 0} item(s)
                       </p>
                       <p className="text-sm text-text-light">
-                        Payment: {order.isCOD ? "Cash on Delivery" : "Online"}
+                        Payment:{" "}
+                        {order.isCOD ? "Cash on Delivery" : "Online (Razorpay)"}
                       </p>
                     </div>
-                    <p className="text-lg font-bold text-primary">
-                      ₹{order.total?.toLocaleString()}
-                    </p>
+                    <div className="flex items-center gap-4">
+                      <p className="text-lg font-bold text-primary">
+                        ₹{order.total?.toLocaleString()}
+                      </p>
+                      <Link
+                        to={`/account/orders/${order._id}`}
+                        className="btn-outline text-xs py-2 px-4"
+                      >
+                        View Details
+                      </Link>
+                    </div>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}

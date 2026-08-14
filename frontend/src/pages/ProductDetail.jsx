@@ -229,24 +229,24 @@ const ProductDetail = () => {
       <div className="pt-20 md:pt-24 pb-16">
         <div className="container-custom">
           {/* Breadcrumb */}
-          <nav className="flex items-center gap-2 text-sm text-text-light mb-6">
-            <Link to="/" className="hover:text-primary">
+          <nav className="flex items-center gap-2 text-sm text-text-light mb-6 overflow-x-auto whitespace-nowrap pb-2">
+            <Link to="/" className="hover:text-primary transition">
               Home
             </Link>
-            <ChevronRightIcon className="w-4 h-4" />
-            <Link to="/shop" className="hover:text-primary">
+            <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
+            <Link to="/shop" className="hover:text-primary transition">
               Shop
             </Link>
-            <ChevronRightIcon className="w-4 h-4" />
-            {product.category && (
+            <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
+            {product.brand?.name && (
               <>
                 <Link
-                  to={`/shop?category=${product.category.slug}`}
-                  className="hover:text-primary"
+                  to={`/shop?brand=${product.brand.slug}`}
+                  className="hover:text-primary transition"
                 >
-                  {product.category.name}
+                  {product.brand.name}
                 </Link>
-                <ChevronRightIcon className="w-4 h-4" />
+                <ChevronRightIcon className="w-4 h-4 flex-shrink-0" />
               </>
             )}
             <span className="text-text truncate">{product.name}</span>

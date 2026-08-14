@@ -29,6 +29,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Shipping = lazy(() => import("./pages/Shipping"));
 const Refund = lazy(() => import("./pages/Refund"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 // Admin Pages
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -142,6 +143,7 @@ function App() {
           <Route path="blogs/edit/:id" element={<EditBlog />} />
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
+          <Route path="reset-password/:token" element={<ResetPassword />} />
         </Route>
 
         {/* 404 */}

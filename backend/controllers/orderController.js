@@ -9,20 +9,26 @@ import sendEmail from "../utils/sendEmail.js";
 // @access  Private
 export const createOrder = async (req, res) => {
   try {
-    const { shippingAddress, couponCode } = req.body;
+    const {
+      shippingAddress,
+      couponCode,
+      paymentMethod,
+      paymentStatus,
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      codAdvance,
+    } = req.body;
 
     const cart = await Cart.findOne({ user: req.user._id }).populate(
       "items.product",
     );
 
     if (!cart || !cart.items || cart.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Cart is empty",
-      });
+      return res.status(400).json({ success: false, message: "Cart is empty" });
     }
 
-    // Validate stock for ALL items first
+    // Validate stock
     for (const item of cart.items) {
       const product = item.product;
       if (!product) continue;
@@ -57,17 +63,15 @@ export const createOrder = async (req, res) => {
 
       subtotal += itemSubtotal;
 
-      // Reduce stock
       await Product.findByIdAndUpdate(product._id, {
         $inc: { stock: -quantity },
       });
     }
 
     if (orderItems.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid items in cart",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "No valid items in cart" });
     }
 
     const shippingCost = subtotal >= 999 ? 0 : 99;
@@ -86,33 +90,24 @@ export const createOrder = async (req, res) => {
         });
 
         if (coupon) {
-          // Check total usage limit
           if (
             coupon.totalUsageLimit &&
             coupon.usedCount >= coupon.totalUsageLimit
           ) {
-            // Don't block the order, just skip the coupon
             console.log("Coupon usage limit reached");
           } else {
-            // Determine discount base
             let discountBase = subtotal;
-            if (coupon.discountOn === "delivery") {
-              discountBase = shippingCost;
-            }
+            if (coupon.discountOn === "delivery") discountBase = shippingCost;
 
-            // Calculate discount
             if (coupon.discountType === "percentage") {
               discount = (discountBase * coupon.discountValue) / 100;
-              if (coupon.maxDiscount) {
+              if (coupon.maxDiscount)
                 discount = Math.min(discount, coupon.maxDiscount);
-              }
             } else {
               discount = Math.min(coupon.discountValue, discountBase);
             }
 
             discount = Math.round(discount * 100) / 100;
-
-            // Update coupon usage
             coupon.usedCount = (coupon.usedCount || 0) + 1;
             await coupon.save();
 
@@ -131,6 +126,17 @@ export const createOrder = async (req, res) => {
     }
 
     const total = Math.max(0, subtotal - discount + shippingCost);
+
+    // ============ COD ADVANCE (10%) ============
+    let codAdvanceAmount = 0;
+    let amountToPay = total;
+    let remainingCOD = total;
+
+    if (paymentMethod === "cod" && codAdvance) {
+      codAdvanceAmount = Math.round(total * 0.1 * 100) / 100; // 10% advance
+      remainingCOD = Math.round((total - codAdvanceAmount) * 100) / 100;
+      amountToPay = codAdvanceAmount; // Amount to pay online now
+    }
 
     const orderData = {
       user: req.user._id,
@@ -152,25 +158,30 @@ export const createOrder = async (req, res) => {
       discount: Number(discount),
       coupon: couponData,
       total: Number(total),
-      paymentMethod: req.body.paymentMethod || "cod",
-      paymentStatus: req.body.paymentStatus || "pending",
-      isCOD: req.body.paymentMethod !== "online",
-      codAmount: req.body.paymentMethod !== "online" ? Number(total) : 0,
-      orderStatus: req.body.paymentStatus === "paid" ? "confirmed" : "pending",
-      paymentDetails: req.body.razorpay_payment_id
+      codAdvance: Number(codAdvanceAmount),
+      amountToPay: Number(amountToPay),
+      remainingCOD: Number(remainingCOD),
+      paymentMethod: paymentMethod || "cod",
+      paymentStatus: paymentStatus || "pending",
+      isCOD: paymentMethod !== "online",
+      codAmount: paymentMethod !== "online" ? Number(remainingCOD) : 0,
+      orderStatus: paymentStatus === "paid" ? "confirmed" : "pending",
+      paymentDetails: razorpay_payment_id
         ? {
-            transactionId: req.body.razorpay_payment_id,
+            transactionId: razorpay_payment_id,
             paymentGateway: "razorpay",
-            razorpayOrderId: req.body.razorpay_order_id,
+            razorpayOrderId: razorpay_order_id,
           }
         : null,
       statusHistory: [
         {
-          status: req.body.paymentStatus === "paid" ? "confirmed" : "pending",
+          status: paymentStatus === "paid" ? "confirmed" : "pending",
           note:
-            req.body.paymentStatus === "paid"
+            paymentStatus === "paid"
               ? "Payment received via Razorpay"
-              : "Order placed",
+              : codAdvance
+                ? "10% advance paid"
+                : "Order placed",
           date: new Date(),
         },
       ],
@@ -186,15 +197,15 @@ export const createOrder = async (req, res) => {
     try {
       const emailHTML = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1 style="color: #0B1C39;">Order Confirmed! 🎉</h1>
+          <h1 style="color: #0B1C39;">Order Confirmed!</h1>
           <p>Thank you for your order, <strong>${shippingAddress?.fullName || "Customer"}</strong>!</p>
           <div style="background: #EBF4FC; padding: 20px; border-radius: 12px; margin: 20px 0;">
             <p style="font-size: 18px;">Order Number: <strong style="color: #3D96EB;">${order.orderNumber}</strong></p>
             <p style="font-size: 24px; font-weight: bold; color: #0B1C39;">Total: ₹${total.toLocaleString()}</p>
-            ${couponData ? `<p style="color: #10B981;">Coupon ${couponData.code} applied - You saved ₹${discount.toLocaleString()}!</p>` : ""}
-            <p>Payment Method: <strong>Cash on Delivery</strong></p>
+            ${codAdvanceAmount > 0 ? `<p style="color: #F59E0B;">Advance Paid: ₹${codAdvanceAmount.toLocaleString()}</p><p style="color: #F59E0B;">Remaining COD: ₹${remainingCOD.toLocaleString()}</p>` : ""}
+            ${couponData ? `<p style="color: #10B981;">Coupon ${couponData.code} - Saved ₹${discount.toLocaleString()}</p>` : ""}
+            <p>Payment Method: <strong>${paymentMethod === "online" ? "Online" : codAdvance ? "10% Advance + COD" : "Cash on Delivery"}</strong></p>
           </div>
-          <p>We'll notify you when your order ships.</p>
           <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" 
              style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">
             Track Your Order
@@ -211,11 +222,9 @@ export const createOrder = async (req, res) => {
       console.log("Email failed:", emailError.message);
     }
 
-    res.status(201).json({
-      success: true,
-      order,
-      message: "Order placed successfully!",
-    });
+    res
+      .status(201)
+      .json({ success: true, order, message: "Order placed successfully!" });
   } catch (error) {
     console.error("Create order error:", error);
     res.status(400).json({
@@ -233,7 +242,6 @@ export const getOrders = async (req, res) => {
     const orders = await Order.find({ user: req.user._id })
       .sort("-createdAt")
       .populate("items.product", "name slug images");
-
     res.status(200).json({ success: true, orders });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -249,13 +257,10 @@ export const getOrder = async (req, res) => {
       "items.product",
       "name slug images",
     );
-
-    if (!order) {
+    if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    }
-
     if (
       order.user.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
@@ -264,7 +269,6 @@ export const getOrder = async (req, res) => {
         .status(403)
         .json({ success: false, message: "Not authorized" });
     }
-
     res.status(200).json({ success: true, order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -277,7 +281,6 @@ export const getOrder = async (req, res) => {
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-
     if (!order)
       return res
         .status(404)
@@ -291,14 +294,16 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     }
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending or confirmed orders can be cancelled",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Only pending or confirmed orders can be cancelled",
+        });
     }
 
-    // Restore stock
     if (order.orderStatus !== "cancelled") {
+      // Restore stock
       for (const item of order.items) {
         await Product.findByIdAndUpdate(item.product, {
           $inc: { stock: item.quantity },
@@ -311,6 +316,15 @@ export const cancelOrder = async (req, res) => {
           { $inc: { usedCount: -1 } },
         );
       }
+      // If COD advance was paid, mark refund required
+      if (order.codAdvance > 0 && order.paymentStatus === "paid") {
+        order.paymentStatus = "refund_pending";
+        order.statusHistory.push({
+          status: "cancelled",
+          note: `Refund of ₹${order.codAdvance} (advance) is pending`,
+          date: new Date(),
+        });
+      }
     }
 
     order.orderStatus = "cancelled";
@@ -321,11 +335,13 @@ export const cancelOrder = async (req, res) => {
     });
     await order.save();
 
-    res.status(200).json({
-      success: true,
-      order,
-      message: "Order cancelled. Stock restored.",
-    });
+    res
+      .status(200)
+      .json({
+        success: true,
+        order,
+        message: "Order cancelled. Stock restored.",
+      });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -339,7 +355,6 @@ export const getAllOrders = async (req, res) => {
     const { page = 1, limit = 20, status } = req.query;
     const query = {};
     if (status) query.orderStatus = status;
-
     const skip = (Number(page) - 1) * Number(limit);
 
     const [orders, total] = await Promise.all([
@@ -377,7 +392,6 @@ export const updateOrderStatus = async (req, res) => {
       "user",
       "email firstName",
     );
-
     if (!order)
       return res
         .status(404)
@@ -399,22 +413,19 @@ export const updateOrderStatus = async (req, res) => {
 
     try {
       const statusEmails = {
-        confirmed: "Order Confirmed ✅",
-        processing: "Order Processing 🔄",
-        shipped: "Order Shipped 📦",
-        delivered: "Order Delivered 🎉",
-        cancelled: "Order Cancelled ❌",
+        confirmed: "Order Confirmed",
+        processing: "Order Processing",
+        shipped: "Order Shipped",
+        delivered: "Order Delivered",
+        cancelled: "Order Cancelled",
       };
 
       const emailHTML = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1>${statusEmails[status] || "Order Update"}</h1>
           <p>Your order <strong>#${order.orderNumber}</strong> has been updated to: <strong style="color: #3D96EB;">${status}</strong></p>
-          ${note ? `<p style="background: #f9f9f9; padding: 10px; border-radius: 8px;">📝 ${note}</p>` : ""}
-          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" 
-             style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;">
-            View Order Details
-          </a>
+          ${note ? `<p style="background: #f9f9f9; padding: 10px; border-radius: 8px;">${note}</p>` : ""}
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;">View Order Details</a>
         </div>
       `;
 
@@ -446,12 +457,10 @@ export const updateOrder = async (req, res) => {
       new: true,
       runValidators: true,
     }).populate("user", "firstName lastName email");
-
     if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-
     res.status(200).json({ success: true, order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

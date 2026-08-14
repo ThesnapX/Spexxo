@@ -21,7 +21,9 @@ const Checkout = () => {
   const [useSavedAddress, setUseSavedAddress] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [processingPayment, setProcessingPayment] = useState(false);
-
+  const [codAdvance, setCodAdvance] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showAddressList, setShowAddressList] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -76,6 +78,10 @@ const Checkout = () => {
   const couponCode = appliedCoupon?.code || "";
   const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
 
+  // Calculate 10% advance amount
+  const advanceAmount = Math.round(grandTotal * 0.1);
+  const remainingCOD = grandTotal - advanceAmount;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (
@@ -90,20 +96,12 @@ const Checkout = () => {
     }
 
     if (paymentMethod === "online") {
-      // ONLINE PAYMENT - Create Razorpay order first, then create our order after payment
+      // ONLINE PAYMENT
       setLoading(true);
       try {
-        // Calculate amount in paise
         const amountInPaise = Math.round(grandTotal * 100);
-
-        // First, we need a Razorpay order ID without creating our order yet
-        // We'll pass the amount directly to Razorpay
-        // const key = import.meta.env.VITE_RAZORPAY_KEY_ID || paymentData?.key;
-
-        // Load Razorpay script
         setProcessingPayment(true);
 
-        // For direct Razorpay integration without backend order creation first
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.onload = () => {
@@ -128,21 +126,17 @@ const Checkout = () => {
               },
             },
             handler: async function (response) {
-              // Payment successful - now create the order
               try {
                 setProcessingPayment(false);
-                const { data: orderData } = await axios.post(
-                  `${API_URL}/orders`,
-                  {
-                    shippingAddress: form,
-                    couponCode: couponCode || undefined,
-                    paymentMethod: "online",
-                    paymentStatus: "paid",
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_signature: response.razorpay_signature,
-                  },
-                );
+                await axios.post(`${API_URL}/orders`, {
+                  shippingAddress: form,
+                  couponCode: couponCode || undefined,
+                  paymentMethod: "online",
+                  paymentStatus: "paid",
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                });
                 await clearCart();
                 toast.success("Payment successful! Order placed!");
                 navigate("/account/orders");
@@ -163,13 +157,81 @@ const Checkout = () => {
       } finally {
         setLoading(false);
       }
+    } else if (paymentMethod === "cod" && codAdvance) {
+      // COD with 10% Advance - Open Razorpay for advance amount
+      setLoading(true);
+      try {
+        const advanceAmountInPaise = advanceAmount * 100;
+        setProcessingPayment(true);
+
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.onload = () => {
+          const options = {
+            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+            amount: advanceAmountInPaise,
+            currency: "INR",
+            name: "Spexxo",
+            description: "10% Advance Payment (COD Order)",
+            image: "/images/logo.png",
+            prefill: {
+              name: form.fullName,
+              email: user?.email || "customer@spexxo.com",
+              contact: form.phone || "9999999999",
+            },
+            theme: { color: "#3D96EB" },
+            modal: {
+              ondismiss: function () {
+                setProcessingPayment(false);
+                setLoading(false);
+                toast.error(
+                  "Advance payment cancelled. You can still place COD order without advance.",
+                );
+              },
+            },
+            handler: async function (response) {
+              try {
+                setProcessingPayment(false);
+                await axios.post(`${API_URL}/orders`, {
+                  shippingAddress: form,
+                  couponCode: couponCode || undefined,
+                  paymentMethod: "cod",
+                  paymentStatus: "paid", // Advance paid
+                  codAdvance: true,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_signature: response.razorpay_signature,
+                });
+                await clearCart();
+                toast.success(
+                  "Order placed with 10% advance! Remaining on delivery.",
+                );
+                navigate("/account/orders");
+              } catch (error) {
+                toast.error(
+                  "Order creation failed after advance payment. Contact support.",
+                );
+              }
+            },
+          };
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        };
+        document.body.appendChild(script);
+      } catch (error) {
+        toast.error("Payment initiation failed");
+        setProcessingPayment(false);
+      } finally {
+        setLoading(false);
+      }
     } else {
-      // COD FLOW
+      // Full COD
       setLoading(true);
       try {
         await axios.post(`${API_URL}/orders`, {
           shippingAddress: form,
           couponCode: couponCode || undefined,
+          paymentMethod: "cod",
         });
         await clearCart();
         toast.success("Order placed successfully!");
@@ -215,6 +277,53 @@ const Checkout = () => {
               </h2>
 
               {/* Saved Address Option */}
+              {/* Multiple Address Selection */}
+              {user?.addresses?.length > 1 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">
+                    Select Delivery Address
+                  </label>
+                  <div className="space-y-2">
+                    {user.addresses.map((addr) => (
+                      <button
+                        key={addr._id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAddressId(addr._id);
+                          setForm({
+                            fullName: addr.fullName || "",
+                            phone: addr.phone || "",
+                            addressLine1: addr.addressLine1 || "",
+                            addressLine2: addr.addressLine2 || "",
+                            landmark: addr.landmark || "",
+                            area: addr.area || "",
+                            city: addr.city || "",
+                            state: addr.state || "Maharashtra",
+                            pincode: addr.pincode || "",
+                          });
+                          setUseSavedAddress(true);
+                        }}
+                        className={`w-full text-left p-4 rounded-xl border-2 transition ${selectedAddressId === addr._id ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">
+                            {addr.name || "Address"}
+                          </span>
+                          {addr.isDefault && (
+                            <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-text-light mt-1">
+                          {addr.addressLine1}, {addr.city}, {addr.state} -{" "}
+                          {addr.pincode}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {user?.defaultAddress?.addressLine1 && (
                 <div className="mb-4">
                   <button
@@ -438,6 +547,30 @@ const Checkout = () => {
                       </p>
                     </div>
                   </label>
+
+                  {/* COD Advance Option */}
+                  {paymentMethod === "cod" && (
+                    <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={codAdvance}
+                          onChange={(e) => setCodAdvance(e.target.checked)}
+                          className="mt-0.5 text-primary w-4 h-4"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-text">
+                            Pay 10% Advance (Recommended)
+                          </p>
+                          <p className="text-xs text-text-light">
+                            Pay ₹{advanceAmount.toLocaleString()} now, remaining
+                            ₹{remainingCOD.toLocaleString()} on delivery
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+
                   <label
                     className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${paymentMethod === "online" ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
                   >
@@ -471,7 +604,9 @@ const Checkout = () => {
                     ? "Complete Payment in Popup..."
                     : paymentMethod === "online"
                       ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                      : `Place Order - ₹${grandTotal.toLocaleString()}`}
+                      : codAdvance
+                        ? `Pay ₹${advanceAmount.toLocaleString()} Advance`
+                        : `Place Order - ₹${grandTotal.toLocaleString()}`}
               </button>
             </div>
 
@@ -531,6 +666,22 @@ const Checkout = () => {
                     <p className="text-xs text-green-600">
                       You save ₹{couponDiscount.toLocaleString()}!
                     </p>
+                  )}
+                  {codAdvance && (
+                    <div className="bg-amber-50 p-3 rounded-lg mt-3">
+                      <div className="flex justify-between text-sm">
+                        <span>Pay Now (10%)</span>
+                        <span className="font-semibold text-amber-600">
+                          ₹{advanceAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Pay on Delivery</span>
+                        <span className="font-semibold">
+                          ₹{remainingCOD.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <Link

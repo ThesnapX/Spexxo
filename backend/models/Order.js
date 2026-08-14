@@ -123,6 +123,9 @@ const orderSchema = new mongoose.Schema(
     codAmount: {
       type: Number,
     },
+    codAdvance: { type: Number, default: 0 },
+    amountToPay: { type: Number },
+    remainingCOD: { type: Number },
   },
   {
     timestamps: true,
