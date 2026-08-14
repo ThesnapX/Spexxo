@@ -15,6 +15,7 @@ import {
   XMarkIcon,
   ChevronDownIcon,
   CubeIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 
 const AdminLayout = () => {
@@ -43,6 +44,11 @@ const AdminLayout = () => {
     { name: "Brands", icon: CubeIcon, path: "/admin/brands" },
     { name: "Users", icon: UsersIcon, path: "/admin/users" },
     { name: "Coupons", icon: TicketIcon, path: "/admin/coupons" },
+    {
+      name: "Email Marketing",
+      icon: EnvelopeIcon,
+      path: "/admin/email-marketing",
+    },
     { name: "Popups", icon: PhotoIcon, path: "/admin/popups" },
   ];
 
@@ -73,11 +79,7 @@ const AdminLayout = () => {
       <div className="flex">
         {/* Sidebar */}
         <aside
-          className={`
-          fixed lg:static inset-y-0 left-0 z-50
-          w-64 bg-white border-r transform transition-transform duration-200 ease-in-out
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}
+          className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-200 ease-in-out ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         >
           <div className="h-full flex flex-col">
             {/* Logo */}
@@ -88,32 +90,14 @@ const AdminLayout = () => {
               <p className="text-sm text-gray-500 mt-1">Admin Panel</p>
             </div>
 
-            {/* Navigation - Scrollable */}
+            {/* Navigation */}
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {/* Dashboard */}
-              <Link
-                to="/admin"
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  location.pathname === "/admin" ||
-                  location.pathname === "/admin/"
-                    ? activeClass
-                    : inactiveClass
-                }`}
-              >
-                <HomeIcon className="w-5 h-5" />
-                <span>Dashboard</span>
-              </Link>
-
-              {/* Other Menu Items */}
-              {menuItems.slice(1).map((item) => (
+              {menuItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive(item.path) ? activeClass : inactiveClass
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive(item.path) ? activeClass : inactiveClass}`}
                 >
                   <item.icon className="w-5 h-5" />
                   <span>{item.name}</span>
@@ -124,18 +108,14 @@ const AdminLayout = () => {
               <div>
                 <button
                   onClick={() => setProductsMenuOpen(!productsMenuOpen)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                    isActive("/admin/products") ? activeClass : inactiveClass
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${isActive("/admin/products") ? activeClass : inactiveClass}`}
                 >
                   <div className="flex items-center gap-3">
                     <ShoppingBagIcon className="w-5 h-5" />
                     <span>Products</span>
                   </div>
                   <ChevronDownIcon
-                    className={`w-4 h-4 transition-transform ${
-                      productsMenuOpen ? "rotate-180" : ""
-                    }`}
+                    className={`w-4 h-4 transition-transform ${productsMenuOpen ? "rotate-180" : ""}`}
                   />
                 </button>
                 {productsMenuOpen && (
@@ -143,22 +123,14 @@ const AdminLayout = () => {
                     <Link
                       to="/admin/products"
                       onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === "/admin/products"
-                          ? dropdownActiveClass
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/products" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
                     >
                       All Products
                     </Link>
                     <Link
                       to="/admin/products/add"
                       onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === "/admin/products/add"
-                          ? dropdownActiveClass
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/products/add" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
                     >
                       Add Product
                     </Link>
@@ -170,18 +142,14 @@ const AdminLayout = () => {
               <div>
                 <button
                   onClick={() => setBlogsMenuOpen(!blogsMenuOpen)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
-                    isActive("/admin/blogs") ? activeClass : inactiveClass
-                  }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${isActive("/admin/blogs") ? activeClass : inactiveClass}`}
                 >
                   <div className="flex items-center gap-3">
                     <DocumentTextIcon className="w-5 h-5" />
                     <span>Blogs</span>
                   </div>
                   <ChevronDownIcon
-                    className={`w-4 h-4 transition-transform ${
-                      blogsMenuOpen ? "rotate-180" : ""
-                    }`}
+                    className={`w-4 h-4 transition-transform ${blogsMenuOpen ? "rotate-180" : ""}`}
                   />
                 </button>
                 {blogsMenuOpen && (
@@ -189,22 +157,14 @@ const AdminLayout = () => {
                     <Link
                       to="/admin/blogs"
                       onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === "/admin/blogs"
-                          ? dropdownActiveClass
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/blogs" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
                     >
                       All Blogs
                     </Link>
                     <Link
                       to="/admin/blogs/add"
                       onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === "/admin/blogs/add"
-                          ? dropdownActiveClass
-                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                      }`}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/blogs/add" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
                     >
                       Add Blog
                     </Link>
@@ -213,8 +173,8 @@ const AdminLayout = () => {
               </div>
             </nav>
 
-            {/* User Info - Sticky at Bottom */}
-            <div className="flex-shrink-0 p-4 border-t bg-white sticky bottom-0">
+            {/* User Info - Sticky Bottom */}
+            <div className="flex-shrink-0 p-4 border-t bg-white">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 bg-[#3D96EB] text-white rounded-full flex items-center justify-center font-semibold flex-shrink-0">
                   {user?.firstName?.[0]}
@@ -233,21 +193,19 @@ const AdminLayout = () => {
                 onClick={handleLogout}
                 className="flex items-center gap-2 w-full px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors text-sm"
               >
-                <ArrowLeftOnRectangleIcon className="w-5 h-5" />
-                Logout
+                <ArrowLeftOnRectangleIcon className="w-5 h-5" /> Logout
               </button>
               <Link
                 to="/"
                 className="flex items-center gap-2 w-full px-4 py-2 text-gray-500 hover:bg-gray-50 rounded-lg transition-colors text-sm mt-1"
               >
-                <HomeIcon className="w-5 h-5" />
-                View Store
+                <HomeIcon className="w-5 h-5" /> View Store
               </Link>
             </div>
           </div>
         </aside>
 
-        {/* Overlay for mobile */}
+        {/* Overlay */}
         {sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"

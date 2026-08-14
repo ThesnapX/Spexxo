@@ -15,6 +15,7 @@ const Checkout = lazy(() => import("./pages/Checkout"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Profile = lazy(() => import("./pages/Profile"));
 const MyOrders = lazy(() => import("./pages/MyOrders"));
 const OrderDetail = lazy(() => import("./pages/OrderDetail"));
@@ -29,7 +30,6 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Shipping = lazy(() => import("./pages/Shipping"));
 const Refund = lazy(() => import("./pages/Refund"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 
 // Admin Pages
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -46,6 +46,7 @@ const AddBlog = lazy(() => import("./pages/admin/AddBlog"));
 const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
+const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
 
 // Maintenance Mode
 import MaintenanceMode from "./components/common/MaintenanceMode";
@@ -65,7 +66,6 @@ function App() {
           <Route path="shop/:category" element={<Shop />} />
           <Route path="product/:slug" element={<ProductDetail />} />
           <Route path="cart" element={<Cart />} />
-
           <Route
             path="checkout"
             element={
@@ -77,6 +77,7 @@ function App() {
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password/:token" element={<ResetPassword />} />
           <Route
             path="account"
             element={
@@ -143,7 +144,7 @@ function App() {
           <Route path="blogs/edit/:id" element={<EditBlog />} />
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
-          <Route path="reset-password/:token" element={<ResetPassword />} />
+          <Route path="email-marketing" element={<EmailMarketing />} />
         </Route>
 
         {/* 404 */}

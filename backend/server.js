@@ -23,6 +23,7 @@ import wishlistRoutes from "./routes/wishlistRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import generateSitemap from "./utils/sitemapGenerator.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
+import emailRoutes from "./routes/emailRoutes.js";
 
 dotenv.config();
 
@@ -88,6 +89,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/email", emailRoutes);
 
 // Generate sitemap
 app.get("/api/sitemap", async (req, res) => {

@@ -30,20 +30,16 @@ export const register = async (req, res) => {
 
     if (userExists) {
       if (email && userExists.email === email.toLowerCase()) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "User already exists with this email",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "User already exists with this email",
+        });
       }
       if (phone && userExists.phone === phone) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "User already exists with this phone number",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "User already exists with this phone number",
+        });
       }
       if (username && userExists.username === username.toLowerCase()) {
         return res
@@ -98,12 +94,10 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Please provide email/phone/username and password",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email/phone/username and password",
+      });
     }
 
     const user = await User.findOne({
@@ -256,21 +250,17 @@ export const updateFullProfile = async (req, res) => {
       const usernameToSet = username.trim().toLowerCase();
       if (usernameToSet) {
         if (!/^[a-zA-Z0-9_]+$/.test(usernameToSet)) {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              message:
-                "Username can only contain letters, numbers, and underscores",
-            });
+          return res.status(400).json({
+            success: false,
+            message:
+              "Username can only contain letters, numbers, and underscores",
+          });
         }
         if (usernameToSet.length < 3) {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              message: "Username must be at least 3 characters",
-            });
+          return res.status(400).json({
+            success: false,
+            message: "Username must be at least 3 characters",
+          });
         }
         const existingUser = await User.findOne({
           username: usernameToSet,
@@ -342,13 +332,11 @@ export const updateDeliveryAddress = async (req, res) => {
       pincode: req.body.pincode || "",
     };
     await user.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        defaultAddress: user.defaultAddress,
-        message: "Delivery address updated successfully",
-      });
+    res.status(200).json({
+      success: true,
+      defaultAddress: user.defaultAddress,
+      message: "Delivery address updated successfully",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -369,12 +357,10 @@ export const forgotPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "User not found with this email/phone/username",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "User not found with this email/phone/username",
+      });
     }
 
     const resetToken = crypto.randomBytes(20).toString("hex");
@@ -403,12 +389,10 @@ export const forgotPassword = async (req, res) => {
       console.log("Reset email failed to send");
     }
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Password reset link sent to your email",
-      });
+    res.status(200).json({
+      success: true,
+      message: "Password reset link sent to your email",
+    });
   } catch (error) {
     res
       .status(500)
@@ -419,6 +403,7 @@ export const forgotPassword = async (req, res) => {
 // @desc    Reset password
 // @route   PUT /api/auth/reset-password/:token
 // @access  Public
+
 export const resetPassword = async (req, res) => {
   try {
     const resetPasswordToken = crypto
@@ -437,9 +422,13 @@ export const resetPassword = async (req, res) => {
     }
 
     user.password = req.body.password;
+    // Clear the reset token immediately so it can't be reused
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
+
+    // The token is now cleared from the database, making it one-time use
+    // Even if the same link is used again, the user won't be found with this token
 
     const token = generateToken(user._id);
     res
@@ -476,20 +465,16 @@ export const changePassword = async (req, res) => {
     const user = await User.findById(req.user._id).select("+password");
 
     if (!currentPassword || !newPassword) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Please provide current and new password",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide current and new password",
+      });
     }
     if (newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Password must be at least 6 characters",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
     }
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
