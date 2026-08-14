@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { EnvelopeIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -14,15 +15,15 @@ const ForgotPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email) {
-      toast.error("Please enter your email or phone");
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      toast.error("Please enter a valid email address");
       return;
     }
     setLoading(true);
     try {
       await axios.post(`${API_URL}/auth/forgot-password`, { email });
       setSent(true);
-      toast.success("Password reset link sent!");
+      toast.success("Password reset link sent to your email!");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to send reset link");
     } finally {
@@ -38,26 +39,14 @@ const ForgotPassword = () => {
           <div className="container-custom max-w-md">
             <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
+                <EnvelopeIcon className="w-8 h-8 text-green-500" />
               </div>
               <h2 className="text-xl font-bold text-text mb-2">
-                Check Your Inbox
+                Check Your Email
               </h2>
               <p className="text-text-light mb-6">
-                We've sent a password reset link to your email/phone. The link
-                expires in 30 minutes.
+                We've sent a password reset link to <strong>{email}</strong>.
+                The link expires in 30 minutes.
               </p>
               <button
                 onClick={() => navigate("/login")}
@@ -81,7 +70,7 @@ const ForgotPassword = () => {
             Forgot Password
           </h1>
           <p className="text-text-light text-center mb-8">
-            Enter your email or phone to reset your password
+            Enter your email to reset your password
           </p>
 
           <form
@@ -90,16 +79,19 @@ const ForgotPassword = () => {
           >
             <div>
               <label className="block text-sm font-medium text-text mb-1">
-                Email or Phone
+                Email Address
               </label>
-              <input
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                placeholder="Enter your email or phone number"
-                required
-              />
+              <div className="relative">
+                <EnvelopeIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  placeholder="Enter your registered email"
+                  required
+                />
+              </div>
             </div>
             <button
               type="submit"

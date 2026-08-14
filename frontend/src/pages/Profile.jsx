@@ -16,9 +16,9 @@ import {
   XMarkIcon,
   HomeIcon,
   BriefcaseIcon,
-  HeartIcon as HeartOutlineIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from "@heroicons/react/24/outline";
-import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -34,6 +34,15 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
+
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Validation errors
+  const [profileErrors, setProfileErrors] = useState({});
+  const [passwordErrors, setPasswordErrors] = useState({});
 
   // Address management
   const [addresses, setAddresses] = useState([]);
@@ -70,7 +79,6 @@ const Profile = () => {
   const [editProfile, setEditProfile] = useState(false);
   const [editPassword, setEditPassword] = useState(false);
 
-  // Load user data and addresses
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -80,19 +88,14 @@ const Profile = () => {
         email: user.email || "",
         phone: user.phone || "",
       });
-      if (user.addresses) {
-        setAddresses(user.addresses);
-      }
+      if (user.addresses) setAddresses(user.addresses);
     }
   }, [user]);
 
-  // Fetch fresh user data
   const refreshUser = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/auth/me`);
-      if (data.user.addresses) {
-        setAddresses(data.user.addresses);
-      }
+      if (data.user.addresses) setAddresses(data.user.addresses);
     } catch (error) {
       console.log("Failed to refresh user data");
     }
@@ -120,8 +123,45 @@ const Profile = () => {
     }
   };
 
+  const validateProfileForm = () => {
+    const errors = {};
+    if (!profileForm.firstName.trim())
+      errors.firstName = "First name is required";
+    if (!profileForm.lastName.trim()) errors.lastName = "Last name is required";
+    if (!profileForm.email) errors.email = "Email is required";
+    else if (!/^\S+@\S+\.\S+$/.test(profileForm.email))
+      errors.email = "Enter a valid email address";
+    if (profileForm.phone && profileForm.phone.length !== 10)
+      errors.phone = "Phone must be exactly 10 digits";
+    else if (profileForm.phone && !/^\d{10}$/.test(profileForm.phone))
+      errors.phone = "Phone can only contain digits";
+    if (profileForm.username && !/^[a-zA-Z0-9_]+$/.test(profileForm.username)) {
+      errors.username =
+        "Username can only contain letters, numbers, and underscores";
+    }
+    return errors;
+  };
+
+  const validatePasswordForm = () => {
+    const errors = {};
+    if (!passwordForm.currentPassword)
+      errors.currentPassword = "Current password is required";
+    if (!passwordForm.newPassword)
+      errors.newPassword = "New password is required";
+    else if (passwordForm.newPassword.length < 6)
+      errors.newPassword = "Password must be at least 6 characters";
+    if (!passwordForm.confirmPassword)
+      errors.confirmPassword = "Confirm your new password";
+    else if (passwordForm.newPassword !== passwordForm.confirmPassword)
+      errors.confirmPassword = "Passwords do not match";
+    return errors;
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    const errors = validateProfileForm();
+    setProfileErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSaving(true);
     try {
       const { data } = await axios.put(
@@ -140,14 +180,9 @@ const Profile = () => {
 
   const handleSavePassword = async (e) => {
     e.preventDefault();
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-    if (passwordForm.newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
+    const errors = validatePasswordForm();
+    setPasswordErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSaving(true);
     try {
       await axios.put(`${API_URL}/auth/change-password`, {
@@ -161,6 +196,7 @@ const Profile = () => {
         confirmPassword: "",
       });
       setEditPassword(false);
+      setPasswordErrors({});
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to change password");
     } finally {
@@ -168,7 +204,7 @@ const Profile = () => {
     }
   };
 
-  // ============ ADDRESS FUNCTIONS ============
+  // Address functions (unchanged)
   const resetAddressForm = () => {
     setAddressForm({
       name: "Home",
@@ -371,41 +407,63 @@ const Profile = () => {
                       ))}
                     </div>
                   ) : (
-                    <form onSubmit={handleSaveProfile} className="space-y-4">
+                    <form
+                      onSubmit={handleSaveProfile}
+                      className="space-y-4"
+                      noValidate
+                    >
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium mb-1">
-                            First Name
+                            First Name *
                           </label>
                           <input
                             type="text"
                             value={profileForm.firstName}
-                            onChange={(e) =>
+                            onChange={(e) => {
                               setProfileForm({
                                 ...profileForm,
                                 firstName: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
+                              });
+                              if (profileErrors.firstName)
+                                setProfileErrors({
+                                  ...profileErrors,
+                                  firstName: undefined,
+                                });
+                            }}
+                            className={`w-full px-4 py-2.5 border rounded-lg ${profileErrors.firstName ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                           />
+                          {profileErrors.firstName && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {profileErrors.firstName}
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-sm font-medium mb-1">
-                            Last Name
+                            Last Name *
                           </label>
                           <input
                             type="text"
                             value={profileForm.lastName}
-                            onChange={(e) =>
+                            onChange={(e) => {
                               setProfileForm({
                                 ...profileForm,
                                 lastName: e.target.value,
-                              })
-                            }
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
+                              });
+                              if (profileErrors.lastName)
+                                setProfileErrors({
+                                  ...profileErrors,
+                                  lastName: undefined,
+                                });
+                            }}
+                            className={`w-full px-4 py-2.5 border rounded-lg ${profileErrors.lastName ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                           />
+                          {profileErrors.lastName && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {profileErrors.lastName}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -426,8 +484,13 @@ const Profile = () => {
                               );
                               setProfileForm({ ...profileForm, username: val });
                               checkUsername(val);
+                              if (profileErrors.username)
+                                setProfileErrors({
+                                  ...profileErrors,
+                                  username: undefined,
+                                });
                             }}
-                            className="w-full pl-8 pr-10 py-2.5 border border-gray-200 rounded-lg"
+                            className={`w-full pl-8 pr-10 py-2.5 border rounded-lg ${profileErrors.username ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                             placeholder="your_username"
                           />
                           {checkingUsername && (
@@ -440,33 +503,47 @@ const Profile = () => {
                             <XCircleIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
                           )}
                         </div>
+                        {profileErrors.username && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {profileErrors.username}
+                          </p>
+                        )}
                         {usernameAvailable === false && (
-                          <p className="text-xs text-red-500 mt-1">
+                          <p className="text-red-500 text-xs mt-1">
                             Username already taken
                           </p>
                         )}
                         {usernameAvailable === true && (
-                          <p className="text-xs text-green-500 mt-1">
+                          <p className="text-green-500 text-xs mt-1">
                             Username available!
                           </p>
                         )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          Email
+                          Email *
                         </label>
                         <input
                           type="email"
                           value={profileForm.email}
-                          onChange={(e) =>
+                          onChange={(e) => {
                             setProfileForm({
                               ...profileForm,
                               email: e.target.value,
-                            })
-                          }
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          required
+                            });
+                            if (profileErrors.email)
+                              setProfileErrors({
+                                ...profileErrors,
+                                email: undefined,
+                              });
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-lg ${profileErrors.email ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                         />
+                        {profileErrors.email && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {profileErrors.email}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
@@ -475,14 +552,25 @@ const Profile = () => {
                         <input
                           type="tel"
                           value={profileForm.phone}
-                          onChange={(e) =>
-                            setProfileForm({
-                              ...profileForm,
-                              phone: e.target.value,
-                            })
-                          }
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/\D/g, "");
+                            if (v.length <= 10) {
+                              setProfileForm({ ...profileForm, phone: v });
+                              if (profileErrors.phone)
+                                setProfileErrors({
+                                  ...profileErrors,
+                                  phone: undefined,
+                                });
+                            }
+                          }}
+                          className={`w-full px-4 py-2.5 border rounded-lg ${profileErrors.phone ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                          maxLength={10}
                         />
+                        {profileErrors.phone && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {profileErrors.phone}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-3 pt-2">
                         <button
@@ -494,7 +582,10 @@ const Profile = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEditProfile(false)}
+                          onClick={() => {
+                            setEditProfile(false);
+                            setProfileErrors({});
+                          }}
                           className="btn-outline text-sm"
                         >
                           Cancel
@@ -528,61 +619,139 @@ const Profile = () => {
                       </p>
                     </div>
                   ) : (
-                    <form onSubmit={handleSavePassword} className="space-y-4">
+                    <form
+                      onSubmit={handleSavePassword}
+                      className="space-y-4"
+                      noValidate
+                    >
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          Current Password
+                          Current Password *
                         </label>
-                        <input
-                          type="password"
-                          value={passwordForm.currentPassword}
-                          onChange={(e) =>
-                            setPasswordForm({
-                              ...passwordForm,
-                              currentPassword: e.target.value,
-                            })
-                          }
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={passwordForm.currentPassword}
+                            onChange={(e) => {
+                              setPasswordForm({
+                                ...passwordForm,
+                                currentPassword: e.target.value,
+                              });
+                              if (passwordErrors.currentPassword)
+                                setPasswordErrors({
+                                  ...passwordErrors,
+                                  currentPassword: undefined,
+                                });
+                            }}
+                            className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${passwordErrors.currentPassword ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowCurrentPassword(!showCurrentPassword)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            tabIndex={-1}
+                          >
+                            {showCurrentPassword ? (
+                              <EyeSlashIcon className="w-5 h-5" />
+                            ) : (
+                              <EyeIcon className="w-5 h-5" />
+                            )}
+                          </button>
+                        </div>
+                        {passwordErrors.currentPassword && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {passwordErrors.currentPassword}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          New Password
+                          New Password *
                         </label>
-                        <input
-                          type="password"
-                          value={passwordForm.newPassword}
-                          onChange={(e) =>
-                            setPasswordForm({
-                              ...passwordForm,
-                              newPassword: e.target.value,
-                            })
-                          }
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          required
-                          minLength={6}
-                        />
-                        <p className="text-xs text-text-light mt-1">
-                          Minimum 6 characters
-                        </p>
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            value={passwordForm.newPassword}
+                            onChange={(e) => {
+                              setPasswordForm({
+                                ...passwordForm,
+                                newPassword: e.target.value,
+                              });
+                              if (passwordErrors.newPassword)
+                                setPasswordErrors({
+                                  ...passwordErrors,
+                                  newPassword: undefined,
+                                });
+                            }}
+                            className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${passwordErrors.newPassword ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            tabIndex={-1}
+                          >
+                            {showNewPassword ? (
+                              <EyeSlashIcon className="w-5 h-5" />
+                            ) : (
+                              <EyeIcon className="w-5 h-5" />
+                            )}
+                          </button>
+                        </div>
+                        {passwordErrors.newPassword && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {passwordErrors.newPassword}
+                          </p>
+                        )}
+                        {!passwordErrors.newPassword && (
+                          <p className="text-xs text-text-light mt-1">
+                            Minimum 6 characters
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          Confirm New Password
+                          Confirm New Password *
                         </label>
-                        <input
-                          type="password"
-                          value={passwordForm.confirmPassword}
-                          onChange={(e) =>
-                            setPasswordForm({
-                              ...passwordForm,
-                              confirmPassword: e.target.value,
-                            })
-                          }
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={passwordForm.confirmPassword}
+                            onChange={(e) => {
+                              setPasswordForm({
+                                ...passwordForm,
+                                confirmPassword: e.target.value,
+                              });
+                              if (passwordErrors.confirmPassword)
+                                setPasswordErrors({
+                                  ...passwordErrors,
+                                  confirmPassword: undefined,
+                                });
+                            }}
+                            className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${passwordErrors.confirmPassword ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowConfirmPassword(!showConfirmPassword)
+                            }
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            tabIndex={-1}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeSlashIcon className="w-5 h-5" />
+                            ) : (
+                              <EyeIcon className="w-5 h-5" />
+                            )}
+                          </button>
+                        </div>
+                        {passwordErrors.confirmPassword && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {passwordErrors.confirmPassword}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-3 pt-2">
                         <button
@@ -596,6 +765,7 @@ const Profile = () => {
                           type="button"
                           onClick={() => {
                             setEditPassword(false);
+                            setPasswordErrors({});
                             setPasswordForm({
                               currentPassword: "",
                               newPassword: "",
@@ -612,7 +782,7 @@ const Profile = () => {
                 </div>
               )}
 
-              {/* Addresses Tab */}
+              {/* Addresses Tab - unchanged from your code */}
               {activeTab === "addresses" && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
@@ -630,7 +800,6 @@ const Profile = () => {
                     </button>
                   </div>
 
-                  {/* Address Form Popup */}
                   {showAddressForm && (
                     <div className="bg-white rounded-xl border border-gray-100 p-6">
                       <div className="flex justify-between items-center mb-4">
@@ -644,7 +813,6 @@ const Profile = () => {
                         </button>
                       </div>
                       <form onSubmit={handleSaveAddress} className="space-y-4">
-                        {/* Address Type */}
                         <div>
                           <label className="block text-sm font-medium mb-2">
                             Address Type
@@ -868,7 +1036,6 @@ const Profile = () => {
                     </div>
                   )}
 
-                  {/* Address List */}
                   {addresses.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
                       <MapPinIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
