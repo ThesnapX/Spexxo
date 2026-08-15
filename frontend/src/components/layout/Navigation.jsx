@@ -345,7 +345,7 @@ const MobileMenuLink = ({ to, onClick, children }) => (
   </NavLink>
 );
 
-// Mega Menu Content - now uses its own useLocation
+// Mega Menu Content
 const MegaMenuContent = ({ type, onClose }) => {
   const location = useLocation();
   const urlParams = new URLSearchParams(location.search);
@@ -355,6 +355,7 @@ const MegaMenuContent = ({ type, onClose }) => {
   const currentBrand = urlParams.get("brand") || "";
   const currentGender = urlParams.get("gender") || "";
 
+  // Fetch categories - filtered by productType
   const { data: categories } = useQuery({
     queryKey: ["categories", type],
     queryFn: async () => {
@@ -365,6 +366,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     },
   });
 
+  // Fetch brands
   const { data: brands } = useQuery({
     queryKey: ["brands"],
     queryFn: async () => {
@@ -373,13 +375,97 @@ const MegaMenuContent = ({ type, onClose }) => {
     },
   });
 
+  // Fetch products to determine which categories/shapes/brands have products
+  const { data: productsData } = useQuery({
+    queryKey: ["mega-menu-products", type],
+    queryFn: async () => {
+      const typeMap = {
+        eyeglasses: "eyeglasses",
+        sunglasses: "sunglasses",
+        contactlens: "contactlens",
+      };
+      const productTypeValue = typeMap[type] || type;
+      const { data } = await axios.get(
+        `${API_URL}/products?productType=${productTypeValue}&limit=200`,
+      );
+      return data.products || [];
+    },
+  });
+
+  const products = productsData || [];
+
+  // Get unique category IDs from products
+  const availableCategoryIds = new Set();
+  products.forEach((product) => {
+    if (product.category) {
+      if (typeof product.category === "string") {
+        product.category
+          .split(",")
+          .filter(Boolean)
+          .forEach((id) => availableCategoryIds.add(id));
+      } else if (typeof product.category === "object" && product.category._id) {
+        availableCategoryIds.add(product.category._id);
+      }
+    }
+  });
+
+  // Get unique frame shapes from products
+  const availableShapes = new Set();
+  products.forEach((product) => {
+    if (product.frameShape) {
+      if (typeof product.frameShape === "string") {
+        product.frameShape
+          .split(",")
+          .filter(Boolean)
+          .forEach((s) => availableShapes.add(s.trim()));
+      }
+    }
+  });
+
+  // Get unique brand IDs from products
+  const availableBrandIds = new Set();
+  products.forEach((product) => {
+    if (product.brand) {
+      if (typeof product.brand === "object" && product.brand._id) {
+        availableBrandIds.add(product.brand._id);
+      } else if (typeof product.brand === "string") {
+        availableBrandIds.add(product.brand);
+      }
+    }
+  });
+
+  // Filter categories to only show those with products
+  const categoriesWithProducts = (categories || []).filter((cat) =>
+    availableCategoryIds.has(cat._id),
+  );
+
+  // Filter brands to only show those with products
+  const brandsWithProducts = (brands || []).filter((brand) =>
+    availableBrandIds.has(brand._id),
+  );
+
+  // All possible frame shapes
+  const allShapes = [
+    "Rectangle",
+    "Round",
+    "Cat Eye",
+    "Square",
+    "Aviator",
+    "Wayfarer",
+    "Rimless",
+    "Oversized",
+  ];
+
+  // Filter shapes to only show those with products
+  const shapesWithProducts = allShapes.filter((shape) =>
+    availableShapes.has(shape),
+  );
+
   const typeLabels = {
     eyeglasses: "Eyeglasses",
     sunglasses: "Sunglasses",
     contactlens: "Contact Lenses",
   };
-
-  // Map type to productType value
   const typeMap = {
     eyeglasses: "eyeglasses",
     sunglasses: "sunglasses",
@@ -387,7 +473,6 @@ const MegaMenuContent = ({ type, onClose }) => {
   };
   const myProductType = typeMap[type] || type;
 
-  // Check if THIS mega menu is the one currently active
   const isMyMenuActive = () => {
     if (currentProductType && currentProductType === myProductType) return true;
     if (!currentProductType) {
@@ -448,14 +533,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         </div>
       </div>
 
-      {/* Categories */}
+      {/* Categories - Only show categories with products */}
       <div className="col-span-3 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Categories
         </h3>
         <div className="space-y-1">
-          {categories?.length > 0 ? (
-            categories.slice(0, 6).map((cat) => (
+          {categoriesWithProducts.length > 0 ? (
+            categoriesWithProducts.slice(0, 6).map((cat) => (
               <Link
                 key={cat._id}
                 to={`/shop?category=${cat.slug}`}
@@ -466,45 +551,46 @@ const MegaMenuContent = ({ type, onClose }) => {
               </Link>
             ))
           ) : (
-            <p className="text-sm text-gray-400 px-3 py-2">No categories yet</p>
+            <p className="text-sm text-gray-400 px-3 py-2">
+              No categories with products
+            </p>
           )}
           <Link
             to={`/shop/${type}`}
             onClick={onClose}
             className="block px-3 py-2 text-[#3D96EB] font-medium text-sm hover:underline mt-2"
           >
-            View All →
+            View All {typeLabels[type]} →
           </Link>
         </div>
       </div>
 
-      {/* Frame Shape */}
+      {/* Frame Shape - Only show shapes with products */}
       <div className="col-span-3 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Frame Shape
         </h3>
         <div className="space-y-1">
           {type !== "contactlens" ? (
-            [
-              "Rectangle",
-              "Round",
-              "Cat Eye",
-              "Square",
-              "Aviator",
-              "Wayfarer",
-            ].map((shape) => {
-              const shapeSlug = shape.toLowerCase().replace(" ", "-");
-              return (
-                <Link
-                  key={shape}
-                  to={`/shop?productType=${type}&frameShape=${shapeSlug}`}
-                  onClick={onClose}
-                  className={`block px-3 py-2 rounded-lg transition text-sm ${isActiveShape(shape) ? "bg-[#EBF4FC] text-[#3D96EB] font-medium" : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"}`}
-                >
-                  {shape}
-                </Link>
-              );
-            })
+            shapesWithProducts.length > 0 ? (
+              shapesWithProducts.map((shape) => {
+                const shapeSlug = shape.toLowerCase().replace(" ", "-");
+                return (
+                  <Link
+                    key={shape}
+                    to={`/shop?productType=${type}&frameShape=${shapeSlug}`}
+                    onClick={onClose}
+                    className={`block px-3 py-2 rounded-lg transition text-sm ${isActiveShape(shape) ? "bg-[#EBF4FC] text-[#3D96EB] font-medium" : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"}`}
+                  >
+                    {shape}
+                  </Link>
+                );
+              })
+            ) : (
+              <p className="text-sm text-gray-400 px-3 py-2">
+                No shapes available
+              </p>
+            )
           ) : (
             <>
               <Link
@@ -533,14 +619,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         </div>
       </div>
 
-      {/* Brands */}
+      {/* Brands - Only show brands with products */}
       <div className="col-span-2 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Top Brands
         </h3>
         <div className="space-y-1">
-          {brands?.length > 0 ? (
-            brands.slice(0, 5).map((brand) => (
+          {brandsWithProducts.length > 0 ? (
+            brandsWithProducts.slice(0, 5).map((brand) => (
               <Link
                 key={brand._id}
                 to={`/shop?brand=${brand.slug}`}
@@ -551,7 +637,9 @@ const MegaMenuContent = ({ type, onClose }) => {
               </Link>
             ))
           ) : (
-            <p className="text-sm text-gray-400 px-3 py-2">No brands yet</p>
+            <p className="text-sm text-gray-400 px-3 py-2">
+              No brands available
+            </p>
           )}
           <Link
             to="/shop"
