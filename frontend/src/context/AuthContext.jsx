@@ -17,9 +17,9 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
 
-  // Set up axios interceptor
+  // Set up axios interceptor - runs whenever token changes
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -28,10 +28,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  // Load user
+  // Load user on mount or when token changes
   useEffect(() => {
     const loadUser = async () => {
       if (!token) {
+        setUser(null);
         setLoading(false);
         return;
       }
@@ -41,6 +42,7 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user);
       } catch (error) {
         console.error("Failed to load user:", error);
+        // Clear invalid token
         localStorage.removeItem("token");
         setToken(null);
         setUser(null);
@@ -85,6 +87,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("savedCredentials"); // Also clear saved credentials on logout
     setToken(null);
     setUser(null);
     toast.success("Logged out successfully");
@@ -96,7 +99,6 @@ export const AuthProvider = ({ children }) => {
         `${API_URL}/auth/update-profile`,
         profileData,
       );
-      // Set user directly from the response
       setUser(data.user);
       toast.success("Profile updated successfully!");
       return data;
@@ -105,6 +107,7 @@ export const AuthProvider = ({ children }) => {
       throw error;
     }
   };
+
   const value = {
     user,
     loading,
