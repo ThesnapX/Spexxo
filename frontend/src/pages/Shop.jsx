@@ -98,15 +98,42 @@ const Shop = () => {
   }, [searchQuery, minPrice, maxPrice]);
 
   // Page title
+  // Page title - now includes category and brand names
   const getPageTitle = () => {
+    const parts = [];
+
+    // Add category name if selected
+    if (categoryFilter) {
+      const cat = categories?.find((c) => c.slug === categoryFilter);
+      if (cat) parts.push(cat.name);
+    }
+
+    // Add brand name if selected
+    if (brandFilter.length === 1) {
+      const brand = brands?.find((b) => b.slug === brandFilter[0]);
+      if (brand) parts.push(brand.name);
+    }
+
+    // Add product type
     if (productType) {
       const typeLabels = {
         eyeglasses: "Eyeglasses",
         sunglasses: "Sunglasses",
         contactlens: "Contact Lenses",
       };
-      return typeLabels[productType] || "All Products";
+      parts.push(typeLabels[productType] || productType);
     }
+
+    // Add gender if selected
+    if (genderFilter.length === 1) {
+      parts.push(
+        "for " +
+          genderFilter[0].charAt(0).toUpperCase() +
+          genderFilter[0].slice(1),
+      );
+    }
+
+    if (parts.length > 0) return parts.join(" ");
     return "All Products";
   };
 
