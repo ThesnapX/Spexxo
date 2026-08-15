@@ -42,20 +42,34 @@ const Users = () => {
       setEditMode(false);
       setSelectedUser(null);
     },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || "Failed to update user");
-    },
+    onError: (error) =>
+      toast.error(error.response?.data?.message || "Failed to update user"),
   });
 
-  const deleteUserMutation = useMutation({
+  const deactivateUserMutation = useMutation({
     mutationFn: async (id) => {
-      await axios.delete(`${API_URL}/users/${id}`);
+      await axios.put(`${API_URL}/users/${id}/deactivate`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      toast.success("User deleted!");
+      toast.success("User deactivated!");
       setSelectedUser(null);
     },
+    onError: (error) =>
+      toast.error(error.response?.data?.message || "Failed to deactivate"),
+  });
+
+  const reactivateUserMutation = useMutation({
+    mutationFn: async (id) => {
+      await axios.put(`${API_URL}/users/${id}/reactivate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User reactivated!");
+      setSelectedUser(null);
+    },
+    onError: (error) =>
+      toast.error(error.response?.data?.message || "Failed to reactivate"),
   });
 
   const handleViewUser = (user) => {
@@ -83,13 +97,23 @@ const Users = () => {
     setSaving(false);
   };
 
-  const handleDeleteUser = () => {
+  const handleDeactivateUser = () => {
     if (
       window.confirm(
-        `Delete user "${selectedUser.firstName} ${selectedUser.lastName}"?`,
+        `Deactivate user "${selectedUser.firstName} ${selectedUser.lastName}"? They will not be able to login.`,
       )
     ) {
-      deleteUserMutation.mutate(selectedUser._id);
+      deactivateUserMutation.mutate(selectedUser._id);
+    }
+  };
+
+  const handleReactivateUser = () => {
+    if (
+      window.confirm(
+        `Reactivate user "${selectedUser.firstName} ${selectedUser.lastName}"?`,
+      )
+    ) {
+      reactivateUserMutation.mutate(selectedUser._id);
     }
   };
 
@@ -131,6 +155,9 @@ const Users = () => {
                   Role
                 </th>
                 <th className="text-left p-4 text-sm font-medium text-text-light">
+                  Status
+                </th>
+                <th className="text-left p-4 text-sm font-medium text-text-light">
                   Joined
                 </th>
                 <th className="text-center p-4 text-sm font-medium text-text-light">
@@ -141,19 +168,22 @@ const Users = () => {
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" className="p-8 text-center">
+                  <td colSpan="8" className="p-8 text-center">
                     Loading...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-12 text-center text-text-light">
+                  <td colSpan="8" className="p-12 text-center text-text-light">
                     No users registered yet
                   </td>
                 </tr>
               ) : (
                 users.map((user) => (
-                  <tr key={user._id} className="hover:bg-gray-50">
+                  <tr
+                    key={user._id}
+                    className={`hover:bg-gray-50 ${user.isActive === false ? "opacity-60" : ""}`}
+                  >
                     <td className="p-4">
                       <span className="text-xs font-mono font-medium text-primary">
                         {user.customerId || "-"}
@@ -189,6 +219,17 @@ const Users = () => {
                       >
                         {user.role}
                       </span>
+                    </td>
+                    <td className="p-4">
+                      {user.isActive !== false ? (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          Inactive
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-xs text-text-light">
                       {new Date(user.createdAt).toLocaleDateString("en-IN")}
@@ -427,6 +468,35 @@ const Users = () => {
                 </div>
               </div>
 
+              {/* Account Status */}
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <p className="text-sm font-medium mb-2">Account Status</p>
+                {selectedUser.isActive !== false ? (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                    Active
+                  </span>
+                ) : (
+                  <div>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                      Inactive
+                    </span>
+                    {selectedUser.deactivatedAt && (
+                      <p className="text-xs text-text-light mt-1">
+                        Deactivated:{" "}
+                        {new Date(
+                          selectedUser.deactivatedAt,
+                        ).toLocaleDateString("en-IN")}
+                      </p>
+                    )}
+                    {selectedUser.deactivationReason && (
+                      <p className="text-xs text-text-light mt-1">
+                        Reason: {selectedUser.deactivationReason}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Addresses */}
               <div>
                 <h3 className="text-sm font-semibold uppercase text-gray-500 mb-3 tracking-wider">
@@ -477,7 +547,7 @@ const Users = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t">
+              <div className="flex gap-3 pt-4 border-t flex-wrap">
                 {editMode ? (
                   <>
                     <button
@@ -502,12 +572,21 @@ const Users = () => {
                     >
                       <PencilIcon className="w-4 h-4" /> Edit User
                     </button>
-                    <button
-                      onClick={handleDeleteUser}
-                      className="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition"
-                    >
-                      🗑️ Delete User
-                    </button>
+                    {selectedUser.isActive !== false ? (
+                      <button
+                        onClick={handleDeactivateUser}
+                        className="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                      >
+                        🚫 Deactivate User
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleReactivateUser}
+                        className="text-green-500 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium transition"
+                      >
+                        ✅ Reactivate User
+                      </button>
+                    )}
                   </>
                 )}
               </div>

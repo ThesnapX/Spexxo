@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -34,6 +34,7 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
+  const navigate = useNavigate();
 
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -296,6 +297,25 @@ const Profile = () => {
     }
   };
 
+  const handleDeactivateAccount = async () => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete your account? You will not be able to login. Contact support to reactivate.",
+      )
+    ) {
+      try {
+        await axios.put(`${API_URL}/auth/deactivate-account`);
+        toast.success("Account deactivated. Contact support to reactivate.");
+        logout();
+        navigate("/");
+      } catch (error) {
+        toast.error(
+          error.response?.data?.message || "Failed to deactivate account",
+        );
+      }
+    }
+  };
+
   const tabs = [
     { id: "profile", label: "Profile", icon: UserIcon },
     { id: "password", label: "Password", icon: LockClosedIcon },
@@ -359,6 +379,22 @@ const Profile = () => {
                   >
                     🚪 Logout
                   </button>
+                  {/* Danger Zone */}
+                  <div className="border-t mt-4 pt-4">
+                    <p className="text-xs font-semibold text-red-500 mb-2">
+                      Danger Zone
+                    </p>
+                    <button
+                      onClick={handleDeactivateAccount}
+                      className="w-full text-left px-3 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 transition"
+                    >
+                      🚫 Delete Account
+                    </button>
+                    <p className="text-xs text-text-light mt-1">
+                      This will deactivate your account. Contact support to
+                      reactivate.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

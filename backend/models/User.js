@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    isActive: { type: Boolean, default: true },
+    deactivatedAt: { type: Date },
+    deactivatedBy: { type: String, enum: ["user", "admin"], default: null },
+    deactivationReason: { type: String },
     firstName: {
       type: String,
       required: [true, "First name is required"],

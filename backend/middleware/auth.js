@@ -5,7 +5,6 @@ import User from "../models/User.js";
 export const protect = async (req, res, next) => {
   try {
     let token;
-
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer")
@@ -16,28 +15,37 @@ export const protect = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authorized to access this route",
-      });
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message: "Not authorized to access this route",
+        });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await User.findById(decoded.id);
 
     if (!req.user) {
-      return res.status(401).json({
+      return res
+        .status(401)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // Check if user is active
+    if (!req.user.isActive) {
+      return res.status(403).json({
         success: false,
-        message: "User not found",
+        message:
+          "Your account has been deactivated. Please contact support to reactivate.",
       });
     }
 
     next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "Not authorized to access this route",
-    });
+    return res
+      .status(401)
+      .json({ success: false, message: "Not authorized to access this route" });
   }
 };
 

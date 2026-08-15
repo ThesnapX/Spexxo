@@ -120,7 +120,13 @@ export const login = async (req, res) => {
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
     }
-
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your account has been deactivated. Please contact support to reactivate.",
+      });
+    }
     const token = generateToken(user._id);
 
     res.status(200).json({
@@ -487,6 +493,33 @@ export const changePassword = async (req, res) => {
     res
       .status(200)
       .json({ success: true, message: "Password changed successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Deactivate own account (User self-service)
+// @route   PUT /api/auth/deactivate-account
+// @access  Private
+export const deactivateOwnAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    user.isActive = false;
+    user.deactivatedAt = new Date();
+    user.deactivatedBy = "user";
+    user.deactivationReason = "Self-deactivated by user";
+    await user.save();
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Account deactivated. Contact support to reactivate.",
+      });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

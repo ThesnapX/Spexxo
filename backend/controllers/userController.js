@@ -149,3 +149,78 @@ export const deleteAddress = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Deactivate user (Admin)
+// @route   PUT /api/users/:id/deactivate
+// @access  Private/Admin
+export const deactivateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    if (user.role === "admin") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Cannot deactivate admin users" });
+    }
+    user.isActive = false;
+    user.deactivatedAt = new Date();
+    user.deactivatedBy = "admin";
+    user.deactivationReason = req.body.reason || "Deactivated by admin";
+    await user.save();
+    res
+      .status(200)
+      .json({ success: true, message: "User deactivated successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Reactivate user (Admin)
+// @route   PUT /api/users/:id/reactivate
+// @access  Private/Admin
+export const reactivateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    user.isActive = true;
+    user.deactivatedAt = undefined;
+    user.deactivatedBy = undefined;
+    user.deactivationReason = undefined;
+    await user.save();
+    res
+      .status(200)
+      .json({ success: true, message: "User reactivated successfully" });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Deactivate own account (User self-service)
+// @route   PUT /api/auth/deactivate-account
+// @access  Private
+export const deactivateOwnAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.isActive = false;
+    user.deactivatedAt = new Date();
+    user.deactivatedBy = "user";
+    user.deactivationReason = "Self-deactivated by user";
+    await user.save();
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Account deactivated. Contact support to reactivate.",
+      });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
