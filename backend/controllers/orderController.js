@@ -189,6 +189,77 @@ export const createOrder = async (req, res) => {
 
     const order = await Order.create(orderData);
 
+    // ============ SAVE SHIPPING ADDRESS AS USER ADDRESS ============
+    // If user has no addresses, save the shipping address as default
+    if (
+      shippingAddress &&
+      shippingAddress.fullName &&
+      shippingAddress.addressLine1
+    ) {
+      try {
+        const user = await User.findById(req.user._id);
+
+        // Check if user has any addresses
+        if (!user.addresses || user.addresses.length === 0) {
+          // Save the shipping address as a new address with "Home" label
+          user.addresses.push({
+            name: "Home",
+            fullName: shippingAddress.fullName || "",
+            phone: shippingAddress.phone || "",
+            addressLine1: shippingAddress.addressLine1 || "",
+            addressLine2: shippingAddress.addressLine2 || "",
+            landmark: shippingAddress.landmark || "",
+            area: shippingAddress.area || "",
+            city: shippingAddress.city || "",
+            state: shippingAddress.state || "",
+            pincode: shippingAddress.pincode || "",
+            isDefault: true,
+          });
+          await user.save();
+          console.log(
+            "✅ Shipping address saved as default for user:",
+            req.user._id,
+          );
+        } else {
+          // Check if this exact address already exists
+          const addressExists = user.addresses.some(
+            (addr) =>
+              addr.addressLine1 === shippingAddress.addressLine1 &&
+              addr.city === shippingAddress.city &&
+              addr.pincode === shippingAddress.pincode,
+          );
+
+          // If address doesn't exist, add it as a non-default address
+          if (!addressExists) {
+            user.addresses.push({
+              name: "Home",
+              fullName: shippingAddress.fullName || "",
+              phone: shippingAddress.phone || "",
+              addressLine1: shippingAddress.addressLine1 || "",
+              addressLine2: shippingAddress.addressLine2 || "",
+              landmark: shippingAddress.landmark || "",
+              area: shippingAddress.area || "",
+              city: shippingAddress.city || "",
+              state: shippingAddress.state || "",
+              pincode: shippingAddress.pincode || "",
+              isDefault: false,
+            });
+            await user.save();
+            console.log(
+              "✅ Shipping address saved as additional address for user:",
+              req.user._id,
+            );
+          }
+        }
+      } catch (addressError) {
+        console.log(
+          "⚠️ Failed to save shipping address to user profile:",
+          addressError.message,
+        );
+        // Don't fail the order if address saving fails
+      }
+    }
+
     // Clear cart
     cart.items = [];
     await cart.save();

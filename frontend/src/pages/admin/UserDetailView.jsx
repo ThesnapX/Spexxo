@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import toast from "react-hot-toast";
 import {
   ArrowLeftIcon,
   UserIcon,
@@ -15,19 +16,65 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   PhotoIcon,
+  PencilIcon,
+  XMarkIcon,
+  PlusIcon,
+  TrashIcon,
+  HomeIcon,
+  BriefcaseIcon,
+  KeyIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const FRONTEND_URL =
+  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
 
 const UserDetailView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("meta");
   const [showOrderModal, setShowOrderModal] = useState(null);
 
+  // Edit states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [sendingResetLink, setSendingResetLink] = useState(false);
+
+  // Form states
+  const [editForm, setEditForm] = useState({
+    firstName: "",
+    lastName: "",
+    username: "",
+    email: "",
+    phone: "",
+    role: "customer",
+    isActive: true,
+  });
+
+  const [addressForm, setAddressForm] = useState({
+    name: "Home",
+    fullName: "",
+    phone: "",
+    addressLine1: "",
+    addressLine2: "",
+    landmark: "",
+    area: "",
+    city: "",
+    state: "Maharashtra",
+    pincode: "",
+    isDefault: false,
+  });
+
   // Fetch user
-  const { data: userData, isLoading: userLoading } = useQuery({
+  const {
+    data: userData,
+    isLoading: userLoading,
+    refetch: refetchUser,
+  } = useQuery({
     queryKey: ["admin-user-detail", id],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/users/${id}`);
@@ -37,7 +84,7 @@ const UserDetailView = () => {
   });
 
   // Fetch user orders
-  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+  const { data: ordersData } = useQuery({
     queryKey: ["admin-user-orders", id],
     queryFn: async () => {
       try {
@@ -52,60 +99,123 @@ const UserDetailView = () => {
     enabled: !!id,
   });
 
-  // Fetch ALL reviews and filter by user (since we don't have a direct endpoint)
-  const { data: allReviewsData, isLoading: reviewsLoading } = useQuery({
+  // Fetch user reviews
+  const { data: allReviewsData } = useQuery({
     queryKey: ["admin-all-reviews-for-user"],
     queryFn: async () => {
       try {
-        // First try to get all reviews from the all endpoint
         const { data } = await axios.get(`${API_URL}/reviews/all`);
         return data.reviews || [];
-      } catch (error) {
-        console.log("Falling back to fetching reviews by product...");
-        // Fallback: fetch all products and their reviews
-        try {
-          const { data: productsData } = await axios.get(
-            `${API_URL}/products?limit=100`,
-          );
-          const allReviews = [];
-
-          for (const product of productsData.products || []) {
-            try {
-              const { data: reviewData } = await axios.get(
-                `${API_URL}/reviews/${product._id}`,
-              );
-              if (reviewData.reviews && reviewData.reviews.length > 0) {
-                // Add product info to each review
-                const reviewsWithProduct = reviewData.reviews.map((r) => ({
-                  ...r,
-                  product: product,
-                }));
-                allReviews.push(...reviewsWithProduct);
-              }
-            } catch (e) {
-              // Skip products with no reviews
-            }
-          }
-          return allReviews;
-        } catch (e) {
-          return [];
-        }
+      } catch {
+        return [];
       }
     },
     enabled: !!id,
   });
 
+  // Update user mutation
+  const updateUserMutation = useMutation({
+    mutationFn: async (userData) => {
+      const { data } = await axios.put(`${API_URL}/users/${id}`, userData);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-user-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("User updated successfully!");
+      setIsEditing(false);
+      refetchUser();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to update user");
+    },
+  });
+
+  // Update address mutation
+  const updateAddressMutation = useMutation({
+    mutationFn: async ({ addressId, addressData }) => {
+      const { data } = await axios.put(
+        `${API_URL}/users/address/${addressId}`,
+        addressData,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-user-detail", id] });
+      toast.success("Address updated successfully!");
+      setEditingAddress(null);
+      setShowAddressForm(false);
+      refetchUser();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to update address");
+    },
+  });
+
+  // Add address mutation
+  const addAddressMutation = useMutation({
+    mutationFn: async (addressData) => {
+      const { data } = await axios.post(
+        `${API_URL}/users/address`,
+        addressData,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-user-detail", id] });
+      toast.success("Address added successfully!");
+      setShowAddressForm(false);
+      refetchUser();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to add address");
+    },
+  });
+
+  // Send reset password link mutation
+  const sendResetLinkMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await axios.post(`${API_URL}/auth/forgot-password`, {
+        email: user?.email,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      toast.success(`Password reset link sent to ${user?.email}`);
+      setSendingResetLink(false);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to send reset link");
+      setSendingResetLink(false);
+    },
+  });
+
   const user = userData;
   const orders = ordersData || [];
-  // Filter reviews to only show those from this user
   const allReviews = allReviewsData || [];
   const reviews = allReviews.filter((review) => review.user?._id === id);
 
   const tabs = [
     { id: "meta", label: "User Meta", icon: ClipboardDocumentListIcon },
+    { id: "addresses", label: "Addresses", icon: MapPinIcon },
     { id: "orders", label: "Order History", icon: ShoppingBagIcon },
     { id: "reviews", label: "Reviews", icon: StarIcon },
   ];
+
+  // Initialize edit form when user data loads
+  useState(() => {
+    if (user) {
+      setEditForm({
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        username: user.username || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        role: user.role || "customer",
+        isActive: user.isActive !== false,
+      });
+    }
+  }, [user]);
 
   if (userLoading) {
     return (
@@ -150,7 +260,105 @@ const UserDetailView = () => {
     }
   };
 
-  const isLoading = userLoading || ordersLoading || reviewsLoading;
+  const handleEditUser = () => {
+    setEditForm({
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      username: user.username || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      role: user.role || "customer",
+      isActive: user.isActive !== false,
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveUser = (e) => {
+    e.preventDefault();
+    updateUserMutation.mutate(editForm);
+  };
+
+  const handleSendResetLink = () => {
+    if (window.confirm(`Send password reset link to ${user?.email}?`)) {
+      setSendingResetLink(true);
+      sendResetLinkMutation.mutate();
+    }
+  };
+
+  const handleEditAddress = (address) => {
+    setAddressForm({
+      name: address.name || "Home",
+      fullName: address.fullName || "",
+      phone: address.phone || "",
+      addressLine1: address.addressLine1 || "",
+      addressLine2: address.addressLine2 || "",
+      landmark: address.landmark || "",
+      area: address.area || "",
+      city: address.city || "",
+      state: address.state || "Maharashtra",
+      pincode: address.pincode || "",
+      isDefault: address.isDefault || false,
+    });
+    setEditingAddress(address);
+    setShowAddressForm(true);
+  };
+
+  const handleAddAddress = () => {
+    setAddressForm({
+      name: "Home",
+      fullName: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      landmark: "",
+      area: "",
+      city: "",
+      state: "Maharashtra",
+      pincode: "",
+      isDefault: false,
+    });
+    setEditingAddress(null);
+    setShowAddressForm(true);
+  };
+
+  const handleSaveAddress = (e) => {
+    e.preventDefault();
+    if (
+      !addressForm.fullName ||
+      !addressForm.addressLine1 ||
+      !addressForm.city ||
+      !addressForm.pincode
+    ) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    if (editingAddress) {
+      updateAddressMutation.mutate({
+        addressId: editingAddress._id,
+        addressData: addressForm,
+      });
+    } else {
+      addAddressMutation.mutate(addressForm);
+    }
+  };
+
+  const handleCancelAddress = () => {
+    setShowAddressForm(false);
+    setEditingAddress(null);
+  };
+
+  // Address type icons
+  const addressIcons = {
+    Home: HomeIcon,
+    Work: BriefcaseIcon,
+    Other: MapPinIcon,
+  };
+
+  const AddressIcon = ({ name }) => {
+    const Icon = addressIcons[name] || MapPinIcon;
+    return <Icon className="w-4 h-4" />;
+  };
 
   return (
     <div>
@@ -203,7 +411,21 @@ const UserDetailView = () => {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleEditUser}
+              className="btn-primary text-sm flex items-center gap-1"
+            >
+              <PencilIcon className="w-4 h-4" /> Edit User
+            </button>
+            <button
+              onClick={handleSendResetLink}
+              disabled={sendingResetLink}
+              className="btn-outline text-sm flex items-center gap-1"
+            >
+              <KeyIcon className="w-4 h-4" />
+              {sendingResetLink ? "Sending..." : "Send Reset Link"}
+            </button>
             <Link
               to={`/account`}
               target="_blank"
@@ -214,6 +436,150 @@ const UserDetailView = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit User Modal */}
+      {isEditing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setIsEditing(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Edit User</h2>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    First Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.firstName}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, firstName: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Last Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.lastName}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, lastName: e.target.value })
+                    }
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  value={editForm.username}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, username: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                  placeholder="Username (optional)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, email: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, phone: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                  placeholder="Phone number"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Role</label>
+                <select
+                  value={editForm.role}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, role: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="customer">Customer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editForm.isActive}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 text-primary rounded"
+                  />
+                  <span className="text-sm">Active</span>
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={updateUserMutation.isPending}
+                  className="btn-primary text-sm flex-1"
+                >
+                  {updateUserMutation.isPending ? "Saving..." : "Save Changes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="btn-outline text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b mb-6 overflow-x-auto">
@@ -238,11 +604,14 @@ const UserDetailView = () => {
                 {reviews.length}
               </span>
             )}
+            {tab.id === "addresses" && user.addresses?.length > 0 && (
+              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-xs">
+                {user.addresses.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
-
-      {/* Tab Content */}
 
       {/* META TAB */}
       {activeTab === "meta" && (
@@ -262,7 +631,9 @@ const UserDetailView = () => {
                 {user.isEmailVerified ? (
                   <CheckCircleIcon className="w-4 h-4 text-green-500" />
                 ) : (
-                  <XCircleIcon className="w-4 h-4 text-red-500" />
+                  <span className="text-xs text-text-light">
+                    (Not verified)
+                  </span>
                 )}
               </p>
             </div>
@@ -294,41 +665,312 @@ const UserDetailView = () => {
                 {new Date(user.createdAt).toLocaleString()}
               </p>
             </div>
-            {user.addresses?.length > 0 && (
-              <div className="bg-gray-50 p-4 rounded-xl col-span-2">
-                <p className="text-xs text-text-light mb-2">Saved Addresses</p>
-                <div className="space-y-2">
-                  {user.addresses.map((addr, i) => (
-                    <div key={i} className="bg-white p-3 rounded-lg border">
-                      <div className="flex items-center gap-2">
-                        <MapPinIcon className="w-4 h-4 text-primary" />
-                        <p className="font-medium text-sm">
-                          {addr.name || "Address"}
-                        </p>
-                        {addr.isDefault && (
-                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                            Default
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-text-light mt-1">
-                        {addr.fullName && `${addr.fullName}, `}
-                        {addr.addressLine1}
-                        {addr.addressLine2 && `, ${addr.addressLine2}`}
-                        {addr.area && `, ${addr.area}`}
-                        {addr.city && `, ${addr.city}`}
-                        {addr.state && `, ${addr.state}`}
-                        {addr.pincode && ` - ${addr.pincode}`}
-                      </p>
-                      <p className="text-xs text-text-light">
-                        📞 {addr.phone || "No phone"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+        </div>
+      )}
+
+      {/* ADDRESSES TAB - NEW */}
+      {activeTab === "addresses" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text">
+              Saved Addresses ({user.addresses?.length || 0})
+            </h2>
+            <button
+              onClick={handleAddAddress}
+              className="btn-primary text-sm flex items-center gap-1"
+            >
+              <PlusIcon className="w-4 h-4" /> Add Address
+            </button>
+          </div>
+
+          {/* Add/Edit Address Form */}
+          {showAddressForm && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold">
+                  {editingAddress ? "Edit Address" : "Add New Address"}
+                </h3>
+                <button onClick={handleCancelAddress}>
+                  <XMarkIcon className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <form onSubmit={handleSaveAddress} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Address Type
+                  </label>
+                  <div className="flex gap-3 flex-wrap">
+                    {["Home", "Work", "Other"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() =>
+                          setAddressForm({ ...addressForm, name: type })
+                        }
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition ${
+                          addressForm.name === type
+                            ? "border-primary bg-[#EBF4FC] text-primary"
+                            : "border-gray-200 text-gray-500 hover:border-gray-300"
+                        }`}
+                      >
+                        <AddressIcon name={type} /> {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.fullName}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          fullName: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      value={addressForm.phone}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          phone: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Address Line 1 *
+                  </label>
+                  <input
+                    type="text"
+                    value={addressForm.addressLine1}
+                    onChange={(e) =>
+                      setAddressForm({
+                        ...addressForm,
+                        addressLine1: e.target.value,
+                      })
+                    }
+                    placeholder="House/Flat No., Building, Street"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Address Line 2 (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={addressForm.addressLine2}
+                    onChange={(e) =>
+                      setAddressForm({
+                        ...addressForm,
+                        addressLine2: e.target.value,
+                      })
+                    }
+                    placeholder="Colony, Apartment Name"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Landmark
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.landmark}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          landmark: e.target.value,
+                        })
+                      }
+                      placeholder="Nearby landmark"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Area / Locality
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.area}
+                      onChange={(e) =>
+                        setAddressForm({ ...addressForm, area: e.target.value })
+                      }
+                      placeholder="Locality"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.city}
+                      onChange={(e) =>
+                        setAddressForm({ ...addressForm, city: e.target.value })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.state}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          state: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Pincode *
+                    </label>
+                    <input
+                      type="text"
+                      value={addressForm.pincode}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          pincode: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+                      required
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addressForm.isDefault}
+                    onChange={(e) =>
+                      setAddressForm({
+                        ...addressForm,
+                        isDefault: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 text-primary rounded"
+                  />
+                  <span className="text-sm">Set as default address</span>
+                </label>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={
+                      updateAddressMutation.isPending ||
+                      addAddressMutation.isPending
+                    }
+                    className="btn-primary text-sm flex-1"
+                  >
+                    {updateAddressMutation.isPending ||
+                    addAddressMutation.isPending
+                      ? "Saving..."
+                      : editingAddress
+                        ? "Update Address"
+                        : "Save Address"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelAddress}
+                    className="btn-outline text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Address List */}
+          {user.addresses?.length === 0 && !showAddressForm ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
+              <MapPinIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-text-light">No saved addresses</p>
+              <button
+                onClick={handleAddAddress}
+                className="text-primary text-sm hover:underline mt-2"
+              >
+                Add first address
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {user.addresses?.map((addr) => (
+                <div
+                  key={addr._id}
+                  className={`bg-white rounded-xl border-2 p-5 relative ${
+                    addr.isDefault ? "border-primary" : "border-gray-100"
+                  }`}
+                >
+                  {addr.isDefault && (
+                    <span className="absolute top-3 right-3 bg-primary text-white text-xs px-2 py-0.5 rounded-full">
+                      Default
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2 mb-3">
+                    <AddressIcon name={addr.name} />
+                    <span className="font-semibold text-text">{addr.name}</span>
+                  </div>
+                  <p className="font-medium text-text">{addr.fullName}</p>
+                  <p className="text-sm text-text-light">{addr.addressLine1}</p>
+                  {addr.addressLine2 && (
+                    <p className="text-sm text-text-light">
+                      {addr.addressLine2}
+                    </p>
+                  )}
+                  <p className="text-sm text-text-light">
+                    {addr.landmark && `${addr.landmark}, `}
+                    {addr.area && `${addr.area}, `}
+                    {addr.city}, {addr.state} - {addr.pincode}
+                  </p>
+                  <p className="text-sm text-text-light">📞 {addr.phone}</p>
+                  <div className="flex gap-2 mt-3 pt-3 border-t">
+                    <button
+                      onClick={() => handleEditAddress(addr)}
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <PencilIcon className="w-3 h-3" /> Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -395,7 +1037,6 @@ const UserDetailView = () => {
                       </p>
                     </div>
                   </div>
-                  {/* Order Items Preview */}
                   <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
                     {order.items?.slice(0, 3).map((item, i) => (
                       <button
@@ -434,18 +1075,13 @@ const UserDetailView = () => {
         </div>
       )}
 
-      {/* REVIEWS TAB - FIXED */}
+      {/* REVIEWS TAB */}
       {activeTab === "reviews" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold mb-4">
             Reviews by {user.firstName} ({reviews.length})
           </h2>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <p className="ml-3 text-text-light">Loading reviews...</p>
-            </div>
-          ) : reviews.length === 0 ? (
+          {reviews.length === 0 ? (
             <div className="text-center py-12 bg-gray-50 rounded-xl">
               <StarIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-text-light">No reviews yet by this user</p>

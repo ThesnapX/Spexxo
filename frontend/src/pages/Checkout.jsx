@@ -9,13 +9,16 @@ import {
   MapPinIcon,
   PlusIcon,
   CheckCircleIcon,
+  HomeIcon,
+  BriefcaseIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Checkout = () => {
   const { cart, cartTotal, clearCart, appliedCoupon } = useCart();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [useSavedAddress, setUseSavedAddress] = useState(true);
@@ -24,6 +27,7 @@ const Checkout = () => {
   const [codAdvance, setCodAdvance] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showAddressList, setShowAddressList] = useState(false);
+  const [saveAddressToProfile, setSaveAddressToProfile] = useState(true);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -36,8 +40,31 @@ const Checkout = () => {
     pincode: "",
   });
 
+  // Load default address on mount
   useEffect(() => {
-    if (user?.defaultAddress?.addressLine1) {
+    if (user?.addresses?.length > 0) {
+      // Find default address or use first one
+      const defaultAddr =
+        user.addresses.find((addr) => addr.isDefault) || user.addresses[0];
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr._id);
+        setForm({
+          fullName:
+            defaultAddr.fullName ||
+            `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+          phone: defaultAddr.phone || user.phone || "",
+          addressLine1: defaultAddr.addressLine1 || "",
+          addressLine2: defaultAddr.addressLine2 || "",
+          landmark: defaultAddr.landmark || "",
+          area: defaultAddr.area || "",
+          city: defaultAddr.city || "",
+          state: defaultAddr.state || "Maharashtra",
+          pincode: defaultAddr.pincode || "",
+        });
+        setUseSavedAddress(true);
+      }
+    } else if (user?.defaultAddress?.addressLine1) {
+      // Fallback to old defaultAddress field
       setForm({
         fullName:
           user.defaultAddress.fullName ||
@@ -50,6 +77,21 @@ const Checkout = () => {
         city: user.defaultAddress.city || "",
         state: user.defaultAddress.state || "Maharashtra",
         pincode: user.defaultAddress.pincode || "",
+      });
+      setUseSavedAddress(true);
+    } else {
+      // No saved address - show form
+      setUseSavedAddress(false);
+      setForm({
+        fullName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim(),
+        phone: user?.phone || "",
+        addressLine1: "",
+        addressLine2: "",
+        landmark: "",
+        area: "",
+        city: "",
+        state: "Maharashtra",
+        pincode: "",
       });
     }
   }, [user]);
@@ -82,6 +124,17 @@ const Checkout = () => {
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
 
+  // Function to save address to user profile
+  const saveAddressToUserProfile = async (addressData) => {
+    try {
+      await axios.post(`${API_URL}/users/address`, addressData);
+      return true;
+    } catch (error) {
+      console.log("Failed to save address:", error.message);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (
@@ -93,6 +146,34 @@ const Checkout = () => {
     ) {
       toast.error("Please fill all required fields");
       return;
+    }
+
+    // If user is logged in and wants to save address
+    if (user && saveAddressToProfile && !useSavedAddress) {
+      // Check if address already exists
+      const addressExists = user.addresses?.some(
+        (addr) =>
+          addr.addressLine1 === form.addressLine1 &&
+          addr.city === form.city &&
+          addr.pincode === form.pincode,
+      );
+
+      if (!addressExists) {
+        const addressData = {
+          name: "Home",
+          fullName: form.fullName,
+          phone: form.phone,
+          addressLine1: form.addressLine1,
+          addressLine2: form.addressLine2 || "",
+          landmark: form.landmark || "",
+          area: form.area || "",
+          city: form.city,
+          state: form.state,
+          pincode: form.pincode,
+          isDefault: user.addresses?.length === 0, // Make default if no addresses
+        };
+        await saveAddressToUserProfile(addressData);
+      }
     }
 
     if (paymentMethod === "online") {
@@ -196,7 +277,7 @@ const Checkout = () => {
                   shippingAddress: form,
                   couponCode: couponCode || undefined,
                   paymentMethod: "cod",
-                  paymentStatus: "paid", // Advance paid
+                  paymentStatus: "paid",
                   codAdvance: true,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_order_id: response.razorpay_order_id,
@@ -276,261 +357,246 @@ const Checkout = () => {
                 <MapPinIcon className="w-5 h-5 text-primary" /> Shipping Address
               </h2>
 
-              {/* Saved Address Option */}
-              {/* Multiple Address Selection */}
-              {user?.addresses?.length > 1 && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium mb-2">
-                    Select Delivery Address
-                  </label>
-                  <div className="space-y-2">
-                    {user.addresses.map((addr) => (
-                      <button
-                        key={addr._id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedAddressId(addr._id);
-                          setForm({
-                            fullName: addr.fullName || "",
-                            phone: addr.phone || "",
-                            addressLine1: addr.addressLine1 || "",
-                            addressLine2: addr.addressLine2 || "",
-                            landmark: addr.landmark || "",
-                            area: addr.area || "",
-                            city: addr.city || "",
-                            state: addr.state || "Maharashtra",
-                            pincode: addr.pincode || "",
-                          });
-                          setUseSavedAddress(true);
-                        }}
-                        className={`w-full text-left p-4 rounded-xl border-2 transition ${selectedAddressId === addr._id ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">
-                            {addr.name || "Address"}
-                          </span>
-                          {addr.isDefault && (
-                            <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-text-light mt-1">
-                          {addr.addressLine1}, {addr.city}, {addr.state} -{" "}
-                          {addr.pincode}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {user?.defaultAddress?.addressLine1 && (
+              {/* Address Selection - Show if user has saved addresses */}
+              {user?.addresses?.length > 0 && (
                 <div className="mb-4">
                   <button
                     type="button"
-                    onClick={() => setUseSavedAddress(true)}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition ${useSavedAddress ? "border-primary bg-[#EBF4FC]" : "border-gray-200"}`}
+                    onClick={() => setShowAddressList(!showAddressList)}
+                    className="w-full text-left p-3 bg-gray-50 rounded-xl border border-gray-200 hover:border-primary transition flex items-center justify-between"
                   >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${useSavedAddress ? "border-primary bg-primary" : "border-gray-300"}`}
-                      >
-                        {useSavedAddress && (
-                          <CheckCircleIcon className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-text text-sm">
-                          Saved Address
-                        </span>
-                        <p className="text-sm font-medium text-text mt-1">
-                          {user.defaultAddress.fullName}
-                        </p>
-                        <p className="text-xs text-text-light">
-                          {user.defaultAddress.addressLine1},{" "}
-                          {user.defaultAddress.city},{" "}
-                          {user.defaultAddress.state} -{" "}
-                          {user.defaultAddress.pincode}
-                        </p>
-                        <p className="text-xs text-text-light">
-                          📞 {user.defaultAddress.phone}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUseSavedAddress(false)}
-                    className={`w-full text-left p-4 rounded-xl border-2 transition mt-2 ${!useSavedAddress ? "border-primary bg-[#EBF4FC]" : "border-gray-200"}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${!useSavedAddress ? "border-primary bg-primary" : "border-gray-300"}`}
-                      >
-                        {!useSavedAddress && (
-                          <CheckCircleIcon className="w-4 h-4 text-white" />
-                        )}
-                      </div>
-                      <span className="text-sm font-medium text-text">
-                        <PlusIcon className="w-4 h-4 inline mr-1" />
-                        Use a new address
+                    <div className="flex items-center gap-2">
+                      <MapPinIcon className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">
+                        {showAddressList
+                          ? "Hide saved addresses"
+                          : "Select from saved addresses"}
                       </span>
                     </div>
+                    <span className="text-xs text-text-light">
+                      {user.addresses.length} addresses
+                    </span>
                   </button>
+
+                  {showAddressList && (
+                    <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                      {user.addresses.map((addr) => (
+                        <button
+                          key={addr._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAddressId(addr._id);
+                            setForm({
+                              fullName: addr.fullName || "",
+                              phone: addr.phone || "",
+                              addressLine1: addr.addressLine1 || "",
+                              addressLine2: addr.addressLine2 || "",
+                              landmark: addr.landmark || "",
+                              area: addr.area || "",
+                              city: addr.city || "",
+                              state: addr.state || "Maharashtra",
+                              pincode: addr.pincode || "",
+                            });
+                            setUseSavedAddress(true);
+                            setShowAddressList(false);
+                          }}
+                          className={`w-full text-left p-4 rounded-xl border-2 transition ${
+                            selectedAddressId === addr._id
+                              ? "border-primary bg-[#EBF4FC]"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {addr.name === "Home" ? (
+                              <HomeIcon className="w-4 h-4 text-gray-500" />
+                            ) : addr.name === "Work" ? (
+                              <BriefcaseIcon className="w-4 h-4 text-gray-500" />
+                            ) : (
+                              <MapPinIcon className="w-4 h-4 text-gray-500" />
+                            )}
+                            <span className="font-medium text-sm">
+                              {addr.name || "Address"}
+                            </span>
+                            {addr.isDefault && (
+                              <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-text-light mt-1">
+                            {addr.addressLine1}
+                            {addr.addressLine2 && `, ${addr.addressLine2}`}
+                            {addr.area && `, ${addr.area}`}
+                            {addr.city && `, ${addr.city}`}
+                            {addr.state && `, ${addr.state}`}
+                            {addr.pincode && ` - ${addr.pincode}`}
+                          </p>
+                          <p className="text-xs text-text-light mt-0.5">
+                            📞 {addr.phone}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* New Address Form */}
-              {(!user?.defaultAddress?.addressLine1 || !useSavedAddress) && (
-                <form
-                  onSubmit={handleSubmit}
-                  className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6"
-                >
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        name="fullName"
-                        value={form.fullName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Phone *
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={form.phone}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        required
-                      />
-                    </div>
-                  </div>
+              <form className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Address Line 1 *
+                      Full Name *
                     </label>
                     <input
                       type="text"
-                      name="addressLine1"
-                      value={form.addressLine1}
+                      name="fullName"
+                      value={form.fullName}
                       onChange={handleChange}
-                      placeholder="House/Flat No., Building, Street"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Address Line 2 (Optional)
+                      Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Address Line 1 *
+                  </label>
+                  <input
+                    type="text"
+                    name="addressLine1"
+                    value={form.addressLine1}
+                    onChange={handleChange}
+                    placeholder="House/Flat No., Building, Street"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Address Line 2 (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="addressLine2"
+                    value={form.addressLine2}
+                    onChange={handleChange}
+                    placeholder="Colony, Apartment Name"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Landmark
                     </label>
                     <input
                       type="text"
-                      name="addressLine2"
-                      value={form.addressLine2}
+                      name="landmark"
+                      value={form.landmark}
                       onChange={handleChange}
-                      placeholder="Colony, Apartment Name"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
+                      placeholder="Nearby landmark"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Landmark
-                      </label>
-                      <input
-                        type="text"
-                        name="landmark"
-                        value={form.landmark}
-                        onChange={handleChange}
-                        placeholder="Nearby landmark"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Area / Locality
-                      </label>
-                      <input
-                        type="text"
-                        name="area"
-                        value={form.area}
-                        onChange={handleChange}
-                        placeholder="Locality"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Area / Locality
+                    </label>
+                    <input
+                      type="text"
+                      name="area"
+                      value={form.area}
+                      onChange={handleChange}
+                      placeholder="Locality"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                    />
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        City *
-                      </label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={form.city}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        State *
-                      </label>
-                      <input
-                        type="text"
-                        name="state"
-                        value={form.state}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Pincode *
-                      </label>
-                      <input
-                        type="text"
-                        name="pincode"
-                        value={form.pincode}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                        required
-                        maxLength={6}
-                      />
-                    </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={form.city}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                      required
+                    />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={form.state}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Pincode *
+                    </label>
+                    <input
+                      type="text"
+                      name="pincode"
+                      value={form.pincode}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
+                      required
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+
+                {/* Save Address Option - Only show if user is logged in */}
+                {user && (
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      id="saveAddress"
-                      defaultChecked
+                      checked={saveAddressToProfile}
+                      onChange={(e) =>
+                        setSaveAddressToProfile(e.target.checked)
+                      }
                       className="w-4 h-4 text-primary rounded"
                     />
                     <span className="text-sm text-text-light">
                       Save this address for future orders
                     </span>
                   </label>
-                </form>
-              )}
+                )}
+              </form>
 
               {/* Payment Method Selection */}
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4">Payment Method</h3>
                 <div className="space-y-3">
                   <label
-                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${paymentMethod === "cod" ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
+                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${
+                      paymentMethod === "cod"
+                        ? "border-primary bg-[#EBF4FC]"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
                   >
                     <input
                       type="radio"
@@ -572,7 +638,11 @@ const Checkout = () => {
                   )}
 
                   <label
-                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${paymentMethod === "online" ? "border-primary bg-[#EBF4FC]" : "border-gray-200 hover:border-gray-300"}`}
+                    className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${
+                      paymentMethod === "online"
+                        ? "border-primary bg-[#EBF4FC]"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
                   >
                     <input
                       type="radio"
@@ -596,7 +666,7 @@ const Checkout = () => {
               <button
                 onClick={handleSubmit}
                 disabled={loading || processingPayment}
-                className="w-full btn-primary py-4 text-base"
+                className="w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading && !processingPayment
                   ? "Creating Order..."
@@ -614,27 +684,29 @@ const Checkout = () => {
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-                {cart.items.map((item) => {
-                  const name = item.product?.name || item.name || "Product";
-                  const price =
-                    item.price ||
-                    item.product?.comparePrice ||
-                    item.product?.price ||
-                    0;
-                  return (
-                    <div
-                      key={item._id}
-                      className="flex justify-between text-sm py-2"
-                    >
-                      <span className="truncate mr-2">
-                        {name} × {item.quantity}
-                      </span>
-                      <span className="flex-shrink-0">
-                        ₹{(price * item.quantity).toLocaleString()}
-                      </span>
-                    </div>
-                  );
-                })}
+                <div className="max-h-60 overflow-y-auto">
+                  {cart.items.map((item) => {
+                    const name = item.product?.name || item.name || "Product";
+                    const price =
+                      item.price ||
+                      item.product?.comparePrice ||
+                      item.product?.price ||
+                      0;
+                    return (
+                      <div
+                        key={item._id}
+                        className="flex justify-between text-sm py-2 border-b border-gray-50"
+                      >
+                        <span className="truncate mr-2">
+                          {name} × {item.quantity}
+                        </span>
+                        <span className="flex-shrink-0">
+                          ₹{(price * item.quantity).toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
                 <div className="border-t mt-4 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
@@ -656,7 +728,7 @@ const Checkout = () => {
                       {shippingCost === 0 ? "FREE" : `₹${shippingCost}`}
                     </span>
                   </div>
-                  <div className="flex justify-between font-bold text-lg mt-2">
+                  <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t">
                     <span>Total</span>
                     <span className="text-primary">
                       ₹{grandTotal.toLocaleString()}
@@ -664,7 +736,7 @@ const Checkout = () => {
                   </div>
                   {couponDiscount > 0 && (
                     <p className="text-xs text-green-600">
-                      You save ₹{couponDiscount.toLocaleString()}!
+                      🎉 You saved ₹{couponDiscount.toLocaleString()}!
                     </p>
                   )}
                   {codAdvance && (
