@@ -42,6 +42,9 @@ const OrderDetailAdmin = lazy(() => import("./pages/admin/OrderDetailView"));
 const Reviews = lazy(() => import("./pages/admin/Reviews"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
 const Brands = lazy(() => import("./pages/admin/Brands"));
+const Shapes = lazy(() => import("./pages/admin/Shapes"));
+const Colors = lazy(() => import("./pages/admin/Colors"));
+const LensTypes = lazy(() => import("./pages/admin/LensTypes"));
 const Users = lazy(() => import("./pages/admin/Users"));
 const UserDetailView = lazy(() => import("./pages/admin/UserDetailView"));
 const Blogs = lazy(() => import("./pages/admin/Blogs"));
@@ -134,15 +137,22 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+
+          {/* Product Management - All under Products dropdown */}
           <Route path="products" element={<Products />} />
           <Route path="products/add" element={<AddProduct />} />
           <Route path="products/edit/:id" element={<EditProduct />} />
           <Route path="products/view/:id" element={<ProductDetailView />} />
+          <Route path="categories" element={<Categories />} />
+          <Route path="brands" element={<Brands />} />
+          <Route path="shapes" element={<Shapes />} />
+          <Route path="colors" element={<Colors />} />
+          <Route path="lens-types" element={<LensTypes />} />
+
+          {/* Other Admin Routes */}
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetailAdmin />} />
           <Route path="reviews" element={<Reviews />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="brands" element={<Brands />} />
           <Route path="users" element={<Users />} />
           <Route path="users/:id" element={<UserDetailView />} />
           <Route path="blogs" element={<Blogs />} />

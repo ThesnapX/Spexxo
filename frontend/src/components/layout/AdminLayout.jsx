@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -17,12 +17,19 @@ import {
   CubeIcon,
   EnvelopeIcon,
   StarIcon,
+  EyeIcon,
+  PaintBrushIcon,
+  Squares2X2Icon,
+  MegaphoneIcon,
+  GiftIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [productsMenuOpen, setProductsMenuOpen] = useState(false);
   const [blogsMenuOpen, setBlogsMenuOpen] = useState(false);
+  const [marketingMenuOpen, setMarketingMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,51 +41,56 @@ const AdminLayout = () => {
 
   // Improved isActive function - exact match or subpath check
   const isActive = (path) => {
-    // For exact match
     if (location.pathname === path) return true;
-    // For subpaths (like /admin/products/view/123)
     if (path !== "/admin" && location.pathname.startsWith(path + "/"))
       return true;
     return false;
   };
 
-  // Check if a dropdown should be open based on current path
+  // Check if dropdowns should be open based on current path
   const isProductsActive = () => {
-    return location.pathname.startsWith("/admin/products");
+    return (
+      location.pathname.startsWith("/admin/products") ||
+      location.pathname.startsWith("/admin/categories") ||
+      location.pathname.startsWith("/admin/brands") ||
+      location.pathname.startsWith("/admin/shapes") ||
+      location.pathname.startsWith("/admin/colors") ||
+      location.pathname.startsWith("/admin/lens-types")
+    );
   };
 
   const isBlogsActive = () => {
     return location.pathname.startsWith("/admin/blogs");
   };
 
+  const isMarketingActive = () => {
+    return (
+      location.pathname.startsWith("/admin/coupons") ||
+      location.pathname.startsWith("/admin/email-marketing") ||
+      location.pathname.startsWith("/admin/popups")
+    );
+  };
+
   // Auto-expand dropdowns if their children are active
-  useState(() => {
+  useEffect(() => {
     if (isProductsActive()) setProductsMenuOpen(true);
     if (isBlogsActive()) setBlogsMenuOpen(true);
+    if (isMarketingActive()) setMarketingMenuOpen(true);
   }, [location.pathname]);
 
+  // Menu items - now with Marketing removed from main menu
   const menuItems = [
     { name: "Dashboard", icon: HomeIcon, path: "/admin" },
     { name: "Orders", icon: ShoppingCartIcon, path: "/admin/orders" },
     { name: "Reviews", icon: StarIcon, path: "/admin/reviews" },
-    { name: "Categories", icon: TagIcon, path: "/admin/categories" },
-    { name: "Brands", icon: CubeIcon, path: "/admin/brands" },
     { name: "Users", icon: UsersIcon, path: "/admin/users" },
-    { name: "Coupons", icon: TicketIcon, path: "/admin/coupons" },
-    {
-      name: "Email Marketing",
-      icon: EnvelopeIcon,
-      path: "/admin/email-marketing",
-    },
-    { name: "Popups", icon: PhotoIcon, path: "/admin/popups" },
   ];
 
   const activeClass = "bg-[#EBF4FC] text-[#3D96EB] font-medium";
   const inactiveClass = "text-gray-600 hover:bg-gray-50 hover:text-gray-900";
   const dropdownActiveClass = "text-[#3D96EB] bg-[#EBF4FC] font-medium";
 
-  // Close sidebar on navigation
-  const handleNavigation = () => {
+  const closeSidebar = () => {
     setSidebarOpen(false);
   };
 
@@ -124,7 +136,7 @@ const AdminLayout = () => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    onClick={handleNavigation}
+                    onClick={closeSidebar}
                     className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                       active ? activeClass : inactiveClass
                     }`}
@@ -152,12 +164,13 @@ const AdminLayout = () => {
                   />
                 </button>
                 {productsMenuOpen && (
-                  <div className="ml-9 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
+                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
                     <Link
                       to="/admin/products"
-                      onClick={handleNavigation}
+                      onClick={closeSidebar}
                       className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                        location.pathname === "/admin/products"
+                        location.pathname === "/admin/products" ||
+                        location.pathname.startsWith("/admin/products/view/")
                           ? dropdownActiveClass
                           : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                       }`}
@@ -166,7 +179,7 @@ const AdminLayout = () => {
                     </Link>
                     <Link
                       to="/admin/products/add"
-                      onClick={handleNavigation}
+                      onClick={closeSidebar}
                       className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                         location.pathname === "/admin/products/add"
                           ? dropdownActiveClass
@@ -174,6 +187,140 @@ const AdminLayout = () => {
                       }`}
                     >
                       Add Product
+                    </Link>
+                    <Link
+                      to="/admin/categories"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/categories")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <TagIcon className="w-4 h-4" />
+                        Categories
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/brands"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/brands")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CubeIcon className="w-4 h-4" />
+                        Brands
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/shapes"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/shapes")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Squares2X2Icon className="w-4 h-4" />
+                        Frame Shapes
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/colors"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/colors")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <PaintBrushIcon className="w-4 h-4" />
+                        Colors
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/lens-types"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/lens-types")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <EyeIcon className="w-4 h-4" />
+                        Lens Types
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Marketing Dropdown - NEW */}
+              <div>
+                <button
+                  onClick={() => setMarketingMenuOpen(!marketingMenuOpen)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+                    isMarketingActive() ? activeClass : inactiveClass
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <MegaphoneIcon className="w-5 h-5" />
+                    <span>Marketing</span>
+                  </div>
+                  <ChevronDownIcon
+                    className={`w-4 h-4 transition-transform ${marketingMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {marketingMenuOpen && (
+                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
+                    <Link
+                      to="/admin/coupons"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/coupons")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <TicketIcon className="w-4 h-4" />
+                        Coupons
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/email-marketing"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/email-marketing")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <EnvelopeIcon className="w-4 h-4" />
+                        Email Marketing
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/popups"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/popups")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <PhotoIcon className="w-4 h-4" />
+                        Popups
+                      </div>
                     </Link>
                   </div>
                 )}
@@ -196,10 +343,10 @@ const AdminLayout = () => {
                   />
                 </button>
                 {blogsMenuOpen && (
-                  <div className="ml-9 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
+                  <div className="ml-4 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
                     <Link
                       to="/admin/blogs"
-                      onClick={handleNavigation}
+                      onClick={closeSidebar}
                       className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                         location.pathname === "/admin/blogs"
                           ? dropdownActiveClass
@@ -210,7 +357,7 @@ const AdminLayout = () => {
                     </Link>
                     <Link
                       to="/admin/blogs/add"
-                      onClick={handleNavigation}
+                      onClick={closeSidebar}
                       className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
                         location.pathname === "/admin/blogs/add"
                           ? dropdownActiveClass
