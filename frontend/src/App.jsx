@@ -36,18 +36,21 @@ const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const Products = lazy(() => import("./pages/admin/Products"));
 const AddProduct = lazy(() => import("./pages/admin/AddProduct"));
 const EditProduct = lazy(() => import("./pages/admin/EditProduct"));
+const ProductDetailView = lazy(() => import("./pages/admin/ProductDetailView"));
 const Orders = lazy(() => import("./pages/admin/Orders"));
-const OrderDetailAdmin = lazy(() => import("./pages/admin/OrderDetail"));
+const OrderDetailAdmin = lazy(() => import("./pages/admin/OrderDetailView"));
+const Reviews = lazy(() => import("./pages/admin/Reviews"));
 const Categories = lazy(() => import("./pages/admin/Categories"));
 const Brands = lazy(() => import("./pages/admin/Brands"));
 const Users = lazy(() => import("./pages/admin/Users"));
+const UserDetailView = lazy(() => import("./pages/admin/UserDetailView"));
 const Blogs = lazy(() => import("./pages/admin/Blogs"));
 const AddBlog = lazy(() => import("./pages/admin/AddBlog"));
 const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
-const ProductDetailView = lazy(() => import("./pages/admin/ProductDetailView"));
+
 // Maintenance Mode
 import MaintenanceMode from "./components/common/MaintenanceMode";
 
@@ -134,18 +137,20 @@ function App() {
           <Route path="products" element={<Products />} />
           <Route path="products/add" element={<AddProduct />} />
           <Route path="products/edit/:id" element={<EditProduct />} />
+          <Route path="products/view/:id" element={<ProductDetailView />} />
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetailAdmin />} />
+          <Route path="reviews" element={<Reviews />} />
           <Route path="categories" element={<Categories />} />
           <Route path="brands" element={<Brands />} />
           <Route path="users" element={<Users />} />
+          <Route path="users/:id" element={<UserDetailView />} />
           <Route path="blogs" element={<Blogs />} />
           <Route path="blogs/add" element={<AddBlog />} />
           <Route path="blogs/edit/:id" element={<EditBlog />} />
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
           <Route path="email-marketing" element={<EmailMarketing />} />
-          <Route path="products/view/:id" element={<ProductDetailView />} />
         </Route>
 
         {/* 404 */}

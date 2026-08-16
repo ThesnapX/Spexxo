@@ -39,6 +39,14 @@ const reviewSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
+    adminReply: {
+      type: String,
+      default: null,
+    },
     helpfulCount: {
       type: Number,
       default: 0,

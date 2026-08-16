@@ -16,6 +16,7 @@ import {
   ChevronDownIcon,
   CubeIcon,
   EnvelopeIcon,
+  StarIcon,
 } from "@heroicons/react/24/outline";
 
 const AdminLayout = () => {
@@ -31,15 +32,35 @@ const AdminLayout = () => {
     navigate("/login");
   };
 
+  // Improved isActive function - exact match or subpath check
   const isActive = (path) => {
-    return (
-      location.pathname === path || location.pathname.startsWith(path + "/")
-    );
+    // For exact match
+    if (location.pathname === path) return true;
+    // For subpaths (like /admin/products/view/123)
+    if (path !== "/admin" && location.pathname.startsWith(path + "/"))
+      return true;
+    return false;
   };
+
+  // Check if a dropdown should be open based on current path
+  const isProductsActive = () => {
+    return location.pathname.startsWith("/admin/products");
+  };
+
+  const isBlogsActive = () => {
+    return location.pathname.startsWith("/admin/blogs");
+  };
+
+  // Auto-expand dropdowns if their children are active
+  useState(() => {
+    if (isProductsActive()) setProductsMenuOpen(true);
+    if (isBlogsActive()) setBlogsMenuOpen(true);
+  }, [location.pathname]);
 
   const menuItems = [
     { name: "Dashboard", icon: HomeIcon, path: "/admin" },
     { name: "Orders", icon: ShoppingCartIcon, path: "/admin/orders" },
+    { name: "Reviews", icon: StarIcon, path: "/admin/reviews" },
     { name: "Categories", icon: TagIcon, path: "/admin/categories" },
     { name: "Brands", icon: CubeIcon, path: "/admin/brands" },
     { name: "Users", icon: UsersIcon, path: "/admin/users" },
@@ -55,6 +76,11 @@ const AdminLayout = () => {
   const activeClass = "bg-[#EBF4FC] text-[#3D96EB] font-medium";
   const inactiveClass = "text-gray-600 hover:bg-gray-50 hover:text-gray-900";
   const dropdownActiveClass = "text-[#3D96EB] bg-[#EBF4FC] font-medium";
+
+  // Close sidebar on navigation
+  const handleNavigation = () => {
+    setSidebarOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -92,23 +118,30 @@ const AdminLayout = () => {
 
             {/* Navigation */}
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              {menuItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive(item.path) ? activeClass : inactiveClass}`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.name}</span>
-                </Link>
-              ))}
+              {menuItems.map((item) => {
+                const active = isActive(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={handleNavigation}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                      active ? activeClass : inactiveClass
+                    }`}
+                  >
+                    <item.icon className="w-5 h-5" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
 
               {/* Products Dropdown */}
               <div>
                 <button
                   onClick={() => setProductsMenuOpen(!productsMenuOpen)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${isActive("/admin/products") ? activeClass : inactiveClass}`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+                    isProductsActive() ? activeClass : inactiveClass
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <ShoppingBagIcon className="w-5 h-5" />
@@ -122,15 +155,23 @@ const AdminLayout = () => {
                   <div className="ml-9 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
                     <Link
                       to="/admin/products"
-                      onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/products" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+                      onClick={handleNavigation}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === "/admin/products"
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       All Products
                     </Link>
                     <Link
                       to="/admin/products/add"
-                      onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/products/add" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+                      onClick={handleNavigation}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === "/admin/products/add"
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       Add Product
                     </Link>
@@ -142,7 +183,9 @@ const AdminLayout = () => {
               <div>
                 <button
                   onClick={() => setBlogsMenuOpen(!blogsMenuOpen)}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${isActive("/admin/blogs") ? activeClass : inactiveClass}`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors ${
+                    isBlogsActive() ? activeClass : inactiveClass
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <DocumentTextIcon className="w-5 h-5" />
@@ -156,15 +199,23 @@ const AdminLayout = () => {
                   <div className="ml-9 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
                     <Link
                       to="/admin/blogs"
-                      onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/blogs" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+                      onClick={handleNavigation}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === "/admin/blogs"
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       All Blogs
                     </Link>
                     <Link
                       to="/admin/blogs/add"
-                      onClick={() => setSidebarOpen(false)}
-                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === "/admin/blogs/add" ? dropdownActiveClass : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"}`}
+                      onClick={handleNavigation}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        location.pathname === "/admin/blogs/add"
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
                     >
                       Add Blog
                     </Link>

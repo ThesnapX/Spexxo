@@ -294,12 +294,10 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     }
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Only pending or confirmed orders can be cancelled",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Only pending or confirmed orders can be cancelled",
+      });
     }
 
     if (order.orderStatus !== "cancelled") {
@@ -335,13 +333,11 @@ export const cancelOrder = async (req, res) => {
     });
     await order.save();
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        order,
-        message: "Order cancelled. Stock restored.",
-      });
+    res.status(200).json({
+      success: true,
+      order,
+      message: "Order cancelled. Stock restored.",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -390,7 +386,7 @@ export const updateOrderStatus = async (req, res) => {
     const { status, note } = req.body;
     const order = await Order.findById(req.params.id).populate(
       "user",
-      "email firstName",
+      "email firstName phone",
     );
     if (!order)
       return res
@@ -411,6 +407,7 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
+    // ============ SEND NOTIFICATION ============
     try {
       const statusEmails = {
         confirmed: "Order Confirmed",
@@ -420,22 +417,74 @@ export const updateOrderStatus = async (req, res) => {
         cancelled: "Order Cancelled",
       };
 
+      const userEmail = order.user?.email;
+      const userPhone = order.shippingAddress?.phone || order.user?.phone;
+      const customerName =
+        order.shippingAddress?.fullName || order.user?.firstName || "Customer";
+
+      // Email HTML
       const emailHTML = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h1>${statusEmails[status] || "Order Update"}</h1>
-          <p>Your order <strong>#${order.orderNumber}</strong> has been updated to: <strong style="color: #3D96EB;">${status}</strong></p>
-          ${note ? `<p style="background: #f9f9f9; padding: 10px; border-radius: 8px;">${note}</p>` : ""}
-          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;">View Order Details</a>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #0B1C39; padding: 20px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="color: #fff; margin: 0;">Spe<span style="color: #3D96EB;">xx</span>o</h1>
+          </div>
+          <div style="background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+            <h2 style="color: #0B1C39; margin-top: 0;">Order Status Update</h2>
+            <p>Hi <strong>${customerName}</strong>,</p>
+            <p>Your order <strong style="color: #3D96EB;">#${order.orderNumber}</strong> has been updated to:</p>
+            <div style="background: #EBF4FC; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
+              <p style="font-size: 24px; font-weight: bold; color: #3D96EB; margin: 0;">
+                ${statusEmails[status] || status.toUpperCase()}
+              </p>
+            </div>
+            ${note ? `<p style="background: #f9f9f9; padding: 10px; border-radius: 8px; border-left: 4px solid #3D96EB;">📝 ${note}</p>` : ""}
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Order Total:</strong> ₹${order.total?.toLocaleString()}</p>
+              <p style="margin: 5px 0;"><strong>Payment:</strong> ${order.paymentMethod?.toUpperCase()}</p>
+            </div>
+            <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" 
+               style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">
+              View Order Details
+            </a>
+            <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">Thank you for shopping with Spexxo! 👓</p>
+          </div>
         </div>
       `;
 
-      await sendEmail({
-        email: order.user.email,
-        subject: `Order ${status} - ${order.orderNumber} | Spexxo`,
-        html: emailHTML,
-      });
-    } catch (emailError) {
-      console.log("Status email failed:", emailError.message);
+      // Send Email
+      if (userEmail) {
+        await sendEmail({
+          email: userEmail,
+          subject: `Order ${statusEmails[status] || status} - ${order.orderNumber} | Spexxo`,
+          html: emailHTML,
+        });
+        console.log(`✅ Email sent to ${userEmail}`);
+      }
+
+      // Send WhatsApp (if phone exists)
+      if (userPhone) {
+        const whatsappMessage =
+          `Hi *${customerName}*,\n\n` +
+          `Your order *#${order.orderNumber}* status has been updated to *${(statusEmails[status] || status).toUpperCase()}*.\n\n` +
+          `📦 *Order Details:*\n` +
+          `• Total: ₹${order.total?.toLocaleString()}\n` +
+          `• Payment: ${order.paymentMethod?.toUpperCase()}\n` +
+          `${note ? `• Note: ${note}\n` : ""}\n` +
+          `Thank you for shopping with Spexxo! 👓`;
+
+        // Send WhatsApp via API (using Twilio or any other service)
+        // For now, we'll just log it and the frontend will handle the button click
+        // You can integrate with a WhatsApp API like Twilio, WATI, or WhatsApp Business API
+        console.log(
+          `📱 WhatsApp would be sent to ${userPhone}: ${whatsappMessage}`,
+        );
+
+        // Example with a WhatsApp API (you'll need to implement this)
+        // await sendWhatsApp(userPhone, whatsappMessage);
+      }
+    } catch (notificationError) {
+      console.log("Notification failed:", notificationError.message);
+      // Don't fail the request if notification fails
     }
 
     res.status(200).json({

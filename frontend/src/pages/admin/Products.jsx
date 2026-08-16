@@ -35,7 +35,6 @@ const Products = () => {
   const [stockFilter, setStockFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-
   const { data: productsData, isLoading } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {

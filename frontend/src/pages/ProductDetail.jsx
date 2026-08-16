@@ -663,7 +663,7 @@ const ProductDetail = () => {
                       <button
                         type="button"
                         onClick={() => removeReviewImage(i)}
-                        className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 flex items-center justify-center text-xs"
+                        className="absolute top-0 right-0 bg-red-500 text-white w-4 h-4 flex items-center justify-center text-xs rounded-tr-lg"
                       >
                         ×
                       </button>
@@ -753,6 +753,45 @@ const ProductDetail = () => {
                       <p className="font-medium text-sm mb-1">{review.title}</p>
                     )}
                     <p className="text-sm text-text-light">{review.comment}</p>
+
+                    {/* Review Images */}
+                    {review.images?.length > 0 && (
+                      <div className="flex gap-2 mt-3">
+                        {review.images.map((img, i) => (
+                          <img
+                            key={i}
+                            src={img.url}
+                            alt="Review"
+                            className="w-16 h-16 rounded-lg object-cover border"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Admin Reply - FIXED: Now shows admin replies */}
+                    {review.adminReply && (
+                      <div className="mt-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-semibold">
+                            S
+                          </div>
+                          <p className="text-xs font-semibold text-blue-700">
+                            Spexxo Admin
+                          </p>
+                          <span className="text-xs text-blue-400">•</span>
+                          <span className="text-xs text-blue-400">
+                            {new Date(
+                              review.updatedAt || review.createdAt,
+                            ).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-text">{review.adminReply}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
