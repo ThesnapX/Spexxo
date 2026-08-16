@@ -213,14 +213,6 @@ const OrderDetailView = () => {
 
   return (
     <div>
-      {/* Back Button */}
-      <button
-        onClick={() => navigate("/admin/orders")}
-        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4"
-      >
-        <ArrowLeftIcon className="w-5 h-5" /> Back to Orders
-      </button>
-
       {/* Order Header */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between flex-wrap gap-4">

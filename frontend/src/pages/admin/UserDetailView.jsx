@@ -363,12 +363,6 @@ const UserDetailView = () => {
   return (
     <div>
       {/* Back Button */}
-      <button
-        onClick={() => navigate("/admin/users")}
-        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4"
-      >
-        <ArrowLeftIcon className="w-5 h-5" /> Back to Users
-      </button>
 
       {/* User Header */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">

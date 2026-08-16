@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import AdminNavigation from "../common/AdminNavigation";
 import {
   HomeIcon,
   ShoppingBagIcon,
@@ -21,8 +22,6 @@ import {
   PaintBrushIcon,
   Squares2X2Icon,
   MegaphoneIcon,
-  GiftIcon,
-  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 
 const AdminLayout = () => {
@@ -78,7 +77,7 @@ const AdminLayout = () => {
     if (isMarketingActive()) setMarketingMenuOpen(true);
   }, [location.pathname]);
 
-  // Menu items - now with Marketing removed from main menu
+  // Menu items
   const menuItems = [
     { name: "Dashboard", icon: HomeIcon, path: "/admin" },
     { name: "Orders", icon: ShoppingCartIcon, path: "/admin/orders" },
@@ -93,6 +92,9 @@ const AdminLayout = () => {
   const closeSidebar = () => {
     setSidebarOpen(false);
   };
+
+  // Check if current page should show navigation
+  const showAdminNav = location.pathname !== "/admin";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -262,7 +264,7 @@ const AdminLayout = () => {
                 )}
               </div>
 
-              {/* Marketing Dropdown - NEW */}
+              {/* Marketing Dropdown */}
               <div>
                 <button
                   onClick={() => setMarketingMenuOpen(!marketingMenuOpen)}
@@ -413,6 +415,12 @@ const AdminLayout = () => {
 
         {/* Main Content */}
         <main className="flex-1 p-4 lg:p-8 min-h-screen">
+          {/* Admin Navigation Bar */}
+          {showAdminNav && (
+            <div className="mb-6 pb-4 border-b border-gray-100">
+              <AdminNavigation />
+            </div>
+          )}
           <Outlet />
         </main>
       </div>
