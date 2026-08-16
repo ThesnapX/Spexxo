@@ -149,7 +149,7 @@ const AdminLayout = () => {
                 );
               })}
 
-              {/* Products Dropdown */}
+              {/* Products Dropdown*/}
               <div>
                 <button
                   onClick={() => setProductsMenuOpen(!productsMenuOpen)}
@@ -230,6 +230,20 @@ const AdminLayout = () => {
                       <div className="flex items-center gap-2">
                         <Squares2X2Icon className="w-4 h-4" />
                         Frame Shapes
+                      </div>
+                    </Link>
+                    <Link
+                      to="/admin/frame-materials"
+                      onClick={closeSidebar}
+                      className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                        isActive("/admin/frame-materials")
+                          ? dropdownActiveClass
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <CubeIcon className="w-4 h-4" />
+                        Frame Materials
                       </div>
                     </Link>
                     <Link

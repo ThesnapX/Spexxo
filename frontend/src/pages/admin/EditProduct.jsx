@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -54,6 +54,7 @@ const EditProduct = () => {
     sku: "",
   });
 
+  // Fetch categories
   const { data: categories } = useQuery({
     queryKey: ["admin-categories"],
     queryFn: async () => {
@@ -62,6 +63,7 @@ const EditProduct = () => {
     },
   });
 
+  // Fetch brands
   const { data: brands } = useQuery({
     queryKey: ["admin-brands"],
     queryFn: async () => {
@@ -70,10 +72,36 @@ const EditProduct = () => {
     },
   });
 
+  // Fetch shapes from API
+  const { data: shapesData } = useQuery({
+    queryKey: ["shapes"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/shapes`);
+      return data.shapes || [];
+    },
+  });
+
+  // Fetch colors from API
+  const { data: colorsData } = useQuery({
+    queryKey: ["colors"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/colors`);
+      return data.colors || [];
+    },
+  });
+
+  // Fetch lens types from API
+  const { data: lensTypesData } = useQuery({
+    queryKey: ["lens-types"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/lens-types`);
+      return data.lensTypes || [];
+    },
+  });
+
   const { data: productData, isLoading: productLoading } = useQuery({
     queryKey: ["product-edit", id],
     queryFn: async () => {
-      // Fetch single product directly by ID
       const { data } = await axios.get(`${API_URL}/products/${id}`);
       return data.product || null;
     },
@@ -83,10 +111,9 @@ const EditProduct = () => {
     refetchOnWindowFocus: false,
   });
 
-  // Initialize form from product data - only once when data loads
+  // Initialize form from product data
   useEffect(() => {
     if (productData && !formInitialized) {
-      // Extract category - could be string "id1,id2", object {_id, name}, or null
       let catStr = "";
       if (productData.categories && Array.isArray(productData.categories)) {
         catStr = productData.categories.map((c) => c._id).join(",");
@@ -101,7 +128,6 @@ const EditProduct = () => {
         }
       }
 
-      // Extract brand
       let brandStr = "";
       if (productData.brand) {
         if (typeof productData.brand === "string") {
@@ -564,37 +590,37 @@ const EditProduct = () => {
             />
           </div>
 
+          {/* Frame Shape - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Shape
             </label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                "Rectangle",
-                "Round",
-                "Cat Eye",
-                "Square",
-                "Oval",
-                "Aviator",
-                "Wayfarer",
-                "Rimless",
-              ].map((shape) => {
-                const sel = form.frameShape
-                  ? form.frameShape.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={shape}
-                    type="button"
-                    onClick={() => toggleMultiSelect("frameShape", shape)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-                  >
-                    {shape}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {shapesData?.length > 0 ? (
+                shapesData.map((shape) => {
+                  const sel = form.frameShape
+                    ? form.frameShape.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={shape._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("frameShape", shape.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      {shape.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">No shapes available</p>
+              )}
             </div>
           </div>
+
+          {/* Frame Material */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Material
@@ -624,43 +650,68 @@ const EditProduct = () => {
               })}
             </div>
           </div>
+
+          {/* Frame Color - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Color
             </label>
-            <input
-              type="text"
-              value={form.frameColor}
-              onChange={(e) => handleChange("frameColor", e.target.value)}
-              className={inputClass("frameColor")}
-            />
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {colorsData?.length > 0 ? (
+                colorsData.map((color) => {
+                  const sel = form.frameColor
+                    ? form.frameColor.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={color._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("frameColor", color.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(color.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      <span
+                        className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
+                        style={{ backgroundColor: color.hexCode || "#000" }}
+                      ></span>
+                      {color.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">No colors available</p>
+              )}
+            </div>
           </div>
+
+          {/* Lens Type - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">Lens Type</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                "Single Vision",
-                "Bifocal",
-                "Progressive",
-                "Blue Cut",
-                "UV Protection",
-                "Polarized",
-                "Anti-Glare",
-              ].map((lt) => {
-                const sel = form.lensType
-                  ? form.lensType.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={lt}
-                    type="button"
-                    onClick={() => toggleMultiSelect("lensType", lt)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lt) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-                  >
-                    {lt}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {lensTypesData?.length > 0 ? (
+                lensTypesData.map((lensType) => {
+                  const sel = form.lensType
+                    ? form.lensType.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={lensType._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("lensType", lensType.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lensType.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      {lensType.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">
+                  No lens types available
+                </p>
+              )}
             </div>
           </div>
 

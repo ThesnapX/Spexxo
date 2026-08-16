@@ -24,6 +24,10 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import generateSitemap from "./utils/sitemapGenerator.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import emailRoutes from "./routes/emailRoutes.js";
+import shapeRoutes from "./routes/shapeRoutes.js";
+import colorRoutes from "./routes/colorRoutes.js";
+import lensTypeRoutes from "./routes/lensTypeRoutes.js";
+import frameMaterialRoutes from "./routes/frameMaterialRoutes.js";
 
 dotenv.config();
 
@@ -90,6 +94,10 @@ app.use("/api/wishlist", wishlistRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/email", emailRoutes);
+app.use("/api/shapes", shapeRoutes);
+app.use("/api/colors", colorRoutes);
+app.use("/api/lens-types", lensTypeRoutes);
+app.use("/api/frame-materials", frameMaterialRoutes);
 
 // Generate sitemap
 app.get("/api/sitemap", async (req, res) => {

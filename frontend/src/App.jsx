@@ -45,6 +45,7 @@ const Brands = lazy(() => import("./pages/admin/Brands"));
 const Shapes = lazy(() => import("./pages/admin/Shapes"));
 const Colors = lazy(() => import("./pages/admin/Colors"));
 const LensTypes = lazy(() => import("./pages/admin/LensTypes"));
+const FrameMaterials = lazy(() => import("./pages/admin/FrameMaterials"));
 const Users = lazy(() => import("./pages/admin/Users"));
 const UserDetailView = lazy(() => import("./pages/admin/UserDetailView"));
 const Blogs = lazy(() => import("./pages/admin/Blogs"));
@@ -148,6 +149,7 @@ function App() {
           <Route path="shapes" element={<Shapes />} />
           <Route path="colors" element={<Colors />} />
           <Route path="lens-types" element={<LensTypes />} />
+          <Route path="frame-materials" element={<FrameMaterials />} />
 
           {/* Other Admin Routes */}
           <Route path="orders" element={<Orders />} />

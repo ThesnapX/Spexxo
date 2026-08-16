@@ -52,6 +52,7 @@ const AddProduct = () => {
     sku: "",
   });
 
+  // Fetch categories
   const { data: categories } = useQuery({
     queryKey: ["admin-categories"],
     queryFn: async () => {
@@ -60,11 +61,39 @@ const AddProduct = () => {
     },
   });
 
+  // Fetch brands
   const { data: brands } = useQuery({
     queryKey: ["admin-brands"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/brands`);
       return data.brands || [];
+    },
+  });
+
+  // Fetch shapes from API
+  const { data: shapesData } = useQuery({
+    queryKey: ["shapes"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/shapes`);
+      return data.shapes || [];
+    },
+  });
+
+  // Fetch colors from API
+  const { data: colorsData } = useQuery({
+    queryKey: ["colors"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/colors`);
+      return data.colors || [];
+    },
+  });
+
+  // Fetch lens types from API
+  const { data: lensTypesData } = useQuery({
+    queryKey: ["lens-types"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/lens-types`);
+      return data.lensTypes || [];
     },
   });
 
@@ -498,40 +527,37 @@ const AddProduct = () => {
             />
           </div>
 
-          {/* Frame Shape */}
+          {/* Frame Shape - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Shape
             </label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                "Rectangle",
-                "Round",
-                "Cat Eye",
-                "Square",
-                "Oval",
-                "Aviator",
-                "Wayfarer",
-                "Rimless",
-              ].map((shape) => {
-                const sel = form.frameShape
-                  ? form.frameShape.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={shape}
-                    type="button"
-                    onClick={() => toggleMultiSelect("frameShape", shape)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-                  >
-                    {shape}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {shapesData?.length > 0 ? (
+                shapesData.map((shape) => {
+                  const sel = form.frameShape
+                    ? form.frameShape.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={shape._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("frameShape", shape.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      {shape.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">No shapes available</p>
+              )}
             </div>
           </div>
 
-          {/* Frame Material */}
+          {/* Frame Material - Static options */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Material
@@ -562,47 +588,67 @@ const AddProduct = () => {
             </div>
           </div>
 
-          {/* Frame Color */}
+          {/* Frame Color - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Frame Color
             </label>
-            <input
-              type="text"
-              value={form.frameColor}
-              onChange={(e) => handleChange("frameColor", e.target.value)}
-              className={inputClass("frameColor")}
-              placeholder="e.g. Black, Gold"
-            />
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {colorsData?.length > 0 ? (
+                colorsData.map((color) => {
+                  const sel = form.frameColor
+                    ? form.frameColor.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={color._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("frameColor", color.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(color.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      <span
+                        className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
+                        style={{ backgroundColor: color.hexCode || "#000" }}
+                      ></span>
+                      {color.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">No colors available</p>
+              )}
+            </div>
           </div>
 
-          {/* Lens Type */}
+          {/* Lens Type - From API */}
           <div>
             <label className="block text-sm font-medium mb-1">Lens Type</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                "Single Vision",
-                "Bifocal",
-                "Progressive",
-                "Blue Cut",
-                "UV Protection",
-                "Polarized",
-                "Anti-Glare",
-              ].map((lt) => {
-                const sel = form.lensType
-                  ? form.lensType.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={lt}
-                    type="button"
-                    onClick={() => toggleMultiSelect("lensType", lt)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lt) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
-                  >
-                    {lt}
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
+              {lensTypesData?.length > 0 ? (
+                lensTypesData.map((lensType) => {
+                  const sel = form.lensType
+                    ? form.lensType.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={lensType._id}
+                      type="button"
+                      onClick={() =>
+                        toggleMultiSelect("lensType", lensType.name)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lensType.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    >
+                      {lensType.name}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-text-light">
+                  No lens types available
+                </p>
+              )}
             </div>
           </div>
 

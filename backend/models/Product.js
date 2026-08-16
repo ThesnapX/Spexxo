@@ -36,7 +36,7 @@ const productSchema = new mongoose.Schema(
       type: String,
     },
     category: {
-      type: String, // Now stores comma-separated IDs like "id1,id2,id3"
+      type: String, // Stores comma-separated IDs like "id1,id2,id3"
     },
     brand: {
       type: mongoose.Schema.Types.ObjectId,
@@ -52,18 +52,24 @@ const productSchema = new mongoose.Schema(
       enum: ["eyeglasses", "sunglasses", "contactlens"],
       required: true,
     },
+    // ============ UPDATED FIELDS ============
     frameShape: {
       type: String,
-      // Supports multiple values like "Rectangle,Round,Cat Eye"
+      // Can store single value or comma-separated: "Rectangle,Round"
     },
     frameMaterial: {
       type: String,
-      // Supports multiple values like "Metal,Acetate,Titanium"
+      // Can store single value or comma-separated: "Metal,Acetate"
     },
     lensType: {
       type: String,
-      // Supports multiple values like "Blue Cut,UV Protection,Polarized"
+      // Can store single value or comma-separated: "Blue Cut,UV Protection"
     },
+    frameColor: {
+      type: String,
+      // Can store single value or comma-separated: "Black,Gold"
+    },
+    // ========================================
     frameWidth: {
       type: Number,
     },
@@ -75,9 +81,6 @@ const productSchema = new mongoose.Schema(
     },
     bridge: {
       type: Number,
-    },
-    frameColor: {
-      type: String,
     },
     lensMaterial: {
       type: String,
