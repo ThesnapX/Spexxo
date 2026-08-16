@@ -47,7 +47,7 @@ const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
-
+const ProductDetailView = lazy(() => import("./pages/admin/ProductDetailView"));
 // Maintenance Mode
 import MaintenanceMode from "./components/common/MaintenanceMode";
 
@@ -145,6 +145,7 @@ function App() {
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
           <Route path="email-marketing" element={<EmailMarketing />} />
+          <Route path="products/view/:id" element={<ProductDetailView />} />
         </Route>
 
         {/* 404 */}
