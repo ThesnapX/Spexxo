@@ -144,23 +144,45 @@ const OrderDetailView = () => {
   };
 
   const handleWhatsAppClick = () => {
-    const phone = order?.shippingAddress?.phone || order?.user?.phone;
-    if (!phone) {
-      toast.error("No phone number found for WhatsApp");
+    // Get phone from shipping address or user profile
+    let phone = order?.shippingAddress?.phone || order?.user?.phone || "";
+
+    // Clean the phone number - remove spaces, dashes, plus signs, etc.
+    phone = phone.replace(/[\s\-\(\)\+]/g, "");
+
+    // If phone starts with 0, remove it
+    if (phone.startsWith("0")) {
+      phone = phone.substring(1);
+    }
+
+    // If phone doesn't have country code, add 91 (India)
+    if (!phone.startsWith("91") && phone.length === 10) {
+      phone = "91" + phone;
+    }
+
+    // If phone is still not valid, show error
+    if (!phone || phone.length < 10) {
+      toast.error("No valid phone number found for WhatsApp");
       return;
     }
 
+    const customerName =
+      order?.shippingAddress?.fullName || order?.user?.firstName || "Customer";
+
     const message =
-      `Hi *${order?.shippingAddress?.fullName || order?.user?.firstName || "Customer"}*,\n\n` +
+      `Hi *${customerName}*,\n\n` +
       `Your order *#${order?.orderNumber}* status has been updated to *${order?.orderStatus?.toUpperCase()}*.\n\n` +
-      `📦 Order Details:\n` +
+      `*Order Details:*\n` +
       `• Total: ₹${order?.total?.toLocaleString()}\n` +
       `• Payment: ${order?.paymentMethod?.toUpperCase()}\n` +
       `• Status: ${order?.orderStatus?.toUpperCase()}\n\n` +
-      `Thank you for shopping with Spexxo! 👓`;
+      `Thank you for shopping with Spexxo!`;
 
     const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/91${phone}?text=${encodedMessage}`, "_blank");
+    const whatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+
+    // Open WhatsApp in new tab
+    window.open(whatsappUrl, "_blank");
   };
 
   if (isLoading) {

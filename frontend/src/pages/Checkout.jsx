@@ -24,7 +24,6 @@ const Checkout = () => {
   const [useSavedAddress, setUseSavedAddress] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [codAdvance, setCodAdvance] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showAddressList, setShowAddressList] = useState(false);
   const [saveAddressToProfile, setSaveAddressToProfile] = useState(true);
@@ -120,14 +119,28 @@ const Checkout = () => {
   const couponCode = appliedCoupon?.code || "";
   const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
 
-  // Calculate 10% advance amount
+  // Calculate 10% advance amount (MANDATORY for COD)
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
+
+  // Function to refresh user data after address save
+  const refreshUserData = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/auth/me`);
+      if (data.user) {
+        updateProfile(data.user);
+      }
+    } catch (error) {
+      console.log("Failed to refresh user data");
+    }
+  };
 
   // Function to save address to user profile
   const saveAddressToUserProfile = async (addressData) => {
     try {
       await axios.post(`${API_URL}/users/address`, addressData);
+      // Refresh user data to get the new address
+      await refreshUserData();
       return true;
     } catch (error) {
       console.log("Failed to save address:", error.message);
@@ -170,14 +183,14 @@ const Checkout = () => {
           city: form.city,
           state: form.state,
           pincode: form.pincode,
-          isDefault: user.addresses?.length === 0, // Make default if no addresses
+          isDefault: user.addresses?.length === 0,
         };
         await saveAddressToUserProfile(addressData);
       }
     }
 
     if (paymentMethod === "online") {
-      // ONLINE PAYMENT
+      // ONLINE PAYMENT - Full payment
       setLoading(true);
       try {
         const amountInPaise = Math.round(grandTotal * 100);
@@ -238,8 +251,8 @@ const Checkout = () => {
       } finally {
         setLoading(false);
       }
-    } else if (paymentMethod === "cod" && codAdvance) {
-      // COD with 10% Advance - Open Razorpay for advance amount
+    } else {
+      // COD - 10% Advance is MANDATORY
       setLoading(true);
       try {
         const advanceAmountInPaise = advanceAmount * 100;
@@ -266,7 +279,7 @@ const Checkout = () => {
                 setProcessingPayment(false);
                 setLoading(false);
                 toast.error(
-                  "Advance payment cancelled. You can still place COD order without advance.",
+                  "Advance payment is required for COD orders. Please complete the payment.",
                 );
               },
             },
@@ -285,7 +298,9 @@ const Checkout = () => {
                 });
                 await clearCart();
                 toast.success(
-                  "Order placed with 10% advance! Remaining on delivery.",
+                  "Order placed with 10% advance! Remaining ₹" +
+                    remainingCOD.toLocaleString() +
+                    " on delivery.",
                 );
                 navigate("/account/orders");
               } catch (error) {
@@ -302,23 +317,6 @@ const Checkout = () => {
       } catch (error) {
         toast.error("Payment initiation failed");
         setProcessingPayment(false);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // Full COD
-      setLoading(true);
-      try {
-        await axios.post(`${API_URL}/orders`, {
-          shippingAddress: form,
-          couponCode: couponCode || undefined,
-          paymentMethod: "cod",
-        });
-        await clearCart();
-        toast.success("Order placed successfully!");
-        navigate("/account/orders");
-      } catch (error) {
-        toast.error(error.response?.data?.message || "Order failed");
       } finally {
         setLoading(false);
       }
@@ -609,31 +607,33 @@ const Checkout = () => {
                     <div>
                       <p className="font-medium text-text">Cash on Delivery</p>
                       <p className="text-xs text-text-light">
-                        Pay when you receive your order
+                        Pay 10% advance now, remaining on delivery
                       </p>
                     </div>
                   </label>
 
-                  {/* COD Advance Option */}
+                  {/* COD Advance Info - Always shown for COD */}
                   {paymentMethod === "cod" && (
                     <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={codAdvance}
-                          onChange={(e) => setCodAdvance(e.target.checked)}
-                          className="mt-0.5 text-primary w-4 h-4"
-                        />
+                      <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                          i
+                        </div>
                         <div>
-                          <p className="text-sm font-medium text-text">
-                            Pay 10% Advance (Recommended)
+                          <p className="text-sm font-medium text-amber-800">
+                            10% Advance Payment Required
                           </p>
-                          <p className="text-xs text-text-light">
-                            Pay ₹{advanceAmount.toLocaleString()} now, remaining
-                            ₹{remainingCOD.toLocaleString()} on delivery
+                          <p className="text-xs text-amber-700 mt-1">
+                            Pay ₹{advanceAmount.toLocaleString()} now to confirm
+                            your order. Remaining ₹
+                            {remainingCOD.toLocaleString()} on delivery.
+                          </p>
+                          <p className="text-xs text-amber-600 mt-1">
+                            ✅ This helps us ensure your order reaches you
+                            reliably
                           </p>
                         </div>
-                      </label>
+                      </div>
                     </div>
                   )}
 
@@ -655,7 +655,8 @@ const Checkout = () => {
                     <div>
                       <p className="font-medium text-text">Online Payment</p>
                       <p className="text-xs text-text-light">
-                        Pay securely via UPI, Cards, NetBanking, Wallets
+                        Pay full amount securely via UPI, Cards, NetBanking,
+                        Wallets
                       </p>
                     </div>
                   </label>
@@ -674,10 +675,14 @@ const Checkout = () => {
                     ? "Complete Payment in Popup..."
                     : paymentMethod === "online"
                       ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                      : codAdvance
-                        ? `Pay ₹${advanceAmount.toLocaleString()} Advance`
-                        : `Place Order - ₹${grandTotal.toLocaleString()}`}
+                      : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
               </button>
+              {paymentMethod === "cod" && !processingPayment && !loading && (
+                <p className="text-xs text-text-light text-center mt-2">
+                  You'll pay remaining ₹{remainingCOD.toLocaleString()} on
+                  delivery
+                </p>
+              )}
             </div>
 
             {/* Right Side - Order Summary */}
@@ -739,19 +744,26 @@ const Checkout = () => {
                       🎉 You saved ₹{couponDiscount.toLocaleString()}!
                     </p>
                   )}
-                  {codAdvance && (
+                  {/* COD Advance Breakdown - Always shown when COD is selected */}
+                  {paymentMethod === "cod" && (
                     <div className="bg-amber-50 p-3 rounded-lg mt-3">
                       <div className="flex justify-between text-sm">
-                        <span>Pay Now (10%)</span>
+                        <span className="font-medium text-amber-800">
+                          Pay Now (10%)
+                        </span>
                         <span className="font-semibold text-amber-600">
                           ₹{advanceAmount.toLocaleString()}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Pay on Delivery</span>
-                        <span className="font-semibold">
+                      <div className="flex justify-between text-sm mt-1">
+                        <span className="text-amber-700">Pay on Delivery</span>
+                        <span className="font-semibold text-amber-700">
                           ₹{remainingCOD.toLocaleString()}
                         </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-amber-600 mt-2 pt-2 border-t border-amber-200">
+                        <span>Total</span>
+                        <span>₹{grandTotal.toLocaleString()}</span>
                       </div>
                     </div>
                   )}

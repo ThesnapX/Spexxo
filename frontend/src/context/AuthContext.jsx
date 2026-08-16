@@ -93,6 +93,7 @@ export const AuthProvider = ({ children }) => {
     toast.success("Logged out successfully");
   };
 
+  // In AuthContext.jsx - Make sure this exists and works
   const updateProfile = async (profileData) => {
     try {
       const { data } = await axios.put(

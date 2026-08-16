@@ -76,6 +76,7 @@ export const addAddress = async (req, res) => {
     }
 
     user.addresses.push({
+      name: req.body.name || "Home",
       fullName: req.body.fullName || "",
       phone: req.body.phone || "",
       addressLine1: req.body.addressLine1 || "",
@@ -214,12 +215,10 @@ export const deactivateOwnAccount = async (req, res) => {
     user.deactivatedBy = "user";
     user.deactivationReason = "Self-deactivated by user";
     await user.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Account deactivated. Contact support to reactivate.",
-      });
+    res.status(200).json({
+      success: true,
+      message: "Account deactivated. Contact support to reactivate.",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
