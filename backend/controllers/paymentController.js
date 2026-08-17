@@ -149,3 +149,74 @@ export const getRazorpayKey = async (req, res) => {
     key: process.env.RAZORPAY_KEY_ID,
   });
 };
+
+// @desc    Verify COD advance payment
+// @route   POST /api/payment/verify-cod-advance
+// @access  Private
+export const verifyCODAdvance = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      orderId,
+      isCODAdvance,
+    } = req.body;
+
+    // Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body)
+      .digest("hex");
+
+    const isAuthentic = expectedSignature === razorpay_signature;
+
+    if (!isAuthentic) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Payment verification failed" });
+    }
+
+    // Update order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // For COD advance payment
+    if (isCODAdvance) {
+      order.paymentStatus = "paid";
+      order.paymentMethod = "cod";
+      order.isCOD = true;
+      order.orderStatus = "confirmed";
+      order.codAdvance = order.codAdvance || Math.round(order.total * 0.1);
+      order.remainingCOD = order.total - order.codAdvance;
+      order.paymentDetails = {
+        transactionId: razorpay_payment_id,
+        paymentGateway: "razorpay",
+        razorpayOrderId: razorpay_order_id,
+      };
+      order.statusHistory.push({
+        status: "confirmed",
+        note: `10% advance payment (₹${order.codAdvance}) received via Razorpay`,
+        date: new Date(),
+      });
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified successfully",
+      order,
+    });
+  } catch (error) {
+    console.error("COD advance verification error:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Payment verification failed" });
+  }
+};

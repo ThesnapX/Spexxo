@@ -15,29 +15,22 @@ import {
   TruckIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon as ClockIconSolid,
   PhotoIcon,
   EnvelopeIcon,
   PhoneIcon,
-  DocumentTextIcon,
-  IdentificationIcon,
-  ReceiptRefundIcon,
-  TagIcon,
   ClipboardDocumentListIcon,
+  TagIcon,
+  ReceiptRefundIcon,
 } from "@heroicons/react/24/outline";
-import { CheckIcon, XMarkIcon } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
 
 const OrderDetailView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [whatsAppMessage, setWhatsAppMessage] = useState("");
+  const [statusNote, setStatusNote] = useState("");
 
   // Fetch order
   const {
@@ -68,6 +61,7 @@ const OrderDetailView = () => {
       toast.success(`Order status updated to ${data.order.orderStatus}!`);
       refetch();
       setUpdatingStatus(false);
+      setStatusNote("");
     },
     onError: (error) => {
       toast.error(
@@ -112,6 +106,13 @@ const OrderDetailView = () => {
     },
   ];
 
+  const paymentStatusColors = {
+    pending: "bg-yellow-100 text-yellow-700",
+    paid: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
+    refund_pending: "bg-orange-100 text-orange-700",
+  };
+
   const getStatusBadge = (status) => {
     const option = statusOptions.find((s) => s.value === status);
     return option || statusOptions[0];
@@ -121,13 +122,10 @@ const OrderDetailView = () => {
     const newStatus = e.target.value;
     if (newStatus === order?.orderStatus) return;
 
-    const note = prompt(`Enter a note for this status change (optional):`);
-    if (note === null) return;
-
     setUpdatingStatus(true);
     await updateStatusMutation.mutateAsync({
       status: newStatus,
-      note: note || undefined,
+      note: statusNote || undefined,
     });
   };
 
@@ -144,23 +142,11 @@ const OrderDetailView = () => {
   };
 
   const handleWhatsAppClick = () => {
-    // Get phone from shipping address or user profile
     let phone = order?.shippingAddress?.phone || order?.user?.phone || "";
-
-    // Clean the phone number - remove spaces, dashes, plus signs, etc.
     phone = phone.replace(/[\s\-\(\)\+]/g, "");
+    if (phone.startsWith("0")) phone = phone.substring(1);
+    if (!phone.startsWith("91") && phone.length === 10) phone = "91" + phone;
 
-    // If phone starts with 0, remove it
-    if (phone.startsWith("0")) {
-      phone = phone.substring(1);
-    }
-
-    // If phone doesn't have country code, add 91 (India)
-    if (!phone.startsWith("91") && phone.length === 10) {
-      phone = "91" + phone;
-    }
-
-    // If phone is still not valid, show error
     if (!phone || phone.length < 10) {
       toast.error("No valid phone number found for WhatsApp");
       return;
@@ -168,7 +154,6 @@ const OrderDetailView = () => {
 
     const customerName =
       order?.shippingAddress?.fullName || order?.user?.firstName || "Customer";
-
     const message =
       `Hi *${customerName}*,\n\n` +
       `Your order *#${order?.orderNumber}* status has been updated to *${order?.orderStatus?.toUpperCase()}*.\n\n` +
@@ -180,8 +165,6 @@ const OrderDetailView = () => {
 
     const encodedMessage = encodeURIComponent(message);
     const whatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
-
-    // Open WhatsApp in new tab
     window.open(whatsappUrl, "_blank");
   };
 
@@ -213,6 +196,14 @@ const OrderDetailView = () => {
 
   return (
     <div>
+      {/* Back Button */}
+      <button
+        onClick={() => navigate("/admin/orders")}
+        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4"
+      >
+        <ArrowLeftIcon className="w-5 h-5" /> Back to Orders
+      </button>
+
       {/* Order Header */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between flex-wrap gap-4">
@@ -226,9 +217,21 @@ const OrderDetailView = () => {
               >
                 {statusInfo.label.toUpperCase()}
               </span>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium ${paymentStatusColors[order.paymentStatus]}`}
+              >
+                {order.paymentStatus?.toUpperCase()}
+              </span>
             </div>
-            <div className="flex items-center gap-3 mt-2 text-sm text-text-light">
-              <span>Placed: {new Date(order.createdAt).toLocaleString()}</span>
+            <div className="flex items-center gap-3 mt-2 text-sm text-text-light flex-wrap">
+              <span className="flex items-center gap-1">
+                <CalendarIcon className="w-4 h-4" />
+                {new Date(order.createdAt).toLocaleDateString()}
+              </span>
+              <span className="flex items-center gap-1">
+                <ClockIcon className="w-4 h-4" />
+                {new Date(order.createdAt).toLocaleTimeString()}
+              </span>
               <span>•</span>
               <span className="flex items-center gap-1">
                 <UserIcon className="w-4 h-4" />
@@ -238,6 +241,10 @@ const OrderDetailView = () => {
                 >
                   {order.user?.firstName} {order.user?.lastName}
                 </button>
+              </span>
+              <span>•</span>
+              <span className="text-text-light">
+                Customer ID: {order.user?.customerId || "N/A"}
               </span>
             </div>
           </div>
@@ -261,9 +268,9 @@ const OrderDetailView = () => {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Content Grid - Left: Order Items & Status, Right: All Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - 2/3 */}
+        {/* LEFT COLUMN - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
           {/* Status Update */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
@@ -283,15 +290,16 @@ const OrderDetailView = () => {
                   </option>
                 ))}
               </select>
+              <input
+                type="text"
+                placeholder="Add a note (optional)"
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+                className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+              />
               {updatingStatus && (
                 <span className="text-sm text-text-light">Updating...</span>
               )}
-              <span className="text-xs text-text-light ml-2">
-                Current:{" "}
-                <span className={`font-medium ${statusInfo.color}`}>
-                  {statusInfo.label}
-                </span>
-              </span>
             </div>
             {order.statusHistory?.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100">
@@ -306,8 +314,8 @@ const OrderDetailView = () => {
                         {new Date(history.date).toLocaleString()}
                       </span>
                       <span className="text-text font-medium">→</span>
-                      <span className="text-text">
-                        {history.status.toUpperCase()}
+                      <span className="text-text font-medium capitalize">
+                        {history.status}
                       </span>
                       {history.note && (
                         <span className="text-text-light text-xs">
@@ -373,7 +381,7 @@ const OrderDetailView = () => {
           </div>
         </div>
 
-        {/* Right Column - 1/3 */}
+        {/* RIGHT COLUMN - 1/3 - All Details */}
         <div className="lg:col-span-1 space-y-6">
           {/* Order Summary */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
@@ -443,30 +451,24 @@ const OrderDetailView = () => {
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
               <CreditCardIcon className="w-5 h-5" /> Payment Details
             </h2>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
                 <span className="text-text-light">Method</span>
                 <span className="font-medium text-text uppercase">
                   {order.paymentMethod}
                   {isCOD && order.codAdvance > 0 && " (10% Advance + COD)"}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between">
                 <span className="text-text-light">Status</span>
                 <span
-                  className={`font-medium ${
-                    order.paymentStatus === "paid"
-                      ? "text-green-600"
-                      : order.paymentStatus === "failed"
-                        ? "text-red-600"
-                        : "text-yellow-600"
-                  }`}
+                  className={`font-medium ${paymentStatusColors[order.paymentStatus]}`}
                 >
                   {order.paymentStatus?.toUpperCase()}
                 </span>
               </div>
               {order.paymentDetails?.transactionId && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-text-light">Transaction ID</span>
                   <span className="font-medium text-text font-mono text-xs">
                     {order.paymentDetails.transactionId}
@@ -474,7 +476,7 @@ const OrderDetailView = () => {
                 </div>
               )}
               {order.paymentDetails?.paymentGateway && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-text-light">Gateway</span>
                   <span className="font-medium text-text">
                     {order.paymentDetails.paymentGateway.toUpperCase()}
@@ -482,11 +484,33 @@ const OrderDetailView = () => {
                 </div>
               )}
               {order.paymentDetails?.razorpayOrderId && (
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between">
                   <span className="text-text-light">Razorpay Order ID</span>
                   <span className="font-medium text-text font-mono text-xs">
                     {order.paymentDetails.razorpayOrderId}
                   </span>
+                </div>
+              )}
+              {isCOD && order.codAdvance > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-orange-600 border-t pt-2">
+                    <span>Advance Amount</span>
+                    <span>₹{order.codAdvance?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-light">COD Amount</span>
+                    <span className="font-medium text-text">
+                      ₹{order.remainingCOD?.toLocaleString()}
+                    </span>
+                  </div>
+                </>
+              )}
+              {order.paymentStatus === "refund_pending" && (
+                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
+                  <p className="text-xs text-orange-700 flex items-center gap-1">
+                    <ReceiptRefundIcon className="w-4 h-4" />
+                    Refund of ₹{order.codAdvance?.toLocaleString()} is pending
+                  </p>
                 </div>
               )}
             </div>
@@ -498,7 +522,7 @@ const OrderDetailView = () => {
               <MapPinIcon className="w-5 h-5" /> Shipping Address
             </h2>
             {order.shippingAddress ? (
-              <div className="space-y-2 text-sm">
+              <div className="space-y-1 text-sm">
                 <p className="font-medium text-text">
                   {order.shippingAddress.fullName}
                 </p>
@@ -543,7 +567,7 @@ const OrderDetailView = () => {
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
               <UserIcon className="w-5 h-5" /> Customer Info
             </h2>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-1 text-sm">
               <button
                 onClick={() => handleViewUser(order.user?._id)}
                 className="font-medium text-text hover:text-primary hover:underline transition flex items-center gap-1"
@@ -570,7 +594,7 @@ const OrderDetailView = () => {
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
               <ClipboardDocumentListIcon className="w-5 h-5" /> Order Meta
             </h2>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-text-light">Order ID</span>
                 <span className="font-medium text-text font-mono text-xs">
@@ -611,6 +635,46 @@ const OrderDetailView = () => {
               )}
             </div>
           </div>
+
+          {/* Status Timeline */}
+          {order.statusHistory?.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-6">
+              <h2 className="text-lg font-semibold text-text mb-4">
+                Status Timeline
+              </h2>
+              <div className="space-y-3">
+                {order.statusHistory.map((history, index) => (
+                  <div key={index} className="flex gap-3 text-sm">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          index === order.statusHistory.length - 1
+                            ? "bg-primary"
+                            : "bg-gray-300"
+                        }`}
+                      ></div>
+                      {index < order.statusHistory.length - 1 && (
+                        <div className="w-0.5 h-6 bg-gray-300"></div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-text capitalize">
+                        {history.status}
+                      </p>
+                      <p className="text-text-light text-xs">
+                        {new Date(history.date).toLocaleString()}
+                      </p>
+                      {history.note && (
+                        <p className="text-text-light text-xs mt-0.5">
+                          {history.note}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

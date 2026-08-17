@@ -1,15 +1,11 @@
 import { Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
-import { XCircleIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const MyOrders = () => {
-  const queryClient = useQueryClient();
-
   const { data, isLoading } = useQuery({
     queryKey: ["my-orders"],
     queryFn: async () => {
@@ -22,19 +18,6 @@ const MyOrders = () => {
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: async (orderId) => {
-      await axios.put(`${API_URL}/orders/${orderId}/cancel`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["my-orders"] });
-      toast.success("Order cancelled successfully!");
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || "Failed to cancel order");
-    },
-  });
-
   const orders = data || [];
 
   const statusColors = {
@@ -44,16 +27,6 @@ const MyOrders = () => {
     shipped: "bg-orange-100 text-orange-700",
     delivered: "bg-green-100 text-green-700",
     cancelled: "bg-red-100 text-red-700",
-  };
-
-  const handleCancelOrder = (orderId) => {
-    if (
-      window.confirm(
-        "Are you sure you want to cancel this order? This action cannot be undone.",
-      )
-    ) {
-      cancelMutation.mutate(orderId);
-    }
   };
 
   return (
@@ -95,7 +68,7 @@ const MyOrders = () => {
               {orders.map((order) => (
                 <div
                   key={order._id}
-                  className="bg-white rounded-xl border border-gray-100 overflow-hidden"
+                  className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition"
                 >
                   <div className="p-4 border-b flex items-center justify-between flex-wrap gap-3">
                     <div>
@@ -116,15 +89,6 @@ const MyOrders = () => {
                       >
                         {order.orderStatus}
                       </span>
-                      {["pending", "confirmed"].includes(order.orderStatus) && (
-                        <button
-                          onClick={() => handleCancelOrder(order._id)}
-                          disabled={cancelMutation.isPending}
-                          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium"
-                        >
-                          <XCircleIcon className="w-4 h-4" /> Cancel Order
-                        </button>
-                      )}
                     </div>
                   </div>
                   <div className="p-4 flex items-center justify-between flex-wrap gap-3">

@@ -13,12 +13,22 @@ import {
   BriefcaseIcon,
   XMarkIcon,
   ExclamationCircleIcon,
+  TicketIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 
 const Checkout = () => {
-  const { cart, cartTotal, clearCart, appliedCoupon } = useCart();
+  const {
+    cart,
+    cartTotal,
+    clearCart,
+    appliedCoupon,
+    applyCoupon,
+    removeCoupon,
+  } = useCart();
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -28,6 +38,12 @@ const Checkout = () => {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showAddressList, setShowAddressList] = useState(false);
   const [saveAddressToProfile, setSaveAddressToProfile] = useState(true);
+
+  // Coupon states
+  const [couponCode, setCouponCode] = useState("");
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState("");
+
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -119,11 +135,55 @@ const Checkout = () => {
   };
 
   const couponDiscount = calculateCouponDiscount();
-  const couponCode = appliedCoupon?.code || "";
+  const couponCodeApplied = appliedCoupon?.code || "";
   const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
 
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
+
+  // Handle coupon application
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError("Please enter a coupon code");
+      return;
+    }
+    setValidatingCoupon(true);
+    setCouponError("");
+    try {
+      const { data } = await axios.post(`${API_URL}/coupons/validate`, {
+        code: couponCode.trim(),
+        cartTotal: cartTotal,
+      });
+      if (data.success) {
+        applyCoupon({
+          code: data.coupon.code,
+          discountType: data.coupon.discountType,
+          discountValue: data.coupon.discountValue,
+          discountOn: data.coupon.discountOn || "total",
+          maxDiscount: data.coupon.maxDiscount || null,
+        });
+        setCouponCode("");
+        toast.success(`Coupon "${data.coupon.code}" applied!`);
+      }
+    } catch (error) {
+      setCouponError(error.response?.data?.message || "Invalid coupon code");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    removeCoupon();
+    setCouponError("");
+    toast.success("Coupon removed");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleApplyCoupon();
+    }
+  };
 
   const refreshUserData = async () => {
     try {
@@ -205,7 +265,7 @@ const Checkout = () => {
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.onload = () => {
           const options = {
-            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+            key: RAZORPAY_KEY,
             amount: amountInPaise,
             currency: "INR",
             name: "Spexxo",
@@ -227,22 +287,32 @@ const Checkout = () => {
             handler: async function (response) {
               try {
                 setProcessingPayment(false);
-                await axios.post(`${API_URL}/orders`, {
+                // Create order with payment details - status set to "pending"
+                const orderData = {
                   shippingAddress: form,
-                  couponCode: couponCode || undefined,
+                  couponCode: couponCodeApplied || undefined,
                   paymentMethod: "online",
                   paymentStatus: "paid",
+                  isCOD: false,
+                  orderStatus: "pending", // Changed from "confirmed" to "pending"
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_signature: response.razorpay_signature,
-                });
+                };
+
+                const { data } = await axios.post(
+                  `${API_URL}/orders`,
+                  orderData,
+                );
                 await clearCart();
                 toast.success("Payment successful! Order placed!");
-                navigate("/account/orders");
+                navigate(`/account/orders/${data.order._id}`);
               } catch (error) {
+                console.error("Order creation error:", error);
                 toast.error(
                   "Order creation failed after payment. Contact support.",
                 );
+                navigate("/account/orders");
               }
             },
           };
@@ -251,75 +321,107 @@ const Checkout = () => {
         };
         document.body.appendChild(script);
       } catch (error) {
+        console.error("Payment initiation error:", error);
         toast.error("Payment initiation failed");
         setProcessingPayment(false);
       } finally {
         setLoading(false);
       }
     } else {
+      // COD Payment
       setLoading(true);
       try {
-        const advanceAmountInPaise = advanceAmount * 100;
-        setProcessingPayment(true);
+        // For COD with advance payment
+        if (advanceAmount > 0) {
+          const advanceAmountInPaise = advanceAmount * 100;
+          setProcessingPayment(true);
 
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.onload = () => {
-          const options = {
-            key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-            amount: advanceAmountInPaise,
-            currency: "INR",
-            name: "Spexxo",
-            description: "10% Advance Payment (COD Order)",
-            image: "/images/logo.png",
-            prefill: {
-              name: form.fullName,
-              email: user?.email || "customer@spexxo.com",
-              contact: form.phone || "9999999999",
-            },
-            theme: { color: "#3D96EB" },
-            modal: {
-              ondismiss: function () {
-                setProcessingPayment(false);
-                setLoading(false);
-                toast.error(
-                  "Advance payment is required for COD orders. Please complete the payment.",
-                );
+          const script = document.createElement("script");
+          script.src = "https://checkout.razorpay.com/v1/checkout.js";
+          script.onload = () => {
+            const options = {
+              key: RAZORPAY_KEY,
+              amount: advanceAmountInPaise,
+              currency: "INR",
+              name: "Spexxo",
+              description: "10% Advance Payment (COD Order)",
+              image: "/images/logo.png",
+              prefill: {
+                name: form.fullName,
+                email: user?.email || "customer@spexxo.com",
+                contact: form.phone || "9999999999",
               },
-            },
-            handler: async function (response) {
-              try {
-                setProcessingPayment(false);
-                await axios.post(`${API_URL}/orders`, {
-                  shippingAddress: form,
-                  couponCode: couponCode || undefined,
-                  paymentMethod: "cod",
-                  paymentStatus: "paid",
-                  codAdvance: true,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_signature: response.razorpay_signature,
-                });
-                await clearCart();
-                toast.success(
-                  "Order placed with 10% advance! Remaining ₹" +
-                    remainingCOD.toLocaleString() +
-                    " on delivery.",
-                );
-                navigate("/account/orders");
-              } catch (error) {
-                toast.error(
-                  "Order creation failed after advance payment. Contact support.",
-                );
-              }
-            },
+              theme: { color: "#3D96EB" },
+              modal: {
+                ondismiss: function () {
+                  setProcessingPayment(false);
+                  setLoading(false);
+                  toast.error(
+                    "Advance payment is required for COD orders. Please complete the payment.",
+                  );
+                },
+              },
+              handler: async function (response) {
+                try {
+                  setProcessingPayment(false);
+                  // Create order with COD advance payment - status set to "pending"
+                  const orderData = {
+                    shippingAddress: form,
+                    couponCode: couponCodeApplied || undefined,
+                    paymentMethod: "cod",
+                    paymentStatus: "paid",
+                    isCOD: true,
+                    orderStatus: "pending", // Changed from "confirmed" to "pending"
+                    codAdvance: advanceAmount,
+                    remainingCOD: remainingCOD,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                  };
+
+                  const { data } = await axios.post(
+                    `${API_URL}/orders`,
+                    orderData,
+                  );
+                  await clearCart();
+                  toast.success(
+                    "Order placed with 10% advance! Remaining ₹" +
+                      remainingCOD.toLocaleString() +
+                      " on delivery.",
+                  );
+                  navigate(`/account/orders/${data.order._id}`);
+                } catch (error) {
+                  console.error("COD order creation error:", error);
+                  toast.error(
+                    "Order creation failed after advance payment. Contact support.",
+                  );
+                  navigate("/account/orders");
+                }
+              },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.open();
           };
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-        };
-        document.body.appendChild(script);
+          document.body.appendChild(script);
+        } else {
+          // COD without advance - status set to "pending"
+          const orderData = {
+            shippingAddress: form,
+            couponCode: couponCodeApplied || undefined,
+            paymentMethod: "cod",
+            paymentStatus: "pending",
+            isCOD: true,
+            orderStatus: "pending", // Changed from undefined to "pending"
+          };
+
+          const { data } = await axios.post(`${API_URL}/orders`, orderData);
+          await clearCart();
+          toast.success("Order placed successfully!");
+          navigate(`/account/orders/${data.order._id}`);
+        }
       } catch (error) {
-        toast.error("Payment initiation failed");
+        console.error("COD order error:", error);
+        toast.error(error.response?.data?.message || "Failed to create order");
         setProcessingPayment(false);
       } finally {
         setLoading(false);
@@ -725,14 +827,77 @@ const Checkout = () => {
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+
+                {/* Coupon Section */}
+                <div className="mb-4 pb-4 border-b">
+                  <p className="text-sm font-medium text-text mb-2 flex items-center gap-1">
+                    <TicketIcon className="w-4 h-4" /> Apply Coupon
+                  </p>
+                  {appliedCoupon ? (
+                    <div className="bg-green-50 p-3 rounded-xl border border-green-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-green-700">
+                            {appliedCoupon.code}
+                          </p>
+                          <p className="text-xs text-green-600">
+                            {appliedCoupon.discountType === "percentage"
+                              ? `${appliedCoupon.discountValue}% off${appliedCoupon.maxDiscount ? ` (max ₹${appliedCoupon.maxDiscount})` : ""}`
+                              : `₹${appliedCoupon.discountValue} off`}
+                            <span className="text-green-500 ml-1">
+                              on{" "}
+                              {appliedCoupon.discountOn === "delivery"
+                                ? "delivery"
+                                : appliedCoupon.discountOn === "product"
+                                  ? "products"
+                                  : "total"}
+                            </span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleRemoveCoupon}
+                          className="text-green-500 hover:text-red-500 transition"
+                        >
+                          <XCircleIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => {
+                            setCouponCode(e.target.value.toUpperCase());
+                            setCouponError("");
+                          }}
+                          onKeyDown={handleKeyDown}
+                          placeholder="Enter coupon code"
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm uppercase focus:outline-none focus:border-primary"
+                        />
+                        <button
+                          onClick={handleApplyCoupon}
+                          disabled={validatingCoupon || !couponCode.trim()}
+                          className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition disabled:opacity-50"
+                        >
+                          {validatingCoupon ? "..." : "Apply"}
+                        </button>
+                      </div>
+                      {couponError && (
+                        <p className="text-xs text-red-500 mt-1">
+                          {couponError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="max-h-60 overflow-y-auto">
                   {cart.items.map((item) => {
                     const name = item.product?.name || item.name || "Product";
                     const price =
-                      item.price ||
-                      item.product?.comparePrice ||
-                      item.product?.price ||
-                      0;
+                      item.product?.comparePrice || item.product?.price || 0;
                     const isDeactivated = item.product?.isActive === false;
                     return (
                       <div
@@ -774,7 +939,8 @@ const Checkout = () => {
                   {couponDiscount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>
-                        Discount{couponCode ? ` (${couponCode})` : ""}
+                        Discount
+                        {couponCodeApplied ? ` (${couponCodeApplied})` : ""}
                       </span>
                       <span>-₹{couponDiscount.toLocaleString()}</span>
                     </div>
