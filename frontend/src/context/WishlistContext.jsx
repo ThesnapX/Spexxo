@@ -28,9 +28,13 @@ export const WishlistProvider = ({ children }) => {
     try {
       setLoading(true);
       const { data } = await axios.get(`${API_URL}/wishlist`);
-      setWishlist(data.wishlist);
+      // Only keep active products in the wishlist
+      const activeWishlist =
+        data.wishlist?.filter((product) => product?.isActive !== false) || [];
+      setWishlist(activeWishlist);
     } catch (error) {
       console.error("Failed to fetch wishlist:", error);
+      setWishlist([]);
     } finally {
       setLoading(false);
     }
@@ -38,13 +42,15 @@ export const WishlistProvider = ({ children }) => {
 
   const addToWishlist = async (productId) => {
     if (!isAuthenticated) {
-      // Return a special flag to indicate login is needed
       return { requiresAuth: true };
     }
 
     try {
       const { data } = await axios.post(`${API_URL}/wishlist/${productId}`);
-      setWishlist(data.wishlist);
+      // Filter to only active products
+      const activeWishlist =
+        data.wishlist?.filter((product) => product?.isActive !== false) || [];
+      setWishlist(activeWishlist);
       toast.success("Added to wishlist!");
       return { success: true };
     } catch (error) {
@@ -56,7 +62,10 @@ export const WishlistProvider = ({ children }) => {
   const removeFromWishlist = async (productId) => {
     try {
       const { data } = await axios.delete(`${API_URL}/wishlist/${productId}`);
-      setWishlist(data.wishlist);
+      // Filter to only active products
+      const activeWishlist =
+        data.wishlist?.filter((product) => product?.isActive !== false) || [];
+      setWishlist(activeWishlist);
       toast.success("Removed from wishlist");
     } catch (error) {
       toast.error(
@@ -69,13 +78,18 @@ export const WishlistProvider = ({ children }) => {
     return wishlist.some((item) => item._id === productId);
   };
 
+  // Get only active products for display
+  const activeWishlist = wishlist.filter(
+    (product) => product?.isActive !== false,
+  );
+
   const value = {
-    wishlist,
+    wishlist: activeWishlist,
+    wishlistCount: activeWishlist.length,
     loading,
     addToWishlist,
     removeFromWishlist,
     isInWishlist,
-    wishlistCount: wishlist.length,
   };
 
   return (

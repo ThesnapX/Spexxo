@@ -1,10 +1,11 @@
 import { Routes, Route } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import Layout from "./components/layout/Layout";
 import AdminLayout from "./components/layout/AdminLayout";
 import Loading from "./components/common/Loading";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import AdminRoute from "./components/common/AdminRoute";
+import { useCart } from "./context/CartContext";
 
 // Lazy loaded pages
 const Home = lazy(() => import("./pages/Home"));
@@ -60,9 +61,28 @@ import MaintenanceMode from "./components/common/MaintenanceMode";
 
 function App() {
   const isMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === "true";
+
+  const { refreshCartWithLatestData } = useCart();
+
+  // Listen for product update events (from admin)
+  useEffect(() => {
+    const handleProductUpdate = (event) => {
+      if (event.detail?.productId) {
+        refreshCartWithLatestData();
+      }
+    };
+
+    window.addEventListener("product-updated", handleProductUpdate);
+
+    return () => {
+      window.removeEventListener("product-updated", handleProductUpdate);
+    };
+  }, [refreshCartWithLatestData]);
+
   if (isMaintenance) {
     return <MaintenanceMode />;
   }
+
   return (
     <Suspense fallback={<Loading />}>
       <Routes>

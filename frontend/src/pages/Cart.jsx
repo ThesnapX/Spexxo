@@ -8,6 +8,8 @@ import {
   ChevronRightIcon,
   TicketIcon,
   XCircleIcon,
+  ExclamationCircleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -26,15 +28,47 @@ const Cart = () => {
     appliedCoupon,
     applyCoupon,
     removeCoupon,
+    removeDeactivatedItems,
+    refreshCart,
+    refreshCartWithLatestData,
   } = useCart();
   const [couponCode, setCouponCode] = useState("");
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Check for deactivated items
+  const hasDeactivated =
+    cart?.items?.some((item) => item.product?.isActive === false) || false;
+
+  // Check for stock issues
+  const hasStockIssue =
+    cart?.items?.some(
+      (item) => item.product && item.quantity > item.product.stock,
+    ) || false;
+
+  // Auto-refresh cart on mount to get latest prices
+  useEffect(() => {
+    refreshCartWithLatestData();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshCartWithLatestData();
+    setIsRefreshing(false);
+    toast.success("Cart updated with latest prices");
+  };
+
+  const handleRemoveDeactivated = async () => {
+    setIsRefreshing(true);
+    await removeDeactivatedItems();
+    setIsRefreshing(false);
+    toast.success("Deactivated items removed");
+  };
 
   const subtotal = cartTotal;
   const shippingCost = subtotal >= 999 ? 0 : 99;
 
-  // Dynamic coupon discount calculation
   const calculateCouponDiscount = () => {
     if (!appliedCoupon) return 0;
     let discountBase = subtotal;
@@ -96,11 +130,32 @@ const Cart = () => {
     }
   };
 
-  if (loading) {
+  const handleQuantityChange = (itemId, newQuantity, maxStock) => {
+    // Validate quantity
+    if (newQuantity < 1) {
+      toast.error("Quantity must be at least 1");
+      return;
+    }
+
+    // Check if quantity exceeds stock
+    if (maxStock !== undefined && maxStock !== null && newQuantity > maxStock) {
+      toast.error(`Only ${maxStock} items available in stock`);
+      return;
+    }
+
+    updateQuantity(itemId, newQuantity);
+  };
+
+  if (loading || isRefreshing) {
     return (
       <div className="pt-24">
         <div className="container-custom text-center py-20">
           <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-text-light mt-4">
+            {isRefreshing
+              ? "Updating cart with latest prices..."
+              : "Loading your cart..."}
+          </p>
         </div>
       </div>
     );
@@ -108,147 +163,308 @@ const Cart = () => {
 
   if (!cart?.items?.length) {
     return (
-      <div className="pt-24">
-        <div className="container-custom text-center py-20">
-          <p className="text-6xl mb-4">🛒</p>
-          <h2 className="text-2xl font-bold text-text mb-2">
-            Your Cart is Empty
-          </h2>
-          <p className="text-text-light mb-6">
-            Looks like you haven't added anything yet
-          </p>
-          <Link to="/shop" className="btn-primary">
-            Continue Shopping
-          </Link>
+      <>
+        <SEO title="Shopping Cart" />
+        <div className="pt-24">
+          <div className="container-custom text-center py-20">
+            <p className="text-6xl mb-4">🛒</p>
+            <h2 className="text-2xl font-bold text-text mb-2">
+              Your Cart is Empty
+            </h2>
+            <p className="text-text-light mb-6">
+              Looks like you haven't added anything yet
+            </p>
+            <Link to="/shop" className="btn-primary">
+              Continue Shopping
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
+
+  // Get active items for display
+  const activeItems = cart.items.filter(
+    (item) => item.product?.isActive !== false,
+  );
 
   return (
     <>
       <SEO title="Shopping Cart" />
       <div className="pt-24 pb-16">
         <div className="container-custom">
-          <div className="flex items-center gap-2 text-sm text-text-light mb-8">
-            <Link to="/" className="hover:text-primary">
-              Home
-            </Link>
-            <ChevronRightIcon className="w-4 h-4" />
-            <span className="text-text">Cart ({cartCount} items)</span>
+          <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+            <div className="flex items-center gap-2 text-sm text-text-light">
+              <Link to="/" className="hover:text-primary">
+                Home
+              </Link>
+              <ChevronRightIcon className="w-4 h-4" />
+              <span className="text-text">
+                Cart ({activeItems.length} items)
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                <ArrowPathIcon
+                  className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+                />
+                {isRefreshing ? "Updating..." : "Refresh Prices"}
+              </button>
+              {hasDeactivated && (
+                <button
+                  onClick={handleRemoveDeactivated}
+                  className="text-sm text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                >
+                  <ExclamationCircleIcon className="w-4 h-4" />
+                  Remove deactivated
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Stock Warning */}
+          {hasStockIssue && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <ExclamationCircleIcon className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-700">Stock Updated</p>
+                  <p className="text-sm text-yellow-600">
+                    Some items in your cart have limited stock. Quantities have
+                    been adjusted. Please review your cart before checkout.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
+              {/* Deactivated Products Warning */}
+              {hasDeactivated && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <ExclamationCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-red-700">
+                        Deactivated Products in Cart
+                      </p>
+                      <p className="text-sm text-red-600">
+                        Some products in your cart have been deactivated and
+                        cannot be ordered. Please remove them to proceed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cart Items */}
               {cart.items.map((item) => {
-                const productSlug = item.product?.slug || "";
-                const productName =
-                  item.product?.name || item.name || "Product";
-                const productImage =
-                  item.product?.images?.[0]?.url ||
-                  item.image ||
-                  "/images/products/placeholder.jpg";
-                const productPrice =
+                const isDeactivated = item.product?.isActive === false;
+                const name = item.product?.name || item.name || "Product";
+                const price =
                   item.price ||
                   item.product?.comparePrice ||
                   item.product?.price ||
                   0;
-                const brandName = item.product?.brand?.name || "";
-                const hasValidSlug = productSlug && productSlug.length > 0;
+                const image =
+                  item.image || item.product?.images?.[0]?.url || "";
+                const stock = item.product?.stock || 0;
+                const isStockExceeded = item.quantity > stock;
+                const isOutOfStock = stock === 0;
+                const canIncrease = stock > 0 && item.quantity < stock;
 
                 return (
                   <div
                     key={item._id}
-                    className="flex gap-4 p-4 bg-white rounded-xl border border-gray-100"
+                    className={`flex items-start gap-4 p-4 rounded-xl ${
+                      isDeactivated
+                        ? "bg-red-50 border border-red-200 opacity-75"
+                        : isStockExceeded
+                          ? "bg-yellow-50 border border-yellow-200"
+                          : "bg-white border border-gray-100"
+                    }`}
                   >
-                    {hasValidSlug ? (
-                      <Link
-                        to={`/product/${productSlug}`}
-                        className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0"
-                      >
+                    {/* Product Image */}
+                    <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                      {image ? (
                         <img
-                          src={productImage}
-                          alt={productName}
+                          src={image}
+                          alt={name}
                           className="w-full h-full object-cover"
                         />
-                      </Link>
-                    ) : (
-                      <div className="w-24 h-24 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
-                        <img
-                          src={productImage}
-                          alt={productName}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      {hasValidSlug ? (
-                        <Link
-                          to={`/product/${productSlug}`}
-                          className="font-medium text-text hover:text-primary transition line-clamp-1 block"
-                        >
-                          {productName}
-                        </Link>
                       ) : (
-                        <span className="font-medium text-text">
-                          {productName}
-                        </span>
-                      )}
-                      {brandName && (
-                        <p className="text-xs text-text-light mt-0.5">
-                          {brandName}
-                        </p>
-                      )}
-                      {item.variant?.name && (
-                        <p className="text-xs text-text-light mt-0.5">
-                          {item.variant.name}
-                        </p>
-                      )}
-                      <p className="text-primary font-semibold mt-2">
-                        ₹{productPrice?.toLocaleString()}
-                      </p>
-                      <div className="flex items-center gap-4 mt-3">
-                        <div className="flex items-center border border-gray-200 rounded-lg">
-                          <button
-                            onClick={() =>
-                              item.quantity > 1 &&
-                              updateQuantity(item._id, item.quantity - 1)
-                            }
-                            className="p-1.5 hover:bg-gray-50"
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <svg
+                            className="w-8 h-8"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                           >
-                            <MinusIcon className="w-4 h-4" />
-                          </button>
-                          <span className="px-3 font-medium text-sm">
-                            {item.quantity}
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={1.5}
+                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                      {isDeactivated && (
+                        <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
+                          <span className="bg-red-600 text-white text-[8px] font-bold px-2 py-0.5 rounded-full">
+                            DEACTIVATED
                           </span>
-                          <button
-                            onClick={() =>
-                              updateQuantity(item._id, item.quantity + 1)
+                        </div>
+                      )}
+                      {isOutOfStock && !isDeactivated && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                            OUT OF STOCK
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Product Details */}
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/product/${item.product?.slug || "#"}`}
+                        className={`font-medium text-text hover:text-primary transition line-clamp-1 ${
+                          isDeactivated ? "opacity-60" : ""
+                        }`}
+                      >
+                        {name}
+                      </Link>
+                      {item.product?.brand?.name && (
+                        <p className="text-xs text-text-light">
+                          {item.product.brand.name}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span
+                          className={`font-bold ${isDeactivated ? "text-gray-400" : "text-text"}`}
+                        >
+                          ₹{price.toLocaleString()}
+                        </span>
+                        {isDeactivated && (
+                          <span className="text-xs text-red-500 font-medium">
+                            ⚠️ Unavailable
+                          </span>
+                        )}
+                        {isOutOfStock && !isDeactivated && (
+                          <span className="text-xs text-red-500 font-medium">
+                            Out of Stock
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quantity & Actions */}
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            const newQty = item.quantity - 1;
+                            if (newQty >= 1) {
+                              handleQuantityChange(item._id, newQty, stock);
                             }
-                            className="p-1.5 hover:bg-gray-50"
+                          }}
+                          disabled={
+                            isDeactivated || isOutOfStock || item.quantity <= 1
+                          }
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
+                            isDeactivated || isOutOfStock || item.quantity <= 1
+                              ? "text-gray-300 cursor-not-allowed"
+                              : "hover:bg-gray-100 text-text"
+                          }`}
+                        >
+                          <MinusIcon className="w-4 h-4" />
+                        </button>
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            if (!isNaN(val) && val > 0) {
+                              if (val <= stock || stock === 0) {
+                                handleQuantityChange(item._id, val, stock);
+                              } else {
+                                toast.error(
+                                  `Only ${stock} items available in stock`,
+                                );
+                              }
+                            }
+                          }}
+                          disabled={isDeactivated || isOutOfStock}
+                          className={`w-12 text-center text-sm font-medium border rounded-lg py-1 focus:outline-none focus:border-primary ${
+                            isDeactivated || isOutOfStock
+                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+                              : "border-gray-200"
+                          }`}
+                          min="1"
+                          max={stock || 99}
+                        />
+                        <div className="relative group">
+                          <button
+                            onClick={() => {
+                              const newQty = item.quantity + 1;
+                              if (stock > 0 && newQty <= stock) {
+                                handleQuantityChange(item._id, newQty, stock);
+                              } else if (stock === 0) {
+                                toast.error("This product is out of stock");
+                              } else {
+                                toast.error(
+                                  `Only ${stock} items available in stock`,
+                                );
+                              }
+                            }}
+                            disabled={
+                              isDeactivated || isOutOfStock || !canIncrease
+                            }
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
+                              isDeactivated || isOutOfStock || !canIncrease
+                                ? "text-gray-300 cursor-not-allowed"
+                                : "hover:bg-gray-100 text-text"
+                            }`}
                           >
                             <PlusIcon className="w-4 h-4" />
                           </button>
+                          {/* Tooltip - shown only when button is disabled due to stock limit */}
+                          {!isDeactivated &&
+                            !isOutOfStock &&
+                            !canIncrease &&
+                            stock > 0 && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                Max stock reached ({stock} available)
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                              </div>
+                            )}
+                          {!isDeactivated && isOutOfStock && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                              Out of stock
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-red-600"></div>
+                            </div>
+                          )}
                         </div>
-                        <button
-                          onClick={() => removeFromCart(item._id)}
-                          className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1"
-                        >
-                          <TrashIcon className="w-4 h-4" /> Remove
-                        </button>
                       </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-semibold text-text">
-                        ₹
-                        {(productPrice * (item.quantity || 1)).toLocaleString()}
-                      </p>
+                      <button
+                        onClick={() => removeFromCart(item._id)}
+                        className="text-red-500 hover:text-red-700 transition p-1"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 );
               })}
             </div>
 
+            {/* Order Summary */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold text-text mb-4">
@@ -366,10 +582,28 @@ const Cart = () => {
 
                 <Link
                   to="/checkout"
-                  className="btn-primary w-full text-center block py-3 mt-6"
+                  className={`btn-primary w-full text-center block py-3 mt-6 ${
+                    hasDeactivated || hasStockIssue
+                      ? "opacity-50 pointer-events-none"
+                      : ""
+                  }`}
                 >
-                  Proceed to Checkout
+                  {hasDeactivated
+                    ? "Remove deactivated items to proceed"
+                    : hasStockIssue
+                      ? "Fix stock issues to proceed"
+                      : "Proceed to Checkout"}
                 </Link>
+                {hasDeactivated && (
+                  <p className="text-xs text-red-500 text-center mt-2">
+                    ⚠️ Please remove deactivated items to checkout
+                  </p>
+                )}
+                {hasStockIssue && !hasDeactivated && (
+                  <p className="text-xs text-yellow-600 text-center mt-2">
+                    ⚠️ Please adjust quantities to match available stock
+                  </p>
+                )}
                 <Link
                   to="/shop"
                   className="block text-center text-primary mt-3 text-sm hover:underline"

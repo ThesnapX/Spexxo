@@ -12,6 +12,7 @@ import {
   HomeIcon,
   BriefcaseIcon,
   XMarkIcon,
+  ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -39,10 +40,14 @@ const Checkout = () => {
     pincode: "",
   });
 
+  // Check for deactivated products
+  const hasDeactivatedProducts = cart.items.some(
+    (item) => item.product?.isActive === false,
+  );
+
   // Load default address on mount
   useEffect(() => {
     if (user?.addresses?.length > 0) {
-      // Find default address or use first one
       const defaultAddr =
         user.addresses.find((addr) => addr.isDefault) || user.addresses[0];
       if (defaultAddr) {
@@ -63,7 +68,6 @@ const Checkout = () => {
         setUseSavedAddress(true);
       }
     } else if (user?.defaultAddress?.addressLine1) {
-      // Fallback to old defaultAddress field
       setForm({
         fullName:
           user.defaultAddress.fullName ||
@@ -79,7 +83,6 @@ const Checkout = () => {
       });
       setUseSavedAddress(true);
     } else {
-      // No saved address - show form
       setUseSavedAddress(false);
       setForm({
         fullName: `${user?.firstName || ""} ${user?.lastName || ""}`.trim(),
@@ -119,11 +122,9 @@ const Checkout = () => {
   const couponCode = appliedCoupon?.code || "";
   const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
 
-  // Calculate 10% advance amount (MANDATORY for COD)
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
 
-  // Function to refresh user data after address save
   const refreshUserData = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/auth/me`);
@@ -135,11 +136,9 @@ const Checkout = () => {
     }
   };
 
-  // Function to save address to user profile
   const saveAddressToUserProfile = async (addressData) => {
     try {
       await axios.post(`${API_URL}/users/address`, addressData);
-      // Refresh user data to get the new address
       await refreshUserData();
       return true;
     } catch (error) {
@@ -150,6 +149,15 @@ const Checkout = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check for deactivated products before proceeding
+    if (hasDeactivatedProducts) {
+      toast.error(
+        "Your cart contains deactivated products. Please remove them to proceed.",
+      );
+      return;
+    }
+
     if (
       !form.fullName ||
       !form.phone ||
@@ -161,9 +169,7 @@ const Checkout = () => {
       return;
     }
 
-    // If user is logged in and wants to save address
     if (user && saveAddressToProfile && !useSavedAddress) {
-      // Check if address already exists
       const addressExists = user.addresses?.some(
         (addr) =>
           addr.addressLine1 === form.addressLine1 &&
@@ -190,7 +196,6 @@ const Checkout = () => {
     }
 
     if (paymentMethod === "online") {
-      // ONLINE PAYMENT - Full payment
       setLoading(true);
       try {
         const amountInPaise = Math.round(grandTotal * 100);
@@ -252,7 +257,6 @@ const Checkout = () => {
         setLoading(false);
       }
     } else {
-      // COD - 10% Advance is MANDATORY
       setLoading(true);
       try {
         const advanceAmountInPaise = advanceAmount * 100;
@@ -348,14 +352,37 @@ const Checkout = () => {
           <h1 className="text-2xl md:text-3xl font-bold text-text mb-8">
             Checkout
           </h1>
+
+          {/* Deactivated Products Warning */}
+          {hasDeactivatedProducts && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <ExclamationCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-700">
+                    Deactivated Products in Cart
+                  </p>
+                  <p className="text-sm text-red-600 mt-1">
+                    Your cart contains products that have been deactivated.
+                    Please remove them to proceed with checkout.
+                  </p>
+                  <Link
+                    to="/cart"
+                    className="text-sm text-red-700 font-medium hover:underline mt-2 inline-block"
+                  >
+                    Go to Cart →
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* Left Side - Address & Payment */}
             <div className="lg:col-span-3">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <MapPinIcon className="w-5 h-5 text-primary" /> Shipping Address
               </h2>
 
-              {/* Address Selection - Show if user has saved addresses */}
               {user?.addresses?.length > 0 && (
                 <div className="mb-4">
                   <button
@@ -439,7 +466,6 @@ const Checkout = () => {
                 </div>
               )}
 
-              {/* New Address Form */}
               <form className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -567,7 +593,6 @@ const Checkout = () => {
                   </div>
                 </div>
 
-                {/* Save Address Option - Only show if user is logged in */}
                 {user && (
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -585,7 +610,6 @@ const Checkout = () => {
                 )}
               </form>
 
-              {/* Payment Method Selection */}
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4">Payment Method</h3>
                 <div className="space-y-3">
@@ -612,7 +636,6 @@ const Checkout = () => {
                     </div>
                   </label>
 
-                  {/* COD Advance Info - Always shown for COD */}
                   {paymentMethod === "cod" && (
                     <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <div className="flex items-start gap-3">
@@ -663,29 +686,42 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Place Order Button */}
               <button
                 onClick={handleSubmit}
-                disabled={loading || processingPayment}
-                className="w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  loading || processingPayment || hasDeactivatedProducts
+                }
+                className={`w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed ${
+                  hasDeactivatedProducts ? "bg-gray-400 hover:bg-gray-400" : ""
+                }`}
               >
-                {loading && !processingPayment
-                  ? "Creating Order..."
-                  : processingPayment
-                    ? "Complete Payment in Popup..."
-                    : paymentMethod === "online"
-                      ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                      : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
+                {hasDeactivatedProducts
+                  ? "Remove deactivated items to proceed"
+                  : loading && !processingPayment
+                    ? "Creating Order..."
+                    : processingPayment
+                      ? "Complete Payment in Popup..."
+                      : paymentMethod === "online"
+                        ? `Pay ₹${grandTotal.toLocaleString()} Online`
+                        : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
               </button>
-              {paymentMethod === "cod" && !processingPayment && !loading && (
-                <p className="text-xs text-text-light text-center mt-2">
-                  You'll pay remaining ₹{remainingCOD.toLocaleString()} on
-                  delivery
+              {hasDeactivatedProducts && (
+                <p className="text-red-500 text-sm text-center mt-2">
+                  ⚠️ Your cart contains deactivated products. Please remove them
+                  to proceed.
                 </p>
               )}
+              {paymentMethod === "cod" &&
+                !processingPayment &&
+                !loading &&
+                !hasDeactivatedProducts && (
+                  <p className="text-xs text-text-light text-center mt-2">
+                    You'll pay remaining ₹{remainingCOD.toLocaleString()} on
+                    delivery
+                  </p>
+                )}
             </div>
 
-            {/* Right Side - Order Summary */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
                 <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
@@ -697,12 +733,16 @@ const Checkout = () => {
                       item.product?.comparePrice ||
                       item.product?.price ||
                       0;
+                    const isDeactivated = item.product?.isActive === false;
                     return (
                       <div
                         key={item._id}
-                        className="flex justify-between text-sm py-2 border-b border-gray-50"
+                        className={`flex justify-between text-sm py-2 border-b border-gray-50 ${
+                          isDeactivated ? "opacity-50" : ""
+                        }`}
                       >
                         <span className="truncate mr-2">
+                          {isDeactivated && "⚠️ "}
                           {name} × {item.quantity}
                         </span>
                         <span className="flex-shrink-0">
@@ -712,6 +752,20 @@ const Checkout = () => {
                     );
                   })}
                 </div>
+                {hasDeactivatedProducts && (
+                  <div className="bg-red-50 p-3 rounded-lg mt-3 border border-red-200">
+                    <p className="text-xs text-red-600 font-medium">
+                      ⚠️ Deactivated products found. Please remove them from
+                      your cart.
+                    </p>
+                    <Link
+                      to="/cart"
+                      className="text-xs text-red-700 hover:underline mt-1 inline-block"
+                    >
+                      Go to Cart
+                    </Link>
+                  </div>
+                )}
                 <div className="border-t mt-4 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
@@ -744,8 +798,7 @@ const Checkout = () => {
                       🎉 You saved ₹{couponDiscount.toLocaleString()}!
                     </p>
                   )}
-                  {/* COD Advance Breakdown - Always shown when COD is selected */}
-                  {paymentMethod === "cod" && (
+                  {paymentMethod === "cod" && !hasDeactivatedProducts && (
                     <div className="bg-amber-50 p-3 rounded-lg mt-3">
                       <div className="flex justify-between text-sm">
                         <span className="font-medium text-amber-800">

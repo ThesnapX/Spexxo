@@ -32,6 +32,8 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
 
   if (!product) return null;
 
+  const isDeactivated = product.isActive === false;
+
   const discount =
     product.comparePrice && product.price > product.comparePrice
       ? Math.round(
@@ -46,6 +48,10 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isDeactivated) {
+      toast.error("This product is currently deactivated");
+      return;
+    }
     addToCart(product._id, 1);
   };
 
@@ -56,13 +62,23 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
       if (onRequireAuth) onRequireAuth();
       return;
     }
+    if (isDeactivated) {
+      toast.error("This product is currently deactivated");
+      return;
+    }
     isInWishlist(product._id)
       ? removeFromWishlist(product._id)
       : addToWishlist(product._id);
   };
 
   return (
-    <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+    <div
+      className={`group bg-white rounded-xl border overflow-hidden hover:shadow-xl transition-all duration-300 ${
+        isDeactivated
+          ? "border-gray-200 opacity-60 grayscale"
+          : "border-gray-100"
+      }`}
+    >
       <div className="relative overflow-hidden bg-gray-50">
         <Link to={`/product/${product.slug}`}>
           {product.images?.[0]?.url ? (
@@ -76,14 +92,26 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             <PlaceholderImage className="w-full h-56 md:h-64" />
           )}
         </Link>
-        {showSaleBadge && discount > 0 && (
-          <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-            {discount}% OFF
+        {isDeactivated ? (
+          <span className="absolute top-3 left-3 bg-gray-600 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+            Deactivated
           </span>
+        ) : (
+          showSaleBadge &&
+          discount > 0 && (
+            <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+              {discount}% OFF
+            </span>
+          )
         )}
         <button
           onClick={handleWishlist}
-          className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all z-10"
+          className={`absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md transition-all z-10 ${
+            isDeactivated
+              ? "cursor-not-allowed opacity-50"
+              : "hover:bg-primary hover:text-white"
+          }`}
+          disabled={isDeactivated}
         >
           {isInWishlist(product._id) ? (
             <HeartSolid className="w-4 h-4 text-red-500" />
@@ -104,7 +132,9 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           </h3>
         </Link>
         <div className="flex items-center gap-2 mb-3">
-          <span className="font-bold text-text">
+          <span
+            className={`font-bold ${isDeactivated ? "text-gray-400" : "text-text"}`}
+          >
             ₹{displayPrice?.toLocaleString()}
           </span>
           {hasDiscount && (
@@ -112,7 +142,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
               ₹{product.price?.toLocaleString()}
             </span>
           )}
-          {discount > 0 && (
+          {discount > 0 && !isDeactivated && (
             <span className="text-xs font-semibold text-green-600">
               ({discount}% off)
             </span>
@@ -120,10 +150,21 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
         </div>
         <button
           onClick={handleAddToCart}
-          className="w-full py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary hover:text-white transition flex items-center justify-center gap-2"
+          disabled={isDeactivated}
+          className={`w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
+            isDeactivated
+              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+              : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+          }`}
         >
-          <ShoppingBagIcon className="w-4 h-4" /> Add to Cart
+          <ShoppingBagIcon className="w-4 h-4" />
+          {isDeactivated ? "Unavailable" : "Add to Cart"}
         </button>
+        {isDeactivated && (
+          <p className="text-xs text-red-500 text-center mt-1">
+            ⚠️ Product deactivated
+          </p>
+        )}
       </div>
     </div>
   );

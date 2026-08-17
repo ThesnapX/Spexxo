@@ -15,6 +15,7 @@ import {
   PhotoIcon,
   BoltIcon,
   CheckBadgeIcon,
+  ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   HeartIcon as HeartSolid,
@@ -61,6 +62,7 @@ const ProductDetail = () => {
   });
 
   const product = data?.product;
+  const isDeactivated = product?.isActive === false;
 
   const { data: reviewsData, refetch: refetchReviews } = useQuery({
     queryKey: ["reviews", product?._id],
@@ -110,15 +112,29 @@ const ProductDetail = () => {
     smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
 
   const handleAddToCart = () => {
+    if (isDeactivated) {
+      toast.error(
+        "This product is currently deactivated and cannot be added to cart",
+      );
+      return;
+    }
     addToCart(product._id, quantity);
   };
 
   const handleBuyNow = () => {
+    if (isDeactivated) {
+      toast.error("This product is currently deactivated");
+      return;
+    }
     addToCart(product._id, quantity);
     navigate("/checkout");
   };
 
   const handleWishlistClick = () => {
+    if (isDeactivated) {
+      toast.error("This product is currently deactivated");
+      return;
+    }
     if (!isAuthenticated) {
       setShowAuthPopup(true);
       return;
@@ -256,8 +272,10 @@ const ProductDetail = () => {
             {/* Image Gallery */}
             <div>
               <div
-                className="relative bg-gray-50 rounded-2xl overflow-hidden group cursor-zoom-in"
-                onClick={() => setShowZoom(!showZoom)}
+                className={`relative bg-gray-50 rounded-2xl overflow-hidden group ${
+                  isDeactivated ? "opacity-60 grayscale" : "cursor-zoom-in"
+                }`}
+                onClick={() => !isDeactivated && setShowZoom(!showZoom)}
               >
                 <img
                   src={
@@ -265,15 +283,27 @@ const ProductDetail = () => {
                     "https://picsum.photos/800/800"
                   }
                   alt={product.name}
-                  className={`w-full aspect-square object-cover transition-transform duration-300 ${showZoom ? "scale-150" : "group-hover:scale-105"}`}
+                  className={`w-full aspect-square object-cover transition-transform duration-300 ${
+                    showZoom && !isDeactivated
+                      ? "scale-150"
+                      : "group-hover:scale-105"
+                  }`}
                 />
-                <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition">
-                  <ArrowsPointingOutIcon className="w-5 h-5 text-text" />
-                </button>
-                {discountPercent > 0 && (
-                  <span className="absolute top-4 left-4 bg-red-500 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
-                    {discountPercent}% OFF
+                {!isDeactivated && (
+                  <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition">
+                    <ArrowsPointingOutIcon className="w-5 h-5 text-text" />
+                  </button>
+                )}
+                {isDeactivated ? (
+                  <span className="absolute top-4 left-4 bg-gray-600 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
+                    Deactivated
                   </span>
+                ) : (
+                  discountPercent > 0 && (
+                    <span className="absolute top-4 left-4 bg-red-500 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
+                      {discountPercent}% OFF
+                    </span>
+                  )
                 )}
               </div>
               {product.images?.length > 1 && (
@@ -285,7 +315,11 @@ const ProductDetail = () => {
                         setSelectedImage(index);
                         setShowZoom(false);
                       }}
-                      className={`w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${selectedImage === index ? "border-primary ring-2 ring-primary/20" : "border-gray-200 hover:border-gray-300"}`}
+                      className={`w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${
+                        selectedImage === index
+                          ? "border-primary ring-2 ring-primary/20"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
                     >
                       <img
                         src={img.url}
@@ -312,7 +346,11 @@ const ProductDetail = () => {
               {/* Price & Rating */}
               <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl md:text-3xl font-bold text-text">
+                  <span
+                    className={`text-2xl md:text-3xl font-bold ${
+                      isDeactivated ? "text-gray-400" : "text-text"
+                    }`}
+                  >
                     ₹{(product.comparePrice || product.price)?.toLocaleString()}
                   </span>
                   {product.comparePrice && (
@@ -320,7 +358,7 @@ const ProductDetail = () => {
                       ₹{product.price?.toLocaleString()}
                     </span>
                   )}
-                  {discountPercent > 0 && (
+                  {discountPercent > 0 && !isDeactivated && (
                     <span className="text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
                       {discountPercent}% off
                     </span>
@@ -345,6 +383,22 @@ const ProductDetail = () => {
                   </span>
                 </div>
               </div>
+
+              {/* Deactivated Banner */}
+              {isDeactivated && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-center gap-2 text-red-700">
+                    <ExclamationCircleIcon className="w-5 h-5" />
+                    <span className="font-medium">
+                      This product is currently deactivated
+                    </span>
+                  </div>
+                  <p className="text-sm text-red-600 mt-1">
+                    This product is not available for purchase at the moment.
+                    Please check back later.
+                  </p>
+                </div>
+              )}
 
               {/* Frame Size */}
               {product.specifications?.length > 0 && (
@@ -371,11 +425,21 @@ const ProductDetail = () => {
               {/* Quantity */}
               <div className="flex items-center gap-4 mb-6">
                 <span className="text-sm font-medium text-text">Quantity:</span>
-                <div className="flex items-center border border-gray-200 rounded-lg">
+                <div
+                  className={`flex items-center border rounded-lg ${
+                    isDeactivated
+                      ? "border-gray-200 bg-gray-50"
+                      : "border-gray-200"
+                  }`}
+                >
                   <button
                     onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 rounded-l-lg"
-                    disabled={quantity <= 1}
+                    className={`w-9 h-9 flex items-center justify-center rounded-l-lg ${
+                      isDeactivated
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "hover:bg-gray-50"
+                    }`}
+                    disabled={isDeactivated || quantity <= 1}
                   >
                     <MinusIcon className="w-4 h-4" />
                   </button>
@@ -386,21 +450,32 @@ const ProductDetail = () => {
                       const v = parseInt(e.target.value);
                       if (v > 0 && v <= (product.stock || 99)) setQuantity(v);
                     }}
-                    className="w-14 text-center text-sm font-medium border-x py-2 focus:outline-none"
+                    className={`w-14 text-center text-sm font-medium border-x py-2 focus:outline-none ${
+                      isDeactivated ? "bg-gray-50 text-gray-400" : ""
+                    }`}
                     min="1"
                     max={product.stock || 99}
+                    disabled={isDeactivated}
                   />
                   <button
                     onClick={() => setQuantity(quantity + 1)}
-                    className="w-9 h-9 flex items-center justify-center hover:bg-gray-50 rounded-r-lg"
+                    className={`w-9 h-9 flex items-center justify-center rounded-r-lg ${
+                      isDeactivated
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "hover:bg-gray-50"
+                    }`}
+                    disabled={isDeactivated}
                   >
                     <PlusIcon className="w-4 h-4" />
                   </button>
                 </div>
-                {product.stock > 0 && (
+                {product.stock > 0 && !isDeactivated && (
                   <span className="text-xs text-green-600">
                     {product.stock} in stock
                   </span>
+                )}
+                {isDeactivated && (
+                  <span className="text-xs text-red-500">Unavailable</span>
                 )}
               </div>
 
@@ -408,13 +483,26 @@ const ProductDetail = () => {
               <div className="flex gap-3 mb-6">
                 <button
                   onClick={handleAddToCart}
-                  className="flex-1 btn-primary flex items-center justify-center gap-2 py-3.5 text-base"
+                  disabled={isDeactivated}
+                  className={`flex-1 py-3.5 text-base rounded-full font-semibold transition flex items-center justify-center gap-2 ${
+                    isDeactivated
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                      : "btn-primary"
+                  }`}
                 >
-                  <ShoppingBagIcon className="w-5 h-5" /> Add to Cart
+                  <ShoppingBagIcon className="w-5 h-5" />
+                  {isDeactivated ? "Unavailable" : "Add to Cart"}
                 </button>
                 <button
                   onClick={handleWishlistClick}
-                  className={`w-12 h-12 flex items-center justify-center border-2 rounded-xl transition flex-shrink-0 ${isInWishlist(product._id) ? "border-red-500 bg-red-50 text-red-500" : "border-gray-200 hover:border-primary hover:text-primary"}`}
+                  disabled={isDeactivated}
+                  className={`w-12 h-12 flex items-center justify-center border-2 rounded-xl transition flex-shrink-0 ${
+                    isDeactivated
+                      ? "border-gray-200 text-gray-400 cursor-not-allowed"
+                      : isInWishlist(product._id)
+                        ? "border-red-500 bg-red-50 text-red-500"
+                        : "border-gray-200 hover:border-primary hover:text-primary"
+                  }`}
                 >
                   {isInWishlist(product._id) ? (
                     <HeartSolid className="w-5 h-5" />
@@ -426,29 +514,43 @@ const ProductDetail = () => {
 
               <button
                 onClick={handleBuyNow}
-                className="w-full bg-text text-white py-3.5 rounded-full font-semibold text-base hover:bg-gray-800 transition mb-6 flex items-center justify-center gap-2"
+                disabled={isDeactivated}
+                className={`w-full py-3.5 rounded-full font-semibold text-base transition mb-6 flex items-center justify-center gap-2 ${
+                  isDeactivated
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-text text-white hover:bg-gray-800"
+                }`}
               >
-                <BoltIcon className="w-5 h-5" /> Buy Now
+                <BoltIcon className="w-5 h-5" />
+                {isDeactivated ? "Unavailable" : "Buy Now"}
               </button>
 
               {/* WhatsApp Order */}
-              <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                <p className="text-sm font-medium text-green-800 mb-1">
-                  Need prescription glasses?
-                </p>
-                <p className="text-xs text-green-600 mb-3">
-                  Order via WhatsApp - send your prescription and we'll handle
-                  the rest.
-                </p>
-                <a
-                  href={`https://wa.me/919969538739?text=${encodeURIComponent(`Hi Spexxo, I want to order:\n\n*Product:* ${product.name}\n*SKU:* ${product.sku || "N/A"}\n*Price:* ₹${(product.comparePrice || product.price)?.toLocaleString()}\n\nPlease confirm availability.`)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition"
-                >
-                  💬 Order on WhatsApp
-                </a>
-              </div>
+              {!isDeactivated && (
+                <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                  <p className="text-sm font-medium text-green-800 mb-1">
+                    Need prescription glasses?
+                  </p>
+                  <p className="text-xs text-green-600 mb-3">
+                    Order via WhatsApp - send your prescription and we'll handle
+                    the rest.
+                  </p>
+                  <a
+                    href={`https://wa.me/919969538739?text=${encodeURIComponent(
+                      `Hi Spexxo, I want to order:\n\n*Product:* ${product.name}\n*SKU:* ${
+                        product.sku || "N/A"
+                      }\n*Price:* ₹${(
+                        product.comparePrice || product.price
+                      )?.toLocaleString()}\n\nPlease confirm availability.`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition"
+                  >
+                    💬 Order on WhatsApp
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 
@@ -469,11 +571,17 @@ const ProductDetail = () => {
                 >
                   <span className="font-semibold text-text">Description</span>
                   <ChevronDownIcon
-                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${openAccordion === "description" ? "rotate-180" : ""}`}
+                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                      openAccordion === "description" ? "rotate-180" : ""
+                    }`}
                   />
                 </button>
                 <div
-                  className={`overflow-hidden transition-all duration-300 ${openAccordion === "description" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
+                  className={`overflow-hidden transition-all duration-300 ${
+                    openAccordion === "description"
+                      ? "max-h-[1000px] opacity-100"
+                      : "max-h-0 opacity-0"
+                  }`}
                 >
                   <div className="px-5 pb-5 text-text-light leading-relaxed">
                     {product.description || "No description available."}
@@ -492,11 +600,17 @@ const ProductDetail = () => {
                       Specifications
                     </span>
                     <ChevronDownIcon
-                      className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${openAccordion === "specs" ? "rotate-180" : ""}`}
+                      className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                        openAccordion === "specs" ? "rotate-180" : ""
+                      }`}
                     />
                   </button>
                   <div
-                    className={`overflow-hidden transition-all duration-300 ${openAccordion === "specs" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
+                    className={`overflow-hidden transition-all duration-300 ${
+                      openAccordion === "specs"
+                        ? "max-h-[1000px] opacity-100"
+                        : "max-h-0 opacity-0"
+                    }`}
                   >
                     <div className="px-5 pb-5 grid grid-cols-2 gap-2">
                       {product.specifications.map((spec, i) => (
@@ -525,11 +639,17 @@ const ProductDetail = () => {
                 >
                   <span className="font-semibold text-text">FAQ</span>
                   <ChevronDownIcon
-                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${openAccordion === "faq" ? "rotate-180" : ""}`}
+                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                      openAccordion === "faq" ? "rotate-180" : ""
+                    }`}
                   />
                 </button>
                 <div
-                  className={`overflow-hidden transition-all duration-300 ${openAccordion === "faq" ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
+                  className={`overflow-hidden transition-all duration-300 ${
+                    openAccordion === "faq"
+                      ? "max-h-[1000px] opacity-100"
+                      : "max-h-0 opacity-0"
+                  }`}
                 >
                   <div className="px-5 pb-5 space-y-3">
                     {[
@@ -604,7 +724,7 @@ const ProductDetail = () => {
             <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
               Customer Reviews ({product.ratings?.count || 0})
             </h2>
-            {isAuthenticated ? (
+            {isAuthenticated && !isDeactivated ? (
               <form
                 onSubmit={handleSubmitReview}
                 className="bg-white rounded-xl border border-gray-100 p-5 mb-6"
@@ -688,6 +808,12 @@ const ProductDetail = () => {
                   {submittingReview ? "Submitting..." : "Submit Review"}
                 </button>
               </form>
+            ) : isAuthenticated && isDeactivated ? (
+              <div className="bg-gray-50 rounded-xl p-6 text-center mb-6 border">
+                <p className="text-text-light">
+                  This product is deactivated, you cannot review it.
+                </p>
+              </div>
             ) : (
               <div className="bg-gray-50 rounded-xl p-6 text-center mb-6 border">
                 <p className="text-text-light mb-3">
@@ -768,7 +894,7 @@ const ProductDetail = () => {
                       </div>
                     )}
 
-                    {/* Admin Reply - FIXED: Now shows admin replies */}
+                    {/* Admin Reply */}
                     {review.adminReply && (
                       <div className="mt-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <div className="flex items-center gap-2 mb-1">

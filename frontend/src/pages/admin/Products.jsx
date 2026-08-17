@@ -15,6 +15,8 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
   StarIcon,
+  EyeSlashIcon,
+  EyeIcon as EyeIconShow,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -35,10 +37,19 @@ const Products = () => {
   const [stockFilter, setStockFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Fetch products - include ALL products (including inactive)
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ["admin-products"],
+    queryKey: ["admin-products", statusFilter],
     queryFn: async () => {
-      const { data } = await axios.get(`${API_URL}/products?limit=200`);
+      let url = `${API_URL}/products?limit=200&includeInactive=true`;
+      // If status filter is applied, add it to the query
+      if (statusFilter === "active") {
+        url += "&isActive=true";
+      } else if (statusFilter === "inactive") {
+        url += "&isActive=false";
+      }
+      const { data } = await axios.get(url);
       return data;
     },
   });
@@ -89,8 +100,9 @@ const Products = () => {
       });
   };
 
-  // Filter products
+  // Filter products - includes ALL products
   const products = (productsData?.products || []).filter((product) => {
+    // Search filter
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
@@ -99,23 +111,28 @@ const Products = () => {
         product.description?.toLowerCase().includes(searchLower);
       if (!matchesSearch) return false;
     }
+    // Category filter
     if (categoryFilter) {
       const catIds = product.category
         ? product.category.split(",").filter(Boolean)
         : [];
       if (!catIds.includes(categoryFilter)) return false;
     }
+    // Brand filter
     if (brandFilter) {
       const brandId =
         typeof product.brand === "object" ? product.brand?._id : product.brand;
       if (brandId !== brandFilter) return false;
     }
+    // Product type filter
     if (productTypeFilter && product.productType !== productTypeFilter)
       return false;
+    // Stock filter
     if (stockFilter === "in-stock" && (product.stock || 0) <= 0) return false;
     if (stockFilter === "out-of-stock" && (product.stock || 0) > 0)
       return false;
     if (stockFilter === "low-stock" && (product.stock || 0) > 3) return false;
+    // Status filter - already handled by API, but also filter locally
     if (statusFilter === "active" && !product.isActive) return false;
     if (statusFilter === "inactive" && product.isActive) return false;
     return true;
@@ -146,6 +163,11 @@ const Products = () => {
           <h1 className="text-2xl font-bold text-text">All Products</h1>
           <p className="text-sm text-text-light mt-1">
             {products.length} products found
+            {statusFilter && (
+              <span className="ml-2 text-xs">
+                ({statusFilter === "active" ? "Active" : "Inactive"})
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -330,11 +352,16 @@ const Products = () => {
                   )
                 : 0;
             const brandDisplay = getBrandName(product);
+            const isDeactivated = !product.isActive;
 
             return (
               <div
                 key={product._id}
-                className={`group bg-white rounded-xl border overflow-hidden hover:shadow-xl transition-all duration-300 ${product.isActive ? "border-gray-100" : "border-red-200 opacity-60"}`}
+                className={`group bg-white rounded-xl border overflow-hidden hover:shadow-xl transition-all duration-300 ${
+                  isDeactivated
+                    ? "border-gray-200 opacity-60 grayscale"
+                    : "border-gray-100"
+                }`}
               >
                 <div
                   className="relative bg-gray-50 cursor-pointer"
@@ -346,44 +373,65 @@ const Products = () => {
                     <img
                       src={product.images[0].url}
                       alt={product.name}
-                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                      className={`w-full h-48 object-cover transition-transform duration-300 ${
+                        isDeactivated ? "opacity-50" : "group-hover:scale-105"
+                      }`}
                     />
                   ) : (
                     <div className="w-full h-48 flex items-center justify-center text-gray-400">
                       <PhotoIcon className="w-10 h-10" />
                     </div>
                   )}
-                  {discountPercent > 0 && (
-                    <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
-                      {discountPercent}% OFF
-                    </span>
-                  )}
-                  {!product.isActive && (
-                    <span className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  {isDeactivated ? (
+                    <span className="absolute top-2 left-2 bg-gray-600 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                       Inactive
                     </span>
+                  ) : (
+                    discountPercent > 0 && (
+                      <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                        {discountPercent}% OFF
+                      </span>
+                    )
+                  )}
+                  {isDeactivated && (
+                    <div className="absolute inset-0 bg-gray-400/10 flex items-center justify-center">
+                      <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full rotate-[-15deg] shadow-lg">
+                        DEACTIVATED
+                      </span>
+                    </div>
                   )}
                 </div>
                 <div
-                  className="p-4 cursor-pointer"
+                  className={`p-4 cursor-pointer ${
+                    isDeactivated ? "opacity-75" : ""
+                  }`}
                   onClick={() =>
                     navigate(`/admin/products/view/${product._id}`)
                   }
                 >
                   <p className="text-xs text-text-light mb-1 truncate">
                     {brandDisplay || "No Brand"}
+                    {isDeactivated && (
+                      <span className="ml-2 text-xs text-red-500 font-medium">
+                        • Inactive
+                      </span>
+                    )}
                   </p>
                   <h3 className="font-medium text-sm text-text mb-2 line-clamp-1">
                     {product.name}
                   </h3>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-text">
+                    <span
+                      className={`font-bold ${
+                        isDeactivated ? "text-gray-400" : "text-text"
+                      }`}
+                    >
                       ₹
                       {(
                         product.comparePrice || product.price
                       )?.toLocaleString()}
                     </span>
-                    {product.comparePrice && (
+                    {product.comparePrice && !isDeactivated && (
                       <span className="text-sm text-gray-400 line-through">
                         ₹{product.price?.toLocaleString()}
                       </span>
@@ -391,7 +439,13 @@ const Products = () => {
                   </div>
                   <div className="flex items-center gap-2 mb-3">
                     <span
-                      className={`text-xs font-medium ${(product.stock || 0) > 10 ? "text-green-600" : (product.stock || 0) > 0 ? "text-orange-600" : "text-red-600"}`}
+                      className={`text-xs font-medium ${
+                        (product.stock || 0) > 10
+                          ? "text-green-600"
+                          : (product.stock || 0) > 0
+                            ? "text-orange-600"
+                            : "text-red-600"
+                      }`}
                     >
                       {product.stock || 0} in stock
                     </span>
@@ -438,17 +492,31 @@ const Products = () => {
                       e.stopPropagation();
                       navigate(`/admin/products/view/${product._id}`);
                     }}
-                    className="p-2 text-gray-500 hover:text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
+                    className={`p-2 rounded-lg transition ${
+                      isDeactivated
+                        ? "text-gray-400 hover:bg-gray-50"
+                        : "text-gray-500 hover:text-[#3D96EB] hover:bg-[#EBF4FC]"
+                    }`}
                     title="View"
                   >
-                    <EyeIcon className="w-4 h-4" />
+                    {isDeactivated ? (
+                      <EyeSlashIcon className="w-4 h-4" />
+                    ) : (
+                      <EyeIconShow className="w-4 h-4" />
+                    )}
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCopyLink(product);
                     }}
-                    className={`p-2 rounded-lg transition ${copiedId === product._id ? "text-green-500 bg-green-50" : "text-gray-500 hover:text-green-500 hover:bg-green-50"}`}
+                    className={`p-2 rounded-lg transition ${
+                      copiedId === product._id
+                        ? "text-green-500 bg-green-50"
+                        : isDeactivated
+                          ? "text-gray-400 hover:bg-gray-50"
+                          : "text-gray-500 hover:text-green-500 hover:bg-green-50"
+                    }`}
                     title="Copy Link"
                   >
                     {copiedId === product._id ? (
@@ -462,7 +530,11 @@ const Products = () => {
                       e.stopPropagation();
                       navigate(`/admin/products/edit/${product._id}`);
                     }}
-                    className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
+                    className={`p-2 rounded-lg transition ${
+                      isDeactivated
+                        ? "text-gray-400 hover:bg-gray-50"
+                        : "text-[#3D96EB] hover:bg-[#EBF4FC]"
+                    }`}
                     title="Edit"
                   >
                     <PencilIcon className="w-4 h-4" />
@@ -472,10 +544,14 @@ const Products = () => {
                       e.stopPropagation();
                       handleToggle(product._id);
                     }}
-                    className={`p-2 rounded-lg transition ${product.isActive ? "text-green-500 hover:bg-green-50" : "text-gray-400 hover:bg-gray-50"}`}
-                    title={product.isActive ? "Deactivate" : "Activate"}
+                    className={`p-2 rounded-lg transition ${
+                      isDeactivated
+                        ? "text-green-500 hover:bg-green-50"
+                        : "text-green-500 hover:bg-green-50"
+                    }`}
+                    title={isDeactivated ? "Activate" : "Deactivate"}
                   >
-                    {product.isActive ? (
+                    {isDeactivated ? (
                       <CheckIcon className="w-4 h-4" />
                     ) : (
                       <XMarkIcon className="w-4 h-4" />

@@ -19,6 +19,8 @@ import {
   XMarkIcon,
   CheckIcon,
   UserIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -34,7 +36,11 @@ const ProductDetailView = () => {
   const [replyText, setReplyText] = useState("");
 
   // Fetch product
-  const { data: productData, isLoading } = useQuery({
+  const {
+    data: productData,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["admin-product-detail", id],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/products/${id}`);
@@ -79,6 +85,27 @@ const ProductDetailView = () => {
     enabled: !!id,
   });
 
+  // Toggle product status mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await axios.put(`${API_URL}/products/${id}/toggle`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-product-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+      toast.success(
+        `Product ${product?.isActive ? "deactivated" : "activated"} successfully!`,
+      );
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(
+        error.response?.data?.message || "Failed to toggle product status",
+      );
+    },
+  });
+
   const product = productData;
   const reviews = reviewsData || [];
   const productOrders = ordersData || [];
@@ -94,7 +121,6 @@ const ProductDetailView = () => {
       queryClient.invalidateQueries({
         queryKey: ["admin-product-reviews", id],
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-reviews"] });
       toast.success("Review visibility updated!");
     },
     onError: (error) => {
@@ -111,7 +137,6 @@ const ProductDetailView = () => {
       queryClient.invalidateQueries({
         queryKey: ["admin-product-reviews", id],
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-reviews"] });
       toast.success("Review deleted!");
     },
     onError: (error) => {
@@ -128,7 +153,6 @@ const ProductDetailView = () => {
       queryClient.invalidateQueries({
         queryKey: ["admin-product-reviews", id],
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-all-reviews"] });
       toast.success("Reply added!");
       setReplyingTo(null);
       setReplyText("");
@@ -167,6 +191,21 @@ const ProductDetailView = () => {
   const handleViewUser = (userId) => {
     if (userId) {
       navigate(`/admin/users/${userId}`);
+    }
+  };
+
+  const handleToggleStatus = () => {
+    const action = product?.isActive ? "deactivate" : "activate";
+    if (
+      window.confirm(
+        `Are you sure you want to ${action} this product? ${
+          product?.isActive
+            ? "It will no longer be visible to customers."
+            : "It will become visible to customers."
+        }`,
+      )
+    ) {
+      toggleStatusMutation.mutate();
     }
   };
 
@@ -210,6 +249,14 @@ const ProductDetailView = () => {
 
   return (
     <div>
+      {/* Back Button */}
+      <button
+        onClick={() => navigate("/admin/products")}
+        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4"
+      >
+        <ArrowLeftIcon className="w-5 h-5" /> Back to Products
+      </button>
+
       {/* Product Header */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between flex-wrap gap-4">
@@ -238,14 +285,19 @@ const ProductDetailView = () => {
                   Brand: <strong>{product.brand?.name || "N/A"}</strong>
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
                 <span
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
                     product.isActive
                       ? "bg-green-100 text-green-700"
                       : "bg-red-100 text-red-700"
                   }`}
                 >
+                  {product.isActive ? (
+                    <CheckCircleIcon className="w-3.5 h-3.5" />
+                  ) : (
+                    <XCircleIcon className="w-3.5 h-3.5" />
+                  )}
                   {product.isActive ? "Active" : "Inactive"}
                 </span>
                 {discountPercent > 0 && (
@@ -256,7 +308,30 @@ const ProductDetailView = () => {
               </div>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleToggleStatus}
+              disabled={toggleStatusMutation.isPending}
+              className={`text-sm flex items-center gap-1 px-4 py-2 rounded-full font-medium transition ${
+                product.isActive
+                  ? "bg-red-100 text-red-700 hover:bg-red-200"
+                  : "bg-green-100 text-green-700 hover:bg-green-200"
+              }`}
+            >
+              {toggleStatusMutation.isPending ? (
+                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+              ) : product.isActive ? (
+                <>
+                  <EyeSlashIcon className="w-4 h-4" />
+                  Deactivate
+                </>
+              ) : (
+                <>
+                  <EyeIcon className="w-4 h-4" />
+                  Activate
+                </>
+              )}
+            </button>
             <button
               onClick={() => navigate(`/admin/products/edit/${product._id}`)}
               className="btn-primary text-sm flex items-center gap-1"
@@ -394,7 +469,7 @@ const ProductDetailView = () => {
         </div>
       )}
 
-      {/* REVIEWS TAB - FULLY FUNCTIONAL */}
+      {/* REVIEWS TAB */}
       {activeTab === "reviews" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -535,7 +610,6 @@ const ProductDetailView = () => {
                       </p>
                     </div>
                   ) : (
-                    // Reply Input
                     <div className="mt-3">
                       {replyingTo === review._id ? (
                         <div className="flex gap-2">
@@ -586,7 +660,7 @@ const ProductDetailView = () => {
         </div>
       )}
 
-      {/* ORDERS TAB - Updated with clickable user names */}
+      {/* ORDERS TAB */}
       {activeTab === "orders" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold mb-4">

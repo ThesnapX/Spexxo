@@ -25,9 +25,15 @@ export const getProducts = async (req, res) => {
       isTrending,
       isNewArrival,
       isBestSeller,
+      includeInactive, // NEW: flag to include inactive products
     } = req.query;
 
-    const query = { isActive: true };
+    const query = {};
+
+    // If includeInactive is not true, only show active products
+    if (includeInactive !== "true") {
+      query.isActive = true;
+    }
 
     // Search - must use $and to combine with other filters
     if (search) {
@@ -53,7 +59,7 @@ export const getProducts = async (req, res) => {
         query.$and = query.$and || [];
         query.$and.push({ category: { $regex: catId, $options: "i" } });
       } else {
-        query._id = { $in: [] }; // Force empty result
+        query._id = { $in: [] };
       }
     }
 
@@ -194,6 +200,7 @@ export const getProducts = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
 // @desc    Get single product
 // @route   GET /api/products/:slug
 // @access  Public
@@ -266,11 +273,18 @@ export const updateProduct = async (req, res) => {
       new: true,
       runValidators: true,
     });
-    if (!product)
+    if (!product) {
       return res
         .status(404)
         .json({ success: false, message: "Product not found" });
-    res.status(200).json({ success: true, product });
+    }
+
+    // Return the updated product with a flag that it was updated
+    res.status(200).json({
+      success: true,
+      product,
+      message: "Product updated successfully",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

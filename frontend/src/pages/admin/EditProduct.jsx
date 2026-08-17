@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import { useCart } from "../../context/CartContext";
+
 import toast from "react-hot-toast";
 import {
   ArrowLeftIcon,
@@ -27,6 +29,7 @@ const EditProduct = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
+  const { refreshCartWithLatestData } = useCart();
 
   const [form, setForm] = useState({
     name: "",
@@ -210,7 +213,17 @@ const EditProduct = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-      queryClient.removeQueries({ queryKey: ["product-edit", id] });
+      queryClient.invalidateQueries({ queryKey: ["admin-product-detail", id] });
+      queryClient.invalidateQueries({
+        queryKey: ["product", productData?.slug],
+      });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["mega-menu-products"] });
+      queryClient.invalidateQueries({ queryKey: ["smart-related"] });
+
+      // Refresh cart with latest product data
+      // refreshCartWithLatestData();
+
       toast.success("Product updated!");
       navigate("/admin/products");
     },

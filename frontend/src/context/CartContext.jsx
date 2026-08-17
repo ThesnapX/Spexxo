@@ -49,7 +49,7 @@ export const CartProvider = ({ children }) => {
         }
         localStorage.removeItem("guestCart");
         const { data: updatedData } = await axios.get(`${API_URL}/cart`);
-        setCart(updatedData.cart);
+        setCart(updatedData.cart || { items: [] });
       } else {
         setCart(data.cart || { items: [] });
       }
@@ -78,17 +78,97 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem("guestCart", JSON.stringify(cartData));
   };
 
-  // Add to cart
+  // Refresh cart with latest product data
+  const refreshCartWithLatestData = async () => {
+    if (isAuthenticated) {
+      try {
+        const { data } = await axios.get(`${API_URL}/cart`);
+        setCart(data.cart || { items: [] });
+        return data.cart;
+      } catch (error) {
+        console.error("Failed to refresh cart:", error);
+        return null;
+      }
+    } else {
+      // For guest cart, fetch fresh product data
+      try {
+        const currentCart = { ...cart };
+        if (!currentCart.items) currentCart.items = [];
+
+        const { data: allProducts } = await axios.get(
+          `${API_URL}/products?limit=200&includeInactive=true`,
+        );
+
+        const products = allProducts.products || [];
+        const productMap = {};
+        products.forEach((product) => {
+          productMap[product._id] = product;
+        });
+
+        let updated = false;
+        for (const item of currentCart.items) {
+          const productId =
+            typeof item.product === "object" ? item.product?._id : item.product;
+          const freshProduct = productMap[productId];
+          if (freshProduct) {
+            // Update product data (price will be read from product)
+            item.product = freshProduct;
+            item.image = freshProduct.images?.[0]?.url || "";
+
+            // Check stock limit
+            if (item.quantity > freshProduct.stock) {
+              item.quantity = Math.max(1, freshProduct.stock || 0);
+              updated = true;
+            }
+          }
+        }
+
+        setCart(currentCart);
+        saveToLocal(currentCart);
+        if (updated) {
+          toast.warning("Some quantities were adjusted due to stock limits");
+        }
+        return currentCart;
+      } catch (error) {
+        console.error("Failed to refresh guest cart:", error);
+        return null;
+      }
+    }
+  };
+
+  // Add to cart with stock validation
   const addToCart = async (productId, quantity = 1, variant = null) => {
     if (isAuthenticated) {
-      // LOGGED IN - Use API
       try {
+        // First, get fresh product data to check stock
+        const { data: productData } = await axios.get(
+          `${API_URL}/products/${productId}`,
+        );
+        const product = productData.product;
+
+        if (!product) {
+          toast.error("Product not found");
+          return;
+        }
+
+        if (product.isActive === false) {
+          toast.error("This product is currently deactivated");
+          return;
+        }
+
+        if (product.stock < quantity) {
+          toast.error(`Only ${product.stock} items available in stock`);
+          return;
+        }
+
         const { data } = await axios.post(`${API_URL}/cart`, {
           productId,
           quantity,
           variant,
         });
-        setCart(data.cart);
+
+        // Refresh cart to get updated data with prices
+        await refreshCartWithLatestData();
         toast.success("Added to cart! 🛒");
         return data;
       } catch (error) {
@@ -101,59 +181,47 @@ export const CartProvider = ({ children }) => {
         const currentCart = { ...cart };
         if (!currentCart.items) currentCart.items = [];
 
-        // Fetch product info
-        let product = null;
-        try {
-          const { data: allProducts } = await axios.get(
-            `${API_URL}/products?limit=200`,
-          );
-          product = allProducts?.products?.find((p) => p._id === productId);
-        } catch (e) {
-          console.log("Could not fetch product info for guest cart");
+        // Fetch fresh product info
+        const { data: productData } = await axios.get(
+          `${API_URL}/products/${productId}`,
+        );
+        const product = productData.product;
+
+        if (!product) {
+          toast.error("Product not found");
+          return;
         }
 
-        // Check stock limit
-        if (product && product.stock !== undefined && product.stock !== null) {
-          const existingItem = currentCart.items.find(
-            (item) => (item.product?._id || item.product) === productId,
-          );
-          const currentQty = existingItem?.quantity || 0;
-          if (currentQty + quantity > product.stock) {
-            toast.error(`Only ${product.stock} items available in stock`);
-            return;
-          }
+        if (product.isActive === false) {
+          toast.error("This product is currently deactivated");
+          return;
         }
 
-        // Find existing item
+        if (product.stock < quantity) {
+          toast.error(`Only ${product.stock} items available in stock`);
+          return;
+        }
+
         const existingIndex = currentCart.items.findIndex(
           (item) => (item.product?._id || item.product) === productId,
         );
 
         if (existingIndex > -1) {
-          // Update existing item
-          currentCart.items[existingIndex].quantity += quantity;
-          if (product) {
-            currentCart.items[existingIndex].product = product;
-            currentCart.items[existingIndex].price =
-              product.comparePrice || product.price;
-            currentCart.items[existingIndex].image =
-              product.images?.[0]?.url || "";
+          const newQty = currentCart.items[existingIndex].quantity + quantity;
+          if (newQty > product.stock) {
+            toast.error(`Only ${product.stock} items available in stock`);
+            return;
           }
+          currentCart.items[existingIndex].quantity = newQty;
+          currentCart.items[existingIndex].product = product;
+          currentCart.items[existingIndex].image =
+            product.images?.[0]?.url || "";
         } else {
-          // Add new item
           currentCart.items.push({
             _id: Date.now().toString(),
-            product: product || {
-              _id: productId,
-              name: "Product",
-              slug: "",
-              images: [],
-              price: 0,
-              brand: null,
-            },
+            product: product,
             quantity,
-            price: product?.comparePrice || product?.price || 0,
-            image: product?.images?.[0]?.url || "",
+            image: product.images?.[0]?.url || "",
             variant: variant || null,
           });
         }
@@ -170,16 +238,26 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Update quantity
+  // Update quantity with stock validation
   const updateQuantity = async (itemId, quantity) => {
+    if (quantity < 1) {
+      toast.error("Quantity must be at least 1");
+      return;
+    }
+
     if (isAuthenticated) {
-      // LOGGED IN - Use API
       try {
-        const { data } = await axios.put(`${API_URL}/cart/${itemId}`, {
-          quantity,
-        });
-        setCart(data.cart);
-        return data;
+        // First, check stock limit
+        const { data: cartData } = await axios.get(`${API_URL}/cart`);
+        const item = cartData.cart?.items?.find((i) => i._id === itemId);
+        if (item && item.product && quantity > item.product.stock) {
+          toast.error(`Only ${item.product.stock} items available in stock`);
+          return;
+        }
+
+        await axios.put(`${API_URL}/cart/${itemId}`, { quantity });
+        await refreshCartWithLatestData();
+        return;
       } catch (error) {
         toast.error(error.response?.data?.message || "Failed to update cart");
         throw error;
@@ -187,38 +265,39 @@ export const CartProvider = ({ children }) => {
     } else {
       // GUEST - Use localStorage
       const currentCart = { ...cart };
-      const item = currentCart.items?.find((item) => item._id === itemId);
-      if (item) {
-        // Check stock limit for guest
-        const product = item.product;
-        if (product && product.stock !== undefined && product.stock !== null) {
-          if (quantity > product.stock) {
-            toast.error(`Only ${product.stock} items available in stock`);
-            return;
-          }
+      const itemIndex = currentCart.items?.findIndex(
+        (item) => item._id === itemId,
+      );
+      if (itemIndex === -1 || itemIndex === undefined) return;
+
+      const item = currentCart.items[itemIndex];
+      const product = item.product;
+      if (product && product.stock !== undefined && product.stock !== null) {
+        if (quantity > product.stock) {
+          toast.error(`Only ${product.stock} items available in stock`);
+          return;
         }
-        item.quantity = quantity;
-        setCart(currentCart);
-        saveToLocal(currentCart);
       }
+
+      item.quantity = quantity;
+      setCart(currentCart);
+      saveToLocal(currentCart);
     }
   };
 
   // Remove from cart
   const removeFromCart = async (itemId) => {
     if (isAuthenticated) {
-      // LOGGED IN - Use API
       try {
-        const { data } = await axios.delete(`${API_URL}/cart/${itemId}`);
-        setCart(data.cart);
+        await axios.delete(`${API_URL}/cart/${itemId}`);
+        await refreshCartWithLatestData();
         toast.success("Removed from cart");
-        return data;
+        return;
       } catch (error) {
         toast.error(error.response?.data?.message || "Failed to remove");
         throw error;
       }
     } else {
-      // GUEST - Use localStorage
       const currentCart = { ...cart };
       currentCart.items =
         currentCart.items?.filter((item) => item._id !== itemId) || [];
@@ -249,23 +328,84 @@ export const CartProvider = ({ children }) => {
     setAppliedCoupon(couponData);
   };
 
+  // Remove all deactivated items from cart
+  const removeDeactivatedItems = async () => {
+    if (isAuthenticated) {
+      try {
+        const { data } = await axios.get(`${API_URL}/cart`);
+        const deactivatedItems =
+          data.cart?.items?.filter(
+            (item) => item.product?.isActive === false,
+          ) || [];
+
+        for (const item of deactivatedItems) {
+          await axios.delete(`${API_URL}/cart/${item._id}`);
+        }
+
+        await refreshCartWithLatestData();
+        return { success: true };
+      } catch (error) {
+        console.error("Failed to remove deactivated items:", error);
+        return { success: false };
+      }
+    } else {
+      const currentCart = { ...cart };
+      currentCart.items =
+        currentCart.items?.filter((item) => item.product?.isActive !== false) ||
+        [];
+      setCart(currentCart);
+      saveToLocal(currentCart);
+      return { success: true };
+    }
+  };
+
+  // Refresh cart
+  const refreshCart = async () => {
+    if (isAuthenticated) {
+      try {
+        const { data } = await axios.get(`${API_URL}/cart`);
+        setCart(data.cart);
+        return data.cart;
+      } catch (error) {
+        console.error("Failed to refresh cart:", error);
+        return null;
+      }
+    } else {
+      fetchCartFromLocal();
+      return cart;
+    }
+  };
+
   const removeCoupon = () => {
     setAppliedCoupon(null);
   };
 
-  // Calculate totals
-  const cartCount =
-    cart?.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
-  const cartTotal =
-    cart?.items?.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0,
-    ) || 0;
+  // Calculate totals - ONLY for active products with latest prices
+  const cartItems = cart?.items || [];
+
+  // Filter out deactivated products for counts
+  const activeItems = cartItems.filter(
+    (item) => item.product?.isActive !== false,
+  );
+
+  const cartCount = activeItems.reduce(
+    (sum, item) => sum + (item.quantity || 0),
+    0,
+  );
+
+  const activeCartCount = cartCount;
+
+  // Calculate total using product's current price
+  const cartTotal = activeItems.reduce((sum, item) => {
+    const price = item.product?.comparePrice || item.product?.price || 0;
+    return sum + price * (item.quantity || 0);
+  }, 0);
 
   const value = {
     cart,
     loading,
     cartCount,
+    activeCartCount,
     cartTotal,
     appliedCoupon,
     applyCoupon,
@@ -275,7 +415,12 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     clearCart,
     fetchCartFromAPI,
+    removeDeactivatedItems,
+    refreshCart,
+    refreshCartWithLatestData,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
+
+export default CartContext;
