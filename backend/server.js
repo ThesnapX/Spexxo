@@ -99,7 +99,6 @@ app.use("/api/shapes", shapeRoutes);
 app.use("/api/colors", colorRoutes);
 app.use("/api/lens-types", lensTypeRoutes);
 app.use("/api/frame-materials", frameMaterialRoutes);
-app.use("/api/pincode", pincodeRoutes);
 
 // Generate sitemap
 app.get("/api/sitemap", async (req, res) => {
