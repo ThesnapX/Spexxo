@@ -19,7 +19,7 @@ const Wishlist = () => {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-text">
-                My Wishlist
+                My Wishlist Check
               </h1>
               <p className="text-text-light text-sm mt-1">
                 {activeWishlist.length}{" "}

@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/OrderDetailView.jsx
+
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,9 +23,15 @@ import {
   ClipboardDocumentListIcon,
   TagIcon,
   ReceiptRefundIcon,
+  PencilIcon,
+  BuildingOfficeIcon,
+  HomeIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const FRONTEND_URL =
+  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
 
 const OrderDetailView = () => {
   const { id } = useParams();
@@ -32,7 +40,7 @@ const OrderDetailView = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusNote, setStatusNote] = useState("");
 
-  // Fetch order
+  // Fetch order - user is now populated by backend
   const {
     data: orderData,
     isLoading,
@@ -78,31 +86,37 @@ const OrderDetailView = () => {
       value: "pending",
       label: "Pending",
       color: "bg-yellow-100 text-yellow-700",
+      icon: ClockIcon,
     },
     {
       value: "confirmed",
       label: "Confirmed",
       color: "bg-blue-100 text-blue-700",
+      icon: CheckCircleIcon,
     },
     {
       value: "processing",
       label: "Processing",
       color: "bg-indigo-100 text-indigo-700",
+      icon: TruckIcon,
     },
     {
       value: "shipped",
       label: "Shipped",
       color: "bg-purple-100 text-purple-700",
+      icon: TruckIcon,
     },
     {
       value: "delivered",
       label: "Delivered",
       color: "bg-green-100 text-green-700",
+      icon: CheckCircleIcon,
     },
     {
       value: "cancelled",
       label: "Cancelled",
       color: "bg-red-100 text-red-700",
+      icon: XCircleIcon,
     },
   ];
 
@@ -142,6 +156,7 @@ const OrderDetailView = () => {
   };
 
   const handleWhatsAppClick = () => {
+    // Use phone from shipping address first, then from user
     let phone = order?.shippingAddress?.phone || order?.user?.phone || "";
     phone = phone.replace(/[\s\-\(\)\+]/g, "");
     if (phone.startsWith("0")) phone = phone.substring(1);
@@ -155,12 +170,12 @@ const OrderDetailView = () => {
     const customerName =
       order?.shippingAddress?.fullName || order?.user?.firstName || "Customer";
     const message =
-      `Hi *${customerName}*,\n\n` +
-      `Your order *#${order?.orderNumber}* status has been updated to *${order?.orderStatus?.toUpperCase()}*.\n\n` +
-      `*Order Details:*\n` +
-      `• Total: ₹${order?.total?.toLocaleString()}\n` +
-      `• Payment: ${order?.paymentMethod?.toUpperCase()}\n` +
-      `• Status: ${order?.orderStatus?.toUpperCase()}\n\n` +
+      `Hi *${customerName}*,\\n\\n` +
+      `Your order *#${order?.orderNumber}* status has been updated to *${order?.orderStatus?.toUpperCase()}*.\\n\\n` +
+      `*Order Details:*\\n` +
+      `• Total: ₹${order?.total?.toLocaleString()}\\n` +
+      `• Payment: ${order?.paymentMethod?.toUpperCase()}\\n` +
+      `• Status: ${order?.orderStatus?.toUpperCase()}\\n\\n` +
       `Thank you for shopping with Spexxo!`;
 
     const encodedMessage = encodeURIComponent(message);
@@ -193,15 +208,23 @@ const OrderDetailView = () => {
 
   const statusInfo = getStatusBadge(order.orderStatus);
   const isCOD = order.paymentMethod === "cod";
+  const StatusIcon = statusInfo.icon;
+
+  // Get customer details - now populated from backend
+  const user = order.user || {};
+  const customerName = user?.firstName || "N/A";
+  const customerLastName = user?.lastName || "";
+  const customerFullName =
+    `${customerName} ${customerLastName}`.trim() || "N/A";
 
   return (
     <div>
       {/* Back Button */}
       <button
         onClick={() => navigate("/admin/orders")}
-        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4"
+        className="flex items-center gap-2 text-text-light hover:text-primary transition mb-4 text-sm"
       >
-        <ArrowLeftIcon className="w-5 h-5" /> Back to Orders
+        <ArrowLeftIcon className="w-4 h-4" /> Back to Orders
       </button>
 
       {/* Order Header */}
@@ -213,8 +236,9 @@ const OrderDetailView = () => {
                 Order #{order.orderNumber}
               </h1>
               <span
-                className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${statusInfo.color}`}
               >
+                <StatusIcon className="w-3.5 h-3.5" />
                 {statusInfo.label.toUpperCase()}
               </span>
               <span
@@ -222,15 +246,27 @@ const OrderDetailView = () => {
               >
                 {order.paymentStatus?.toUpperCase()}
               </span>
+              {order.isCOD && order.codAdvance > 0 && (
+                <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
+                  COD (10% Advance)
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 mt-2 text-sm text-text-light flex-wrap">
               <span className="flex items-center gap-1">
                 <CalendarIcon className="w-4 h-4" />
-                {new Date(order.createdAt).toLocaleDateString()}
+                {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
               </span>
               <span className="flex items-center gap-1">
                 <ClockIcon className="w-4 h-4" />
-                {new Date(order.createdAt).toLocaleTimeString()}
+                {new Date(order.createdAt).toLocaleTimeString("en-IN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
@@ -239,16 +275,23 @@ const OrderDetailView = () => {
                   onClick={() => handleViewUser(order.user?._id)}
                   className="hover:text-primary hover:underline transition"
                 >
-                  {order.user?.firstName} {order.user?.lastName}
+                  {customerFullName}
                 </button>
               </span>
-              <span>•</span>
-              <span className="text-text-light">
-                Customer ID: {order.user?.customerId || "N/A"}
-              </span>
+              {user?.customerId && (
+                <span className="text-text-light text-xs">
+                  ID: {user.customerId}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleWhatsAppClick}
+              className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition flex items-center gap-1"
+            >
+              💬 WhatsApp
+            </button>
             <Link
               to={`/account/orders/${order._id}`}
               target="_blank"
@@ -256,26 +299,19 @@ const OrderDetailView = () => {
             >
               View as Customer
             </Link>
-            {order.shippingAddress?.phone && (
-              <button
-                onClick={handleWhatsAppClick}
-                className="btn-primary text-sm bg-green-500 hover:bg-green-600 border-0"
-              >
-                💬 WhatsApp
-              </button>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Main Content Grid - Left: Order Items & Status, Right: All Details */}
+      {/* Main Content - Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT COLUMN - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Status Update */}
+          {/* 1. Update Status */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4">
-              Update Status
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <TruckIcon className="w-5 h-5 text-primary" />
+              Update Order Status
             </h2>
             <div className="flex flex-wrap items-center gap-4">
               <select
@@ -298,9 +334,14 @@ const OrderDetailView = () => {
                 className="flex-1 min-w-[200px] px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
               />
               {updatingStatus && (
-                <span className="text-sm text-text-light">Updating...</span>
+                <span className="text-sm text-text-light flex items-center gap-1">
+                  <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin inline-block"></span>
+                  Updating...
+                </span>
               )}
             </div>
+
+            {/* Status Timeline */}
             {order.statusHistory?.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs text-text-light mb-2">Status History</p>
@@ -310,7 +351,7 @@ const OrderDetailView = () => {
                       key={index}
                       className="flex items-center gap-3 text-sm"
                     >
-                      <span className="text-text-light">
+                      <span className="text-text-light text-xs whitespace-nowrap">
                         {new Date(history.date).toLocaleString()}
                       </span>
                       <span className="text-text font-medium">→</span>
@@ -318,7 +359,7 @@ const OrderDetailView = () => {
                         {history.status}
                       </span>
                       {history.note && (
-                        <span className="text-text-light text-xs">
+                        <span className="text-text-light text-xs truncate">
                           ({history.note})
                         </span>
                       )}
@@ -329,11 +370,11 @@ const OrderDetailView = () => {
             )}
           </div>
 
-          {/* Order Items */}
+          {/* 2. Order Items */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-              <ShoppingBagIcon className="w-5 h-5" /> Order Items (
-              {order.items?.length || 0})
+              <ShoppingBagIcon className="w-5 h-5 text-primary" />
+              Order Items ({order.items?.length || 0})
             </h2>
             <div className="space-y-3">
               {order.items?.map((item, index) => (
@@ -363,8 +404,14 @@ const OrderDetailView = () => {
                         {item.name}
                       </p>
                       <p className="text-xs text-text-light">
-                        SKU: {item.variant?.sku || "N/A"} • Qty: {item.quantity}
+                        SKU: {item.variant?.sku || item.product?.sku || "N/A"} •{" "}
+                        Qty: {item.quantity}
                       </p>
+                      {item.variant?.name && (
+                        <p className="text-xs text-text-light">
+                          Variant: {item.variant.name}
+                        </p>
+                      )}
                     </div>
                   </button>
                   <div className="text-right flex-shrink-0">
@@ -372,27 +419,298 @@ const OrderDetailView = () => {
                       ₹{item.price?.toLocaleString()}
                     </p>
                     <p className="text-xs text-text-light">
-                      ₹{item.subtotal?.toLocaleString()}
+                      Subtotal: ₹{item.subtotal?.toLocaleString()}
                     </p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* 3. Payment Details - Moved to Left Column */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <CreditCardIcon className="w-5 h-5 text-primary" />
+              Payment Details
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Payment Method</p>
+                <p className="font-medium text-text uppercase">
+                  {order.paymentMethod === "online"
+                    ? "Online Payment"
+                    : "Cash on Delivery"}
+                  {isCOD && order.codAdvance > 0 && " (10% Advance + COD)"}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Payment Status</p>
+                <span
+                  className={`font-medium ${paymentStatusColors[order.paymentStatus]}`}
+                >
+                  {order.paymentStatus?.toUpperCase()}
+                </span>
+              </div>
+              {order.paymentDetails?.transactionId && (
+                <div className="bg-gray-50 p-3 rounded-lg sm:col-span-2">
+                  <p className="text-xs text-text-light">Transaction ID</p>
+                  <p className="font-medium text-text font-mono text-xs break-all">
+                    {order.paymentDetails.transactionId}
+                  </p>
+                </div>
+              )}
+              {order.paymentDetails?.paymentGateway && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-text-light">Gateway</p>
+                  <p className="font-medium text-text capitalize">
+                    {order.paymentDetails.paymentGateway}
+                  </p>
+                </div>
+              )}
+              {order.paymentDetails?.razorpayOrderId && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-text-light">Razorpay Order ID</p>
+                  <p className="font-medium text-text font-mono text-xs break-all">
+                    {order.paymentDetails.razorpayOrderId}
+                  </p>
+                </div>
+              )}
+              {isCOD && order.codAdvance > 0 && (
+                <>
+                  <div className="bg-orange-50 p-3 rounded-lg">
+                    <p className="text-xs text-orange-600">Advance Amount</p>
+                    <p className="font-medium text-orange-700">
+                      ₹{order.codAdvance?.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-xs text-text-light">COD Amount</p>
+                    <p className="font-medium text-text">
+                      ₹{order.remainingCOD?.toLocaleString()}
+                    </p>
+                  </div>
+                </>
+              )}
+              {order.paymentStatus === "refund_pending" && (
+                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 sm:col-span-2">
+                  <p className="text-xs text-orange-700 flex items-center gap-1">
+                    <ReceiptRefundIcon className="w-4 h-4" />
+                    Refund of ₹{order.codAdvance?.toLocaleString()} is pending
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 4. Order Meta */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <ClipboardDocumentListIcon className="w-5 h-5 text-primary" />
+              Order Meta
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Order ID</p>
+                <p className="font-medium text-text font-mono text-xs break-all">
+                  {order._id}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Order Number</p>
+                <p className="font-medium text-text">#{order.orderNumber}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Created At</p>
+                <p className="font-medium text-text text-sm">
+                  {new Date(order.createdAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-xs text-text-light">Last Updated</p>
+                <p className="font-medium text-text text-sm">
+                  {new Date(order.updatedAt).toLocaleString()}
+                </p>
+              </div>
+              {order.trackingNumber && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-text-light">Tracking Number</p>
+                  <p className="font-medium text-text">
+                    {order.trackingNumber}
+                  </p>
+                </div>
+              )}
+              {order.notes && (
+                <div className="bg-gray-50 p-3 rounded-lg sm:col-span-2">
+                  <p className="text-xs text-text-light">Notes</p>
+                  <p className="font-medium text-text text-sm">{order.notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        {/* RIGHT COLUMN - 1/3 - All Details */}
+        {/* RIGHT COLUMN - 1/3 - Customer Info */}
         <div className="lg:col-span-1 space-y-6">
+          {/* Customer Info */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <UserIcon className="w-5 h-5 text-primary" />
+              Customer Info
+            </h2>
+
+            {/* Customer Avatar & Name */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-14 h-14 bg-primary/10 text-primary rounded-full flex items-center justify-center text-lg font-semibold flex-shrink-0">
+                {user?.firstName?.[0] || "C"}
+                {user?.lastName?.[0] || ""}
+              </div>
+              <div>
+                <button
+                  onClick={() => handleViewUser(order.user?._id)}
+                  className="font-semibold text-text hover:text-primary hover:underline transition"
+                >
+                  {customerFullName}
+                </button>
+                {user?.customerId && (
+                  <p className="text-xs text-text-light">
+                    ID: {user.customerId}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Customer Contact Details - Now populated from user */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                <EnvelopeIcon className="w-4 h-4 text-text-light flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-text-light">Email</p>
+                  <p className="text-sm font-medium text-text break-all">
+                    {user?.email || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                <PhoneIcon className="w-4 h-4 text-text-light flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-text-light">Phone</p>
+                  <p className="text-sm font-medium text-text">
+                    {user?.phone || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              {user?.username && (
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                  <TagIcon className="w-4 h-4 text-text-light flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-text-light">Username</p>
+                    <p className="text-sm font-medium text-text">
+                      @{user.username}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {user?.role && (
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                  <BuildingOfficeIcon className="w-4 h-4 text-text-light flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-text-light">Role</p>
+                    <p className="text-sm font-medium text-text capitalize">
+                      {user.role}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                <CalendarIcon className="w-4 h-4 text-text-light flex-shrink-0" />
+                <div>
+                  <p className="text-xs text-text-light">Account Created</p>
+                  <p className="text-sm font-medium text-text">
+                    {user?.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* View Customer Button */}
+            <button
+              onClick={() => handleViewUser(order.user?._id)}
+              className="w-full mt-4 py-2.5 bg-[#EBF4FC] text-primary rounded-lg text-sm font-medium hover:bg-[#D6E8F7] transition flex items-center justify-center gap-1"
+            >
+              <UserIcon className="w-4 h-4" />
+              View Full Customer Profile
+              <ChevronRightIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Shipping Address */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <MapPinIcon className="w-5 h-5 text-primary" />
+              Shipping Address
+            </h2>
+            {order.shippingAddress ? (
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <HomeIcon className="w-4 h-4 text-text-light mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-text">
+                      {order.shippingAddress.fullName || "N/A"}
+                    </p>
+                    {order.shippingAddress.phone && (
+                      <p className="text-sm text-text-light flex items-center gap-1">
+                        <PhoneIcon className="w-3.5 h-3.5" />
+                        {order.shippingAddress.phone}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="pl-6 space-y-0.5 text-sm text-text-light">
+                  <p>{order.shippingAddress.addressLine1 || "N/A"}</p>
+                  {order.shippingAddress.addressLine2 && (
+                    <p>{order.shippingAddress.addressLine2}</p>
+                  )}
+                  {order.shippingAddress.landmark && (
+                    <p>Landmark: {order.shippingAddress.landmark}</p>
+                  )}
+                  {order.shippingAddress.area && (
+                    <p>Area: {order.shippingAddress.area}</p>
+                  )}
+                  <p>
+                    {order.shippingAddress.city || "N/A"},{" "}
+                    {order.shippingAddress.state || "N/A"} -{" "}
+                    {order.shippingAddress.pincode || "N/A"}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-text-light text-sm">
+                No shipping address available
+              </p>
+            )}
+          </div>
+
           {/* Order Summary */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <CurrencyRupeeIcon className="w-5 h-5 text-primary" />
               Order Summary
             </h2>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-text-light">Subtotal</span>
                 <span className="font-medium text-text">
-                  ₹{order.subtotal?.toLocaleString()}
+                  ₹{order.subtotal?.toLocaleString() || "0"}
                 </span>
               </div>
               {order.discount > 0 && (
@@ -412,269 +730,19 @@ const OrderDetailView = () => {
               <div className="flex justify-between text-sm">
                 <span className="text-text-light">Shipping</span>
                 <span className="font-medium text-text">
-                  ₹{order.shippingCost?.toLocaleString()}
+                  {order.shippingCost === 0
+                    ? "Free"
+                    : `₹${order.shippingCost?.toLocaleString()}`}
                 </span>
               </div>
-              {order.tax > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-light">Tax</span>
-                  <span className="font-medium text-text">
-                    ₹{order.tax?.toLocaleString()}
-                  </span>
-                </div>
-              )}
               <div className="border-t pt-3 flex justify-between">
                 <span className="font-semibold text-text">Total</span>
-                <span className="font-bold text-xl text-text">
-                  ₹{order.total?.toLocaleString()}
+                <span className="font-bold text-xl text-primary">
+                  ₹{order.total?.toLocaleString() || "0"}
                 </span>
               </div>
-              {isCOD && order.codAdvance > 0 && (
-                <>
-                  <div className="flex justify-between text-sm text-orange-600">
-                    <span>Advance Paid (10%)</span>
-                    <span>-₹{order.codAdvance?.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-light">Remaining COD</span>
-                    <span className="font-medium text-text">
-                      ₹{order.remainingCOD?.toLocaleString()}
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
           </div>
-
-          {/* Payment Details */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-              <CreditCardIcon className="w-5 h-5" /> Payment Details
-            </h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-text-light">Method</span>
-                <span className="font-medium text-text uppercase">
-                  {order.paymentMethod}
-                  {isCOD && order.codAdvance > 0 && " (10% Advance + COD)"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-light">Status</span>
-                <span
-                  className={`font-medium ${paymentStatusColors[order.paymentStatus]}`}
-                >
-                  {order.paymentStatus?.toUpperCase()}
-                </span>
-              </div>
-              {order.paymentDetails?.transactionId && (
-                <div className="flex justify-between">
-                  <span className="text-text-light">Transaction ID</span>
-                  <span className="font-medium text-text font-mono text-xs">
-                    {order.paymentDetails.transactionId}
-                  </span>
-                </div>
-              )}
-              {order.paymentDetails?.paymentGateway && (
-                <div className="flex justify-between">
-                  <span className="text-text-light">Gateway</span>
-                  <span className="font-medium text-text">
-                    {order.paymentDetails.paymentGateway.toUpperCase()}
-                  </span>
-                </div>
-              )}
-              {order.paymentDetails?.razorpayOrderId && (
-                <div className="flex justify-between">
-                  <span className="text-text-light">Razorpay Order ID</span>
-                  <span className="font-medium text-text font-mono text-xs">
-                    {order.paymentDetails.razorpayOrderId}
-                  </span>
-                </div>
-              )}
-              {isCOD && order.codAdvance > 0 && (
-                <>
-                  <div className="flex justify-between text-sm text-orange-600 border-t pt-2">
-                    <span>Advance Amount</span>
-                    <span>₹{order.codAdvance?.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-light">COD Amount</span>
-                    <span className="font-medium text-text">
-                      ₹{order.remainingCOD?.toLocaleString()}
-                    </span>
-                  </div>
-                </>
-              )}
-              {order.paymentStatus === "refund_pending" && (
-                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
-                  <p className="text-xs text-orange-700 flex items-center gap-1">
-                    <ReceiptRefundIcon className="w-4 h-4" />
-                    Refund of ₹{order.codAdvance?.toLocaleString()} is pending
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Shipping Address */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-              <MapPinIcon className="w-5 h-5" /> Shipping Address
-            </h2>
-            {order.shippingAddress ? (
-              <div className="space-y-1 text-sm">
-                <p className="font-medium text-text">
-                  {order.shippingAddress.fullName}
-                </p>
-                <p className="text-text-light">
-                  {order.shippingAddress.addressLine1}
-                </p>
-                {order.shippingAddress.addressLine2 && (
-                  <p className="text-text-light">
-                    {order.shippingAddress.addressLine2}
-                  </p>
-                )}
-                {order.shippingAddress.landmark && (
-                  <p className="text-text-light">
-                    Landmark: {order.shippingAddress.landmark}
-                  </p>
-                )}
-                {order.shippingAddress.area && (
-                  <p className="text-text-light">
-                    Area: {order.shippingAddress.area}
-                  </p>
-                )}
-                <p className="text-text-light">
-                  {order.shippingAddress.city}, {order.shippingAddress.state} -{" "}
-                  {order.shippingAddress.pincode}
-                </p>
-                {order.shippingAddress.phone && (
-                  <p className="text-text-light flex items-center gap-1">
-                    <PhoneIcon className="w-3.5 h-3.5" />{" "}
-                    {order.shippingAddress.phone}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-text-light text-sm">
-                No shipping address available
-              </p>
-            )}
-          </div>
-
-          {/* Customer Info */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-              <UserIcon className="w-5 h-5" /> Customer Info
-            </h2>
-            <div className="space-y-1 text-sm">
-              <button
-                onClick={() => handleViewUser(order.user?._id)}
-                className="font-medium text-text hover:text-primary hover:underline transition flex items-center gap-1"
-              >
-                {order.user?.firstName} {order.user?.lastName}
-                <UserIcon className="w-3.5 h-3.5" />
-              </button>
-              <p className="text-text-light flex items-center gap-1">
-                <EnvelopeIcon className="w-3.5 h-3.5" /> {order.user?.email}
-              </p>
-              {order.user?.phone && (
-                <p className="text-text-light flex items-center gap-1">
-                  <PhoneIcon className="w-3.5 h-3.5" /> {order.user.phone}
-                </p>
-              )}
-              <p className="text-text-light text-xs">
-                Customer ID: {order.user?.customerId || "N/A"}
-              </p>
-            </div>
-          </div>
-
-          {/* Order Meta */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
-            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
-              <ClipboardDocumentListIcon className="w-5 h-5" /> Order Meta
-            </h2>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-text-light">Order ID</span>
-                <span className="font-medium text-text font-mono text-xs">
-                  {order._id}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-light">Order Number</span>
-                <span className="font-medium text-text">
-                  #{order.orderNumber}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-light">Created</span>
-                <span className="text-text">
-                  {new Date(order.createdAt).toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-text-light">Last Updated</span>
-                <span className="text-text">
-                  {new Date(order.updatedAt).toLocaleString()}
-                </span>
-              </div>
-              {order.trackingNumber && (
-                <div className="flex justify-between">
-                  <span className="text-text-light">Tracking</span>
-                  <span className="font-medium text-text">
-                    {order.trackingNumber}
-                  </span>
-                </div>
-              )}
-              {order.notes && (
-                <div className="mt-2 pt-2 border-t">
-                  <p className="text-text-light text-xs">Notes</p>
-                  <p className="text-text text-sm mt-1">{order.notes}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Status Timeline */}
-          {order.statusHistory?.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-6">
-              <h2 className="text-lg font-semibold text-text mb-4">
-                Status Timeline
-              </h2>
-              <div className="space-y-3">
-                {order.statusHistory.map((history, index) => (
-                  <div key={index} className="flex gap-3 text-sm">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          index === order.statusHistory.length - 1
-                            ? "bg-primary"
-                            : "bg-gray-300"
-                        }`}
-                      ></div>
-                      {index < order.statusHistory.length - 1 && (
-                        <div className="w-0.5 h-6 bg-gray-300"></div>
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-text capitalize">
-                        {history.status}
-                      </p>
-                      <p className="text-text-light text-xs">
-                        {new Date(history.date).toLocaleString()}
-                      </p>
-                      {history.note && (
-                        <p className="text-text-light text-xs mt-0.5">
-                          {history.note}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

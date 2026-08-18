@@ -1,3 +1,5 @@
+// backend/controllers/orderController.js
+
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
@@ -195,7 +197,8 @@ export const getOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id })
       .sort("-createdAt")
-      .populate("items.product", "name slug images");
+      .populate("items.product", "name slug images")
+      .populate("user", "firstName lastName email phone customerId");
     res.status(200).json({ success: true, orders });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -207,16 +210,20 @@ export const getOrders = async (req, res) => {
 // @access  Private
 export const getOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate(
-      "items.product",
-      "name slug images",
-    );
+    const order = await Order.findById(req.params.id)
+      .populate("items.product", "name slug images sku")
+      .populate(
+        "user",
+        "firstName lastName email phone customerId username role createdAt",
+      );
+
     if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+
     if (
-      order.user.toString() !== req.user._id.toString() &&
+      order.user._id.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
     ) {
       return res
@@ -309,8 +316,8 @@ export const getAllOrders = async (req, res) => {
 
     const [orders, total] = await Promise.all([
       Order.find(query)
-        .populate("user", "firstName lastName email")
-        .populate("items.product", "name slug images")
+        .populate("user", "firstName lastName email phone customerId")
+        .populate("items.product", "name slug images sku")
         .sort("-createdAt")
         .skip(skip)
         .limit(Number(limit)),
@@ -342,6 +349,7 @@ export const updateOrderStatus = async (req, res) => {
       "user",
       "email firstName phone",
     );
+
     if (!order)
       return res
         .status(404)
@@ -418,23 +426,17 @@ export const updateOrderStatus = async (req, res) => {
       // Send WhatsApp (if phone exists)
       if (userPhone) {
         const whatsappMessage =
-          `Hi *${customerName}*,\n\n` +
-          `Your order *#${order.orderNumber}* status has been updated to *${(statusEmails[status] || status).toUpperCase()}*.\n\n` +
-          `📦 *Order Details:*\n` +
-          `• Total: ₹${order.total?.toLocaleString()}\n` +
-          `• Payment: ${order.paymentMethod?.toUpperCase()}\n` +
-          `${note ? `• Note: ${note}\n` : ""}\n` +
+          `Hi *${customerName}*,\\n\\n` +
+          `Your order *#${order.orderNumber}* status has been updated to *${(statusEmails[status] || status).toUpperCase()}*.\\n\\n` +
+          `📦 *Order Details:*\\n` +
+          `• Total: ₹${order.total?.toLocaleString()}\\n` +
+          `• Payment: ${order.paymentMethod?.toUpperCase()}\\n` +
+          `${note ? `• Note: ${note}\\n` : ""}\\n` +
           `Thank you for shopping with Spexxo! 👓`;
 
-        // Send WhatsApp via API (using Twilio or any other service)
-        // For now, we'll just log it and the frontend will handle the button click
-        // You can integrate with a WhatsApp API like Twilio, WATI, or WhatsApp Business API
         console.log(
           `📱 WhatsApp would be sent to ${userPhone}: ${whatsappMessage}`,
         );
-
-        // Example with a WhatsApp API (you'll need to implement this)
-        // await sendWhatsApp(userPhone, whatsappMessage);
       }
     } catch (notificationError) {
       console.log("Notification failed:", notificationError.message);
@@ -459,7 +461,10 @@ export const updateOrder = async (req, res) => {
     const order = await Order.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
-    }).populate("user", "firstName lastName email");
+    })
+      .populate("user", "firstName lastName email phone customerId")
+      .populate("items.product", "name slug images sku");
+
     if (!order)
       return res
         .status(404)
