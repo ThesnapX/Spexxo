@@ -84,7 +84,7 @@ const generateSitemap = async () => {
   // Write to public folder
   const publicPath = path.join(__dirname, "../../frontend/public/sitemap.xml");
   fs.writeFileSync(publicPath, sitemap);
-  console.log("Sitemap generated successfully!");
+  // console.log("Sitemap generated successfully!");
 };
 
 export default generateSitemap;

@@ -23,13 +23,13 @@ const sendEmail = async (options) => {
 
     // Send email
     const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent: ", info.messageId);
+    // console.log("Email sent: ", info.messageId);
     return info;
   } catch (error) {
     console.error("Email error:", error.message);
     // Don't throw error, just log it so app doesn't crash
     // Email failure shouldn't stop the main functionality
-    console.log("Email not sent, but continuing...");
+    // console.log("Email not sent, but continuing...");
   }
 };
 

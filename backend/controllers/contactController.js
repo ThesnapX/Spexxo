@@ -23,7 +23,7 @@ export const submitContact = async (req, res) => {
         html: adminEmail,
       });
     } catch (emailError) {
-      console.log("Admin notification email failed");
+      // console.log("Admin notification email failed");
     }
 
     res.status(201).json({

@@ -37,14 +37,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ============ CORS - SINGLE CONFIGURATION ============
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://spexxo.vercel.app",
-  "https://spexxo.vercel.app/",
-  "https://spexxo.com",
-  "https://www.spexxo.com",
-];
+// const allowedOrigins = [
+//   "http://localhost:5173",
+//   "http://localhost:3000",
+//   "https://spexxo.vercel.app",
+//   "https://spexxo.vercel.app/",
+//   "https://spexxo.com",
+//   "https://www.spexxo.com",
+// ];
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((url) => url.trim());
 
 // Add FRONTEND_URL from env if exists
 if (process.env.FRONTEND_URL) {
@@ -183,3 +187,13 @@ app.listen(PORT, () => {
   console.log(`📡 API available at http://localhost:${PORT}/api`);
   console.log(`🔗 Allowed origins:`, allowedOrigins.join(", "));
 });
+
+//  RATE LIMITING
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: "Too many requests, please try again later.",
+});
+app.use("/api/", limiter);

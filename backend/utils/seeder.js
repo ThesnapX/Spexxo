@@ -69,7 +69,7 @@ const brands = [
 const seedData = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log("Connected to MongoDB for seeding...");
+    // console.log("Connected to MongoDB for seeding...");
 
     // Clear existing data
     await User.deleteMany({});
@@ -85,17 +85,17 @@ const seedData = async () => {
       password: "admin123",
       role: "admin",
     });
-    console.log("Admin user created: admin@spexxo.com / admin123");
+    // console.log("Admin user created: admin@spexxo.com / admin123");
 
     // Create categories
     const createdCategories = await Category.insertMany(categories);
-    console.log("Categories created");
+    // console.log("Categories created");
 
     // Create brands
     const createdBrands = await Brand.insertMany(brands);
-    console.log("Brands created");
+    // console.log("Brands created");
 
-    console.log("Database seeded successfully!");
+    // console.log("Database seeded successfully!");
     process.exit();
   } catch (error) {
     console.error("Seeding error:", error);

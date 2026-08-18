@@ -59,7 +59,7 @@ export const sendBulkEmail = async (req, res) => {
         });
         sentCount++;
       } catch (error) {
-        console.log(`Failed to send to ${email}:`, error.message);
+        // console.log(`Failed to send to ${email}:`, error.message);
         failedCount++;
       }
       // Small delay to avoid rate limiting

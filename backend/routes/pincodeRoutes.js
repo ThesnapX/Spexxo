@@ -51,7 +51,7 @@ router.get("/:code", async (req, res) => {
         }
       }
     } catch (error) {
-      console.log("India Post API failed, trying alternative...");
+      // console.log("India Post API failed, trying alternative...");
     }
 
     // Try Zippopotam API as fallback
@@ -78,7 +78,7 @@ router.get("/:code", async (req, res) => {
         });
       }
     } catch (error) {
-      console.log("Zippopotam API failed");
+      // console.log("Zippopotam API failed");
     }
 
     // If both APIs fail, return error

@@ -150,7 +150,7 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    console.log("MongoDB Query:", JSON.stringify(query, null, 2));
+    // console.log("MongoDB Query:", JSON.stringify(query, null, 2));
 
     const [products, total] = await Promise.all([
       Product.find(query)

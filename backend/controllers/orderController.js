@@ -420,7 +420,7 @@ export const updateOrderStatus = async (req, res) => {
           subject: `Order ${statusEmails[status] || status} - ${order.orderNumber} | Spexxo`,
           html: emailHTML,
         });
-        console.log(`✅ Email sent to ${userEmail}`);
+        // console.log(`✅ Email sent to ${userEmail}`);
       }
 
       // Send WhatsApp (if phone exists)
@@ -434,12 +434,12 @@ export const updateOrderStatus = async (req, res) => {
           `${note ? `• Note: ${note}\\n` : ""}\\n` +
           `Thank you for shopping with Spexxo! 👓`;
 
-        console.log(
-          `📱 WhatsApp would be sent to ${userPhone}: ${whatsappMessage}`,
-        );
+        // console.log(
+        //   `📱 WhatsApp would be sent to ${userPhone}: ${whatsappMessage}`,
+        // );
       }
     } catch (notificationError) {
-      console.log("Notification failed:", notificationError.message);
+      // console.log("Notification failed:", notificationError.message);
       // Don't fail the request if notification fails
     }
 

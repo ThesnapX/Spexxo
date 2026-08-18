@@ -392,7 +392,7 @@ export const forgotPassword = async (req, res) => {
         html: emailHTML,
       });
     } catch (emailError) {
-      console.log("Reset email failed to send");
+      // console.log("Reset email failed to send");
     }
 
     res.status(200).json({
@@ -514,12 +514,10 @@ export const deactivateOwnAccount = async (req, res) => {
     user.deactivatedBy = "user";
     user.deactivationReason = "Self-deactivated by user";
     await user.save();
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Account deactivated. Contact support to reactivate.",
-      });
+    res.status(200).json({
+      success: true,
+      message: "Account deactivated. Contact support to reactivate.",
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
