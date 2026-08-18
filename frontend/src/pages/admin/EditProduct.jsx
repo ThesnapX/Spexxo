@@ -1,9 +1,9 @@
+// frontend/src/pages/admin/EditProduct.jsx
+
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { useCart } from "../../context/CartContext";
-
 import toast from "react-hot-toast";
 import {
   ArrowLeftIcon,
@@ -29,7 +29,6 @@ const EditProduct = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllBrands, setShowAllBrands] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
-  const { refreshCartWithLatestData } = useCart();
 
   const [form, setForm] = useState({
     name: "",
@@ -176,7 +175,10 @@ const EditProduct = () => {
             ?.find((s) => s.name === "Temple Length")
             ?.value?.replace(" mm", "") || "",
         lensType: productData.lensType || "",
-        stock: productData.stock || "10",
+        stock:
+          productData.stock !== undefined && productData.stock !== null
+            ? String(productData.stock)
+            : "10",
         isFeatured: productData.isFeatured || false,
         isTrending: productData.isTrending || false,
         isNewArrival: productData.isNewArrival || false,
@@ -221,9 +223,6 @@ const EditProduct = () => {
       queryClient.invalidateQueries({ queryKey: ["mega-menu-products"] });
       queryClient.invalidateQueries({ queryKey: ["smart-related"] });
 
-      // Refresh cart with latest product data
-      // refreshCartWithLatestData();
-
       toast.success("Product updated!");
       navigate("/admin/products");
     },
@@ -263,12 +262,32 @@ const EditProduct = () => {
       else if (dp >= p)
         newErrors.discountedPrice = "Must be less than original price";
     }
+    // Stock validation - ensure it's not negative
+    if (form.stock === "" || form.stock === null || form.stock === undefined) {
+      newErrors.stock = "Stock is required";
+    } else if (Number(form.stock) < 0) {
+      newErrors.stock = "Stock cannot be negative";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (field, value) => {
-    setForm({ ...form, [field]: value });
+    // For stock field, prevent negative values
+    if (field === "stock") {
+      const numValue = Number(value);
+      if (value === "" || value === null || value === undefined) {
+        setForm({ ...form, [field]: value });
+      } else if (numValue < 0) {
+        setForm({ ...form, [field]: "0" });
+        toast.error("Stock cannot be negative");
+        return;
+      } else {
+        setForm({ ...form, [field]: value });
+      }
+    } else {
+      setForm({ ...form, [field]: value });
+    }
     if (errors[field]) setErrors({ ...errors, [field]: undefined });
   };
 
@@ -332,17 +351,27 @@ const EditProduct = () => {
     setUploading(false);
   };
 
-  const inputClass = (field) =>
-    `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-1 transition ${errors[field] ? "border-red-300 bg-red-50" : "border-gray-200 focus:border-[#3D96EB]"}`;
+  // Helper function for input classes - defined BEFORE any conditional returns
+  const getInputClass = (field) => {
+    return `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-1 transition ${
+      errors[field]
+        ? "border-red-300 bg-red-50"
+        : "border-gray-200 focus:border-[#3D96EB]"
+    }`;
+  };
 
-  if (productLoading)
+  // Loading state
+  if (productLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
         <p className="ml-3 text-text-light">Loading product...</p>
       </div>
     );
-  if (!productData)
+  }
+
+  // Not found state
+  if (!productData) {
     return (
       <div className="text-center py-20">
         <p className="text-xl font-semibold">Product Not Found</p>
@@ -354,7 +383,9 @@ const EditProduct = () => {
         </button>
       </div>
     );
+  }
 
+  // Main render
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -380,7 +411,7 @@ const EditProduct = () => {
               type="text"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              className={inputClass("name")}
+              className={getInputClass("name")}
             />
             {errors.name && (
               <p className="text-red-500 text-xs mt-1">
@@ -395,7 +426,7 @@ const EditProduct = () => {
               type="text"
               value={form.sku}
               onChange={(e) => handleChange("sku", e.target.value)}
-              className={inputClass("sku")}
+              className={getInputClass("sku")}
             />
           </div>
           <div className="md:col-span-2">
@@ -406,7 +437,7 @@ const EditProduct = () => {
               rows="4"
               value={form.description}
               onChange={(e) => handleChange("description", e.target.value)}
-              className={inputClass("description")}
+              className={getInputClass("description")}
             />
             {errors.description && (
               <p className="text-red-500 text-xs mt-1">
@@ -441,7 +472,11 @@ const EditProduct = () => {
                     key={cat._id}
                     type="button"
                     onClick={() => toggleMultiSelect("category", cat._id)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(cat._id) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      sel.includes(cat._id)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {cat.name}
                   </button>
@@ -477,7 +512,11 @@ const EditProduct = () => {
               <button
                 type="button"
                 onClick={() => handleChange("brand", "")}
-                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${!form.brand ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                  !form.brand
+                    ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                }`}
               >
                 None
               </button>
@@ -488,7 +527,11 @@ const EditProduct = () => {
                   onClick={() =>
                     handleChange("brand", form.brand === b._id ? "" : b._id)
                   }
-                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${form.brand === b._id ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                    form.brand === b._id
+                      ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
                 >
                   {b.name}
                 </button>
@@ -514,7 +557,7 @@ const EditProduct = () => {
             <select
               value={form.productType}
               onChange={(e) => handleChange("productType", e.target.value)}
-              className={inputClass("productType")}
+              className={getInputClass("productType")}
             >
               <option value="eyeglasses">Eyeglasses</option>
               <option value="sunglasses">Sunglasses</option>
@@ -538,7 +581,11 @@ const EditProduct = () => {
                     key={opt.v}
                     type="button"
                     onClick={() => toggleMultiSelect("gender", opt.v)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(opt.v) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      sel.includes(opt.v)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {opt.l}
                   </button>
@@ -554,7 +601,7 @@ const EditProduct = () => {
               type="number"
               value={form.price}
               onChange={(e) => handleChange("price", e.target.value)}
-              className={inputClass("price")}
+              className={getInputClass("price")}
             />
             {errors.price && (
               <p className="text-red-500 text-xs mt-1">
@@ -571,7 +618,7 @@ const EditProduct = () => {
               type="number"
               value={form.discountedPrice}
               onChange={(e) => handleChange("discountedPrice", e.target.value)}
-              className={inputClass("discountedPrice")}
+              className={getInputClass("discountedPrice")}
             />
             {errors.discountedPrice && (
               <p className="text-red-500 text-xs mt-1">
@@ -594,13 +641,27 @@ const EditProduct = () => {
               )}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Stock</label>
+            <label className="block text-sm font-medium mb-1">
+              Stock <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               value={form.stock}
               onChange={(e) => handleChange("stock", e.target.value)}
-              className={inputClass("stock")}
+              className={getInputClass("stock")}
+              placeholder="e.g. 10"
+              min="0"
+              step="1"
             />
+            {errors.stock && (
+              <p className="text-red-500 text-xs mt-1">
+                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
+                {errors.stock}
+              </p>
+            )}
+            <p className="text-xs text-text-light mt-1">
+              Set to 0 for out of stock
+            </p>
           </div>
 
           {/* Frame Shape - From API */}
@@ -621,7 +682,11 @@ const EditProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("frameShape", shape.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(shape.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       {shape.name}
                     </button>
@@ -655,7 +720,11 @@ const EditProduct = () => {
                     key={mat}
                     type="button"
                     onClick={() => toggleMultiSelect("frameMaterial", mat)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(mat) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      sel.includes(mat)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {mat}
                   </button>
@@ -682,7 +751,11 @@ const EditProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("frameColor", color.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(color.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(color.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       <span
                         className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
@@ -714,7 +787,11 @@ const EditProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("lensType", lensType.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lensType.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(lensType.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       {lensType.name}
                     </button>
@@ -741,7 +818,7 @@ const EditProduct = () => {
                   type="number"
                   value={form.frameWidth}
                   onChange={(e) => handleChange("frameWidth", e.target.value)}
-                  className={inputClass("frameWidth")}
+                  className={getInputClass("frameWidth")}
                 />
               </div>
               <div>
@@ -752,7 +829,7 @@ const EditProduct = () => {
                   type="number"
                   value={form.lensWidth}
                   onChange={(e) => handleChange("lensWidth", e.target.value)}
-                  className={inputClass("lensWidth")}
+                  className={getInputClass("lensWidth")}
                 />
               </div>
               <div>
@@ -763,7 +840,7 @@ const EditProduct = () => {
                   type="number"
                   value={form.frameHeight}
                   onChange={(e) => handleChange("frameHeight", e.target.value)}
-                  className={inputClass("frameHeight")}
+                  className={getInputClass("frameHeight")}
                 />
               </div>
               <div>
@@ -774,7 +851,7 @@ const EditProduct = () => {
                   type="number"
                   value={form.bridge}
                   onChange={(e) => handleChange("bridge", e.target.value)}
-                  className={inputClass("bridge")}
+                  className={getInputClass("bridge")}
                 />
               </div>
               <div>
@@ -785,7 +862,7 @@ const EditProduct = () => {
                   type="number"
                   value={form.temple}
                   onChange={(e) => handleChange("temple", e.target.value)}
-                  className={inputClass("temple")}
+                  className={getInputClass("temple")}
                 />
               </div>
             </div>

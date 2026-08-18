@@ -1,7 +1,14 @@
+// backend/models/Order.js
+
 import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema(
   {
+    orderId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -132,19 +139,24 @@ const orderSchema = new mongoose.Schema(
   },
 );
 
-// Generate order number BEFORE validation
+// Generate orderId and orderNumber BEFORE validation
 orderSchema.pre("validate", async function (next) {
-  if (this.isNew && !this.orderNumber) {
-    const date = new Date();
-    const prefix = "SPX";
-    const dateStr =
-      date.getFullYear().toString().slice(-2) +
-      ("0" + (date.getMonth() + 1)).slice(-2) +
-      ("0" + date.getDate()).slice(-2);
-    const random = Math.floor(Math.random() * 10000)
-      .toString()
-      .padStart(4, "0");
-    this.orderNumber = `${prefix}${dateStr}${random}`;
+  if (this.isNew) {
+    // Generate orderId
+    if (!this.orderId) {
+      const count = await mongoose.model("Order").countDocuments();
+      const nextNumber = (count + 1).toString().padStart(10, "0");
+      this.orderId = `ORD-${nextNumber}`;
+    }
+
+    // Generate orderNumber
+    if (!this.orderNumber) {
+      const date = new Date();
+      const year = date.getFullYear().toString();
+      const count = await mongoose.model("Order").countDocuments();
+      const nextNumber = (count + 1).toString().padStart(10, "0");
+      this.orderNumber = `ORD-${year}${nextNumber}`;
+    }
   }
   next();
 });

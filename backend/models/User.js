@@ -1,8 +1,15 @@
+// backend/models/User.js
+
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
+    userId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     customerId: {
       type: String,
       unique: true,
@@ -94,20 +101,20 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Generate userId before saving
+userSchema.pre("save", async function (next) {
+  if (this.isNew && !this.userId) {
+    const count = await mongoose.model("User").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.userId = `USR-${nextNumber}`;
+  }
+  next();
+});
+
 // Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
-
-// Generate customer ID before saving
-userSchema.pre("save", async function (next) {
-  if (this.isNew && !this.customerId) {
-    const count = await mongoose.model("User").countDocuments();
-    const nextNumber = (count + 1).toString().padStart(4, "0");
-    this.customerId = `SPX${nextNumber}`;
-  }
   next();
 });
 

@@ -1,7 +1,14 @@
+// backend/models/Review.js
+
 import mongoose from "mongoose";
 
 const reviewSchema = new mongoose.Schema(
   {
+    reviewId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -59,6 +66,16 @@ const reviewSchema = new mongoose.Schema(
 
 // Prevent duplicate reviews
 reviewSchema.index({ user: 1, product: 1 }, { unique: true });
+
+// Generate reviewId before saving
+reviewSchema.pre("save", async function (next) {
+  if (this.isNew && !this.reviewId) {
+    const count = await mongoose.model("Review").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.reviewId = `REV-${nextNumber}`;
+  }
+  next();
+});
 
 const Review = mongoose.model("Review", reviewSchema);
 export default Review;

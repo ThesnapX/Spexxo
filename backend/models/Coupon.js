@@ -1,7 +1,14 @@
+// backend/models/Coupon.js
+
 import mongoose from "mongoose";
 
 const couponSchema = new mongoose.Schema(
   {
+    couponId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     code: {
       type: String,
       required: [true, "Coupon code is required"],
@@ -41,22 +48,18 @@ const couponSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
-    // Total usage limit across all users
     totalUsageLimit: {
       type: Number,
-      default: null, // null = unlimited
+      default: null,
     },
-    // How many times ONE user can use this coupon
     perUserLimit: {
       type: Number,
       default: 1,
     },
-    // Track total usage count
     usedCount: {
       type: Number,
       default: 0,
     },
-    // Track which users used this and how many times
     usedBy: [
       {
         user: {
@@ -78,6 +81,16 @@ const couponSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+// Generate couponId before saving
+couponSchema.pre("save", async function (next) {
+  if (this.isNew && !this.couponId) {
+    const count = await mongoose.model("Coupon").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.couponId = `CPN-${nextNumber}`;
+  }
+  next();
+});
 
 const Coupon = mongoose.model("Coupon", couponSchema);
 export default Coupon;

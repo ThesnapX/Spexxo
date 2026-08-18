@@ -1,7 +1,14 @@
+// backend/models/Product.js
+
 import mongoose from "mongoose";
 
 const productSchema = new mongoose.Schema(
   {
+    productId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     name: {
       type: String,
       required: [true, "Product name is required"],
@@ -31,6 +38,7 @@ const productSchema = new mongoose.Schema(
     sku: {
       type: String,
       unique: true,
+      sparse: true,
     },
     barcode: {
       type: String,
@@ -52,24 +60,18 @@ const productSchema = new mongoose.Schema(
       enum: ["eyeglasses", "sunglasses", "contactlens"],
       required: true,
     },
-    // ============ UPDATED FIELDS ============
     frameShape: {
       type: String,
-      // Can store single value or comma-separated: "Rectangle,Round"
     },
     frameMaterial: {
       type: String,
-      // Can store single value or comma-separated: "Metal,Acetate"
     },
     lensType: {
       type: String,
-      // Can store single value or comma-separated: "Blue Cut,UV Protection"
     },
     frameColor: {
       type: String,
-      // Can store single value or comma-separated: "Black,Gold"
     },
-    // ========================================
     frameWidth: {
       type: Number,
     },
@@ -188,6 +190,16 @@ productSchema.pre("save", function (next) {
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]/g, "-")
       .replace(/-+/g, "-");
+  }
+  next();
+});
+
+// Generate productId before saving
+productSchema.pre("save", async function (next) {
+  if (this.isNew && !this.productId) {
+    const count = await mongoose.model("Product").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.productId = `PRD-${nextNumber}`;
   }
   next();
 });

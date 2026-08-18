@@ -1,7 +1,14 @@
+// backend/models/Blog.js
+
 import mongoose from "mongoose";
 
 const blogSchema = new mongoose.Schema(
   {
+    blogId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     title: {
       type: String,
       required: [true, "Title is required"],
@@ -80,6 +87,16 @@ blogSchema.pre("save", function (next) {
   }
   if (this.status === "published" && !this.publishedAt) {
     this.publishedAt = new Date();
+  }
+  next();
+});
+
+// Generate blogId before saving
+blogSchema.pre("save", async function (next) {
+  if (this.isNew && !this.blogId) {
+    const count = await mongoose.model("Blog").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.blogId = `BLG-${nextNumber}`;
   }
   next();
 });

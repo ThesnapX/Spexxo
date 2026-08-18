@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/AddProduct.jsx
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -156,12 +158,32 @@ const AddProduct = () => {
       else if (dp >= p)
         newErrors.discountedPrice = "Must be less than original price";
     }
+    // Stock validation - ensure it's not negative
+    if (form.stock === "" || form.stock === null || form.stock === undefined) {
+      newErrors.stock = "Stock is required";
+    } else if (Number(form.stock) < 0) {
+      newErrors.stock = "Stock cannot be negative";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (field, value) => {
-    setForm({ ...form, [field]: value });
+    // For stock field, prevent negative values
+    if (field === "stock") {
+      const numValue = Number(value);
+      if (value === "" || value === null || value === undefined) {
+        setForm({ ...form, [field]: value });
+      } else if (numValue < 0) {
+        setForm({ ...form, [field]: "0" });
+        toast.error("Stock cannot be negative");
+        return;
+      } else {
+        setForm({ ...form, [field]: value });
+      }
+    } else {
+      setForm({ ...form, [field]: value });
+    }
     if (errors[field]) setErrors({ ...errors, [field]: undefined });
   };
 
@@ -347,7 +369,11 @@ const AddProduct = () => {
                     key={cat._id}
                     type="button"
                     onClick={() => toggleMultiSelect("category", cat._id)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${selected.includes(cat._id) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      selected.includes(cat._id)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {cat.name}
                   </button>
@@ -386,7 +412,11 @@ const AddProduct = () => {
               <button
                 type="button"
                 onClick={() => handleChange("brand", "")}
-                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${!form.brand ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                  !form.brand
+                    ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                }`}
               >
                 None
               </button>
@@ -397,7 +427,11 @@ const AddProduct = () => {
                   onClick={() =>
                     handleChange("brand", form.brand === b._id ? "" : b._id)
                   }
-                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${form.brand === b._id ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                    form.brand === b._id
+                      ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
                 >
                   {b.name}
                 </button>
@@ -450,7 +484,11 @@ const AddProduct = () => {
                     key={opt.v}
                     type="button"
                     onClick={() => toggleMultiSelect("gender", opt.v)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(opt.v) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      sel.includes(opt.v)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {opt.l}
                   </button>
@@ -514,9 +552,11 @@ const AddProduct = () => {
               )}
           </div>
 
-          {/* Stock */}
+          {/* Stock - with min 0 validation */}
           <div>
-            <label className="block text-sm font-medium mb-1">Stock</label>
+            <label className="block text-sm font-medium mb-1">
+              Stock <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               value={form.stock}
@@ -524,7 +564,17 @@ const AddProduct = () => {
               className={inputClass("stock")}
               placeholder="e.g. 10"
               min="0"
+              step="1"
             />
+            {errors.stock && (
+              <p className="text-red-500 text-xs mt-1">
+                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
+                {errors.stock}
+              </p>
+            )}
+            <p className="text-xs text-text-light mt-1">
+              Set to 0 for out of stock
+            </p>
           </div>
 
           {/* Frame Shape - From API */}
@@ -545,7 +595,11 @@ const AddProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("frameShape", shape.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(shape.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(shape.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       {shape.name}
                     </button>
@@ -579,7 +633,11 @@ const AddProduct = () => {
                     key={mat}
                     type="button"
                     onClick={() => toggleMultiSelect("frameMaterial", mat)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(mat) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                      sel.includes(mat)
+                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}
                   >
                     {mat}
                   </button>
@@ -606,7 +664,11 @@ const AddProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("frameColor", color.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(color.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(color.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       <span
                         className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
@@ -638,7 +700,11 @@ const AddProduct = () => {
                       onClick={() =>
                         toggleMultiSelect("lensType", lensType.name)
                       }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${sel.includes(lensType.name) ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(lensType.name)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
                     >
                       {lensType.name}
                     </button>

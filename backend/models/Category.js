@@ -1,7 +1,14 @@
+// backend/models/Category.js
+
 import mongoose from "mongoose";
 
 const categorySchema = new mongoose.Schema(
   {
+    categoryId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     name: {
       type: String,
       required: [true, "Category name is required"],
@@ -26,12 +33,10 @@ const categorySchema = new mongoose.Schema(
     },
     productType: {
       type: String,
-      // Can be single type or comma-separated: "eyeglasses,sunglasses"
       default: "",
     },
     gender: {
       type: String,
-      // Can be single or comma-separated: "men,women,kids"
       default: "",
     },
     seo: {
@@ -59,6 +64,16 @@ categorySchema.pre("save", function (next) {
       .toLowerCase()
       .replace(/[^a-zA-Z0-9]/g, "-")
       .replace(/-+/g, "-");
+  }
+  next();
+});
+
+// Generate categoryId before saving
+categorySchema.pre("save", async function (next) {
+  if (this.isNew && !this.categoryId) {
+    const count = await mongoose.model("Category").countDocuments();
+    const nextNumber = (count + 1).toString().padStart(6, "0");
+    this.categoryId = `CAT-${nextNumber}`;
   }
   next();
 });
