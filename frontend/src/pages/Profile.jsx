@@ -19,6 +19,7 @@ import {
   EyeIcon,
   EyeSlashIcon,
 } from "@heroicons/react/24/outline";
+import AddressForm from "../components/common/AddressForm";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -242,27 +243,17 @@ const Profile = () => {
     setShowAddressForm(true);
   };
 
-  const handleSaveAddress = async (e) => {
-    e.preventDefault();
-    if (
-      !addressForm.fullName ||
-      !addressForm.addressLine1 ||
-      !addressForm.city ||
-      !addressForm.pincode
-    ) {
-      toast.error("Please fill all required fields");
-      return;
-    }
+  const handleSaveAddress = async (addressData) => {
     setSaving(true);
     try {
       if (editingAddressId) {
         await axios.put(
           `${API_URL}/users/address/${editingAddressId}`,
-          addressForm,
+          addressData,
         );
         toast.success("Address updated!");
       } else {
-        await axios.post(`${API_URL}/users/address`, addressForm);
+        await axios.post(`${API_URL}/users/address`, addressData);
         toast.success("Address added!");
       }
       await refreshUser();
@@ -848,227 +839,17 @@ const Profile = () => {
                           <XMarkIcon className="w-5 h-5 text-gray-400" />
                         </button>
                       </div>
-                      <form onSubmit={handleSaveAddress} className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium mb-2">
-                            Address Type
-                          </label>
-                          <div className="flex gap-3">
-                            {addressIcons.map((type) => (
-                              <button
-                                key={type.id}
-                                type="button"
-                                onClick={() =>
-                                  setAddressForm({
-                                    ...addressForm,
-                                    name: type.label,
-                                  })
-                                }
-                                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition ${addressForm.name === type.label ? "border-primary bg-[#EBF4FC] text-primary" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
-                              >
-                                <type.icon className="w-4 h-4" /> {type.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Full Name *
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.fullName}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  fullName: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Phone *
-                            </label>
-                            <input
-                              type="tel"
-                              value={addressForm.phone}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  phone: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                              required
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Address Line 1 *
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.addressLine1}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                addressLine1: e.target.value,
-                              })
-                            }
-                            placeholder="House/Flat No., Building, Street"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium mb-1">
-                            Address Line 2 (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={addressForm.addressLine2}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                addressLine2: e.target.value,
-                              })
-                            }
-                            placeholder="Colony, Apartment Name"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Landmark
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.landmark}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  landmark: e.target.value,
-                                })
-                              }
-                              placeholder="Nearby landmark"
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Area / Locality
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.area}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  area: e.target.value,
-                                })
-                              }
-                              placeholder="Locality"
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              City *
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.city}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  city: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              State *
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.state}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  state: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                              required
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium mb-1">
-                              Pincode *
-                            </label>
-                            <input
-                              type="text"
-                              value={addressForm.pincode}
-                              onChange={(e) =>
-                                setAddressForm({
-                                  ...addressForm,
-                                  pincode: e.target.value,
-                                })
-                              }
-                              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg"
-                              required
-                              maxLength={6}
-                            />
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={addressForm.isDefault}
-                            onChange={(e) =>
-                              setAddressForm({
-                                ...addressForm,
-                                isDefault: e.target.checked,
-                              })
-                            }
-                            className="w-4 h-4 text-primary rounded"
-                          />
-                          <span className="text-sm">
-                            Set as default address
-                          </span>
-                        </label>
-                        <div className="flex gap-3 pt-2">
-                          <button
-                            type="submit"
-                            disabled={saving}
-                            className="btn-primary text-sm"
-                          >
-                            {saving
-                              ? "Saving..."
-                              : editingAddressId
-                                ? "Update Address"
-                                : "Save Address"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={resetAddressForm}
-                            className="btn-outline text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
+                      <AddressForm
+                        initialData={
+                          editingAddressId
+                            ? addresses.find((a) => a._id === editingAddressId)
+                            : null
+                        }
+                        onSubmit={handleSaveAddress}
+                        onCancel={resetAddressForm}
+                        isEditing={!!editingAddressId}
+                        isLoading={saving}
+                      />
                     </div>
                   )}
 

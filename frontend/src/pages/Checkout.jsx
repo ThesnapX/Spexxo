@@ -19,6 +19,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
+import AddressForm from "../components/common/AddressForm";
 
 const Checkout = () => {
   const {
@@ -429,6 +430,12 @@ const Checkout = () => {
     }
   };
 
+  const handleAddressSubmit = (data) => {
+    setForm(data);
+    if (user && saveAddressToProfile) {
+      // Save to profile logic here
+    }
+  };
   if (!cart?.items?.length) {
     return (
       <div className="pt-24">
@@ -569,147 +576,16 @@ const Checkout = () => {
               )}
 
               <form className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Full Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="fullName"
-                      value={form.fullName}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Phone *
-                    </label>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={form.phone}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Address Line 1 *
-                  </label>
-                  <input
-                    type="text"
-                    name="addressLine1"
-                    value={form.addressLine1}
-                    onChange={handleChange}
-                    placeholder="House/Flat No., Building, Street"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Address Line 2 (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    name="addressLine2"
-                    value={form.addressLine2}
-                    onChange={handleChange}
-                    placeholder="Colony, Apartment Name"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Landmark
-                    </label>
-                    <input
-                      type="text"
-                      name="landmark"
-                      value={form.landmark}
-                      onChange={handleChange}
-                      placeholder="Nearby landmark"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Area / Locality
-                    </label>
-                    <input
-                      type="text"
-                      name="area"
-                      value={form.area}
-                      onChange={handleChange}
-                      placeholder="Locality"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={form.city}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      State *
-                    </label>
-                    <input
-                      type="text"
-                      name="state"
-                      value={form.state}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Pincode *
-                    </label>
-                    <input
-                      type="text"
-                      name="pincode"
-                      value={form.pincode}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-primary"
-                      required
-                      maxLength={6}
-                    />
-                  </div>
-                </div>
-
-                {user && (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={saveAddressToProfile}
-                      onChange={(e) =>
-                        setSaveAddressToProfile(e.target.checked)
-                      }
-                      className="w-4 h-4 text-primary rounded"
-                    />
-                    <span className="text-sm text-text-light">
-                      Save this address for future orders
-                    </span>
-                  </label>
-                )}
+                <AddressForm
+                  initialData={form}
+                  onSubmit={(data) => {
+                    setForm(data);
+                    toast.success("Address updated");
+                  }}
+                  isEditing={false}
+                  showTypeSelector={false}
+                  showSaveToProfile={!!user}
+                />
               </form>
 
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
