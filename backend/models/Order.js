@@ -75,12 +75,13 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
+      enum: ["pending", "paid", "failed", "refund_pending", "refunded"], // Added refund_pending and refunded
       default: "pending",
     },
     paymentDetails: {
       transactionId: String,
       paymentGateway: String,
+      razorpayOrderId: String,
     },
     orderStatus: {
       type: String,
@@ -144,6 +145,7 @@ const orderSchema = new mongoose.Schema(
     codAdvance: { type: Number, default: 0 },
     amountToPay: { type: Number },
     remainingCOD: { type: Number },
+    refundAmount: { type: Number, default: 0 }, // ✅ ADD THIS FIELD
   },
   {
     timestamps: true,

@@ -1,8 +1,30 @@
+// frontend/src/pages/OrderDetail.jsx
+
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import {
+  ArrowLeftIcon,
+  UserIcon,
+  ShoppingBagIcon,
+  MapPinIcon,
+  CreditCardIcon,
+  CalendarIcon,
+  ClockIcon,
+  CurrencyRupeeIcon,
+  TruckIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  PhotoIcon,
+  EnvelopeIcon,
+  PhoneIcon,
+  ClipboardDocumentListIcon,
+  TagIcon,
+  ReceiptRefundIcon,
+} from "@heroicons/react/24/outline";
+import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -72,6 +94,7 @@ const OrderDetail = () => {
     paid: "bg-green-100 text-green-700",
     failed: "bg-red-100 text-red-700",
     refund_pending: "bg-orange-100 text-orange-700",
+    refunded: "bg-gray-100 text-gray-700",
   };
 
   const canCancel = ["pending", "confirmed"].includes(order.orderStatus);
@@ -118,7 +141,11 @@ const OrderDetail = () => {
               <span
                 className={`px-4 py-2 rounded-full text-sm font-medium capitalize ${paymentStatusColors[order.paymentStatus]}`}
               >
-                {order.paymentStatus}
+                {order.paymentStatus === "refund_pending"
+                  ? "Refund Pending"
+                  : order.paymentStatus === "refunded"
+                    ? "Refunded"
+                    : order.paymentStatus}
               </span>
               {canCancel && (
                 <button
@@ -131,6 +158,29 @@ const OrderDetail = () => {
               )}
             </div>
           </div>
+
+          {/* Refund Pending Banner */}
+          {order.paymentStatus === "refund_pending" && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <ReceiptRefundIcon className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-orange-700">Refund Pending</p>
+                  <p className="text-sm text-orange-600">
+                    Refund of ₹
+                    {(
+                      order.refundAmount ||
+                      order.codAdvance ||
+                      order.total ||
+                      0
+                    ).toLocaleString()}{" "}
+                    is pending. Please contact support if you haven't received
+                    it within 5-7 business days.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Order Items */}
@@ -154,16 +204,14 @@ const OrderDetail = () => {
                       {item.variant?.name && (
                         <p className="text-sm text-primary font-medium">
                           Variant: {item.variant.name}
-                          {item.variant?.color &&
-                            typeof item.variant.color === "object" && (
-                              <span
-                                className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
-                                style={{
-                                  backgroundColor:
-                                    item.variant.color.hexCode || "#000",
-                                }}
-                              />
-                            )}
+                          {item.variant?.color?.hexCode && (
+                            <span
+                              className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
+                              style={{
+                                backgroundColor: item.variant.color.hexCode,
+                              }}
+                            />
+                          )}
                         </p>
                       )}
                       {item.variant?.sku && (
@@ -236,7 +284,11 @@ const OrderDetail = () => {
                     <span
                       className={`font-medium ${paymentStatusColors[order.paymentStatus]}`}
                     >
-                      {order.paymentStatus?.toUpperCase()}
+                      {order.paymentStatus === "refund_pending"
+                        ? "Refund Pending"
+                        : order.paymentStatus === "refunded"
+                          ? "Refunded"
+                          : order.paymentStatus?.toUpperCase()}
                     </span>
                   </div>
                   {order.paymentDetails?.transactionId && (
@@ -276,6 +328,15 @@ const OrderDetail = () => {
                         </span>
                       </div>
                     </>
+                  )}
+                  {order.paymentStatus === "refund_pending" && (
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 mt-2">
+                      <p className="text-xs text-orange-700 flex items-center gap-1">
+                        <ReceiptRefundIcon className="w-4 h-4" />
+                        Refund is being processed. You will receive it within
+                        5-7 business days.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -338,7 +399,9 @@ const OrderDetail = () => {
                         </div>
                         <div>
                           <p className="font-medium text-text capitalize">
-                            {history.status}
+                            {history.status === "refunded"
+                              ? "Refunded"
+                              : history.status}
                           </p>
                           <p className="text-text-light text-xs">
                             {new Date(history.date).toLocaleString()}

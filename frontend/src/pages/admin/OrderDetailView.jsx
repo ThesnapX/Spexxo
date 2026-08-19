@@ -30,8 +30,6 @@ import {
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
 
 const OrderDetailView = () => {
   const { id } = useParams();
@@ -40,7 +38,7 @@ const OrderDetailView = () => {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusNote, setStatusNote] = useState("");
 
-  // Fetch order - user is now populated by backend
+  // Fetch order
   const {
     data: orderData,
     isLoading,
@@ -79,7 +77,24 @@ const OrderDetailView = () => {
     },
   });
 
+  // Mark refund as completed
+  const refundMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await axios.put(`${API_URL}/orders/${id}/refund`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-order-detail", id] });
+      toast.success("Refund marked as completed!");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to mark refund");
+    },
+  });
+
   const order = orderData;
+  const user = order?.user;
 
   const statusOptions = [
     {
@@ -125,6 +140,7 @@ const OrderDetailView = () => {
     paid: "bg-green-100 text-green-700",
     failed: "bg-red-100 text-red-700",
     refund_pending: "bg-orange-100 text-orange-700",
+    refunded: "bg-gray-100 text-gray-700",
   };
 
   const getStatusBadge = (status) => {
@@ -156,8 +172,7 @@ const OrderDetailView = () => {
   };
 
   const handleWhatsAppClick = () => {
-    // Use phone from shipping address first, then from user
-    let phone = order?.shippingAddress?.phone || order?.user?.phone || "";
+    let phone = order?.shippingAddress?.phone || user?.phone || "";
     phone = phone.replace(/[\s\-\(\)\+]/g, "");
     if (phone.startsWith("0")) phone = phone.substring(1);
     if (!phone.startsWith("91") && phone.length === 10) phone = "91" + phone;
@@ -168,7 +183,7 @@ const OrderDetailView = () => {
     }
 
     const customerName =
-      order?.shippingAddress?.fullName || order?.user?.firstName || "Customer";
+      order?.shippingAddress?.fullName || user?.firstName || "Customer";
     const message =
       `Hi *${customerName}*,\\n\\n` +
       `Your order *#${order?.orderNumber}* status has been updated to *${order?.orderStatus?.toUpperCase()}*.\\n\\n` +
@@ -210,10 +225,9 @@ const OrderDetailView = () => {
   const isCOD = order.paymentMethod === "cod";
   const StatusIcon = statusInfo.icon;
 
-  // Get customer details - now populated from backend
-  const user = order.user || {};
-  const customerName = user?.firstName || "N/A";
-  const customerLastName = user?.lastName || "";
+  // Get customer full name
+  const customerName = user?.firstName || order?.user?.firstName || "N/A";
+  const customerLastName = user?.lastName || order?.user?.lastName || "";
   const customerFullName =
     `${customerName} ${customerLastName}`.trim() || "N/A";
 
@@ -244,7 +258,11 @@ const OrderDetailView = () => {
               <span
                 className={`px-3 py-1 rounded-full text-xs font-medium ${paymentStatusColors[order.paymentStatus]}`}
               >
-                {order.paymentStatus?.toUpperCase()}
+                {order.paymentStatus === "refund_pending"
+                  ? "REFUND PENDING"
+                  : order.paymentStatus === "refunded"
+                    ? "REFUNDED"
+                    : order.paymentStatus?.toUpperCase()}
               </span>
               {order.isCOD && order.codAdvance > 0 && (
                 <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
@@ -278,11 +296,6 @@ const OrderDetailView = () => {
                   {customerFullName}
                 </button>
               </span>
-              {user?.customerId && (
-                <span className="text-text-light text-xs">
-                  ID: {user.customerId}
-                </span>
-              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -356,7 +369,9 @@ const OrderDetailView = () => {
                       </span>
                       <span className="text-text font-medium">→</span>
                       <span className="text-text font-medium capitalize">
-                        {history.status}
+                        {history.status === "refunded"
+                          ? "Refunded"
+                          : history.status}
                       </span>
                       {history.note && (
                         <span className="text-text-light text-xs truncate">
@@ -406,16 +421,14 @@ const OrderDetailView = () => {
                       {item.variant?.name && (
                         <p className="text-xs text-primary font-medium">
                           Variant: {item.variant.name}
-                          {item.variant?.color &&
-                            typeof item.variant.color === "object" &&
-                            item.variant.color.hexCode && (
-                              <span
-                                className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle border"
-                                style={{
-                                  backgroundColor: item.variant.color.hexCode,
-                                }}
-                              />
-                            )}
+                          {item.variant?.color?.hexCode && (
+                            <span
+                              className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle border"
+                              style={{
+                                backgroundColor: item.variant.color.hexCode,
+                              }}
+                            />
+                          )}
                         </p>
                       )}
                       <p className="text-xs text-text-light">
@@ -437,7 +450,7 @@ const OrderDetailView = () => {
             </div>
           </div>
 
-          {/* 3. Payment Details - Moved to Left Column */}
+          {/* 3. Payment Details */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
               <CreditCardIcon className="w-5 h-5 text-primary" />
@@ -458,7 +471,11 @@ const OrderDetailView = () => {
                 <span
                   className={`font-medium ${paymentStatusColors[order.paymentStatus]}`}
                 >
-                  {order.paymentStatus?.toUpperCase()}
+                  {order.paymentStatus === "refund_pending"
+                    ? "Refund Pending"
+                    : order.paymentStatus === "refunded"
+                      ? "Refunded"
+                      : order.paymentStatus?.toUpperCase()}
                 </span>
               </div>
               {order.paymentDetails?.transactionId && (
@@ -501,15 +518,52 @@ const OrderDetailView = () => {
                   </div>
                 </>
               )}
-              {order.paymentStatus === "refund_pending" && (
-                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 sm:col-span-2">
-                  <p className="text-xs text-orange-700 flex items-center gap-1">
-                    <ReceiptRefundIcon className="w-4 h-4" />
-                    Refund of ₹{order.codAdvance?.toLocaleString()} is pending
-                  </p>
-                </div>
-              )}
             </div>
+
+            {/* Refund Section */}
+            {order.paymentStatus === "refund_pending" && (
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200 mt-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-orange-800 flex items-center gap-2">
+                      <ReceiptRefundIcon className="w-5 h-5" />
+                      Refund Pending
+                    </p>
+                    <p className="text-xs text-orange-600 mt-1">
+                      Amount to refund: ₹
+                      {(
+                        order.refundAmount ||
+                        order.codAdvance ||
+                        order.total ||
+                        0
+                      ).toLocaleString()}
+                    </p>
+                    {order.codAdvance > 0 && (
+                      <p className="text-xs text-orange-500 mt-0.5">
+                        (Advance payment: ₹{order.codAdvance.toLocaleString()})
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Mark this refund as completed?")) {
+                        refundMutation.mutate();
+                      }
+                    }}
+                    disabled={refundMutation.isPending}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition disabled:opacity-50"
+                  >
+                    {refundMutation.isPending
+                      ? "Processing..."
+                      : "Mark as Refunded"}
+                  </button>
+                </div>
+                <p className="text-xs text-orange-600 mt-2">
+                  ⚠️ Make sure to process the actual refund in Razorpay
+                  dashboard first.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 4. Order Meta */}
@@ -571,8 +625,8 @@ const OrderDetailView = () => {
             {/* Customer Avatar & Name */}
             <div className="flex items-center gap-4 mb-4">
               <div className="w-14 h-14 bg-primary/10 text-primary rounded-full flex items-center justify-center text-lg font-semibold flex-shrink-0">
-                {user?.firstName?.[0] || "C"}
-                {user?.lastName?.[0] || ""}
+                {customerName?.[0] || "C"}
+                {customerLastName?.[0] || ""}
               </div>
               <div>
                 <button
@@ -581,22 +635,20 @@ const OrderDetailView = () => {
                 >
                   {customerFullName}
                 </button>
-                {user?.customerId && (
-                  <p className="text-xs text-text-light">
-                    ID: {user.customerId}
-                  </p>
-                )}
+                <p className="text-xs text-text-light">
+                  Customer ID: {user?.customerId || "N/A"}
+                </p>
               </div>
             </div>
 
-            {/* Customer Contact Details - Now populated from user */}
+            {/* Customer Contact Details */}
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
                 <EnvelopeIcon className="w-4 h-4 text-text-light flex-shrink-0" />
                 <div>
                   <p className="text-xs text-text-light">Email</p>
                   <p className="text-sm font-medium text-text break-all">
-                    {user?.email || "N/A"}
+                    {user?.email || order?.user?.email || "N/A"}
                   </p>
                 </div>
               </div>
@@ -606,7 +658,7 @@ const OrderDetailView = () => {
                 <div>
                   <p className="text-xs text-text-light">Phone</p>
                   <p className="text-sm font-medium text-text">
-                    {user?.phone || "N/A"}
+                    {user?.phone || order?.user?.phone || "N/A"}
                   </p>
                 </div>
               </div>

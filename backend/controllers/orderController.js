@@ -246,6 +246,7 @@ export const cancelOrder = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+
     if (
       order.user.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
@@ -254,6 +255,8 @@ export const cancelOrder = async (req, res) => {
         .status(403)
         .json({ success: false, message: "Not authorized" });
     }
+
+    // Only allow cancellation for pending or confirmed orders
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
@@ -261,45 +264,75 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
-    if (order.orderStatus !== "cancelled") {
-      // Restore stock
-      for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: item.quantity },
-        });
-      }
-      // Restore coupon usage
-      if (order.coupon?.code) {
-        await Coupon.findOneAndUpdate(
-          { code: order.coupon.code },
-          { $inc: { usedCount: -1 } },
-        );
-      }
-      // If COD advance was paid, mark refund required
-      if (order.codAdvance > 0 && order.paymentStatus === "paid") {
-        order.paymentStatus = "refund_pending";
-        order.statusHistory.push({
-          status: "cancelled",
-          note: `Refund of ₹${order.codAdvance} (advance) is pending`,
-          date: new Date(),
-        });
-      }
+    // If order is already cancelled, return
+    if (order.orderStatus === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Order is already cancelled",
+      });
     }
+
+    // Restore stock for all items
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { stock: item.quantity },
+      });
+    }
+
+    // Restore coupon usage if applicable
+    if (order.coupon?.code) {
+      await Coupon.findOneAndUpdate(
+        { code: order.coupon.code },
+        { $inc: { usedCount: -1 } },
+      );
+    }
+
+    // Calculate refund amount
+    let refundAmount = 0;
+    let refundNote = "";
+
+    // Handle payment status for COD with advance
+    if (order.codAdvance > 0 && order.paymentStatus === "paid") {
+      refundAmount = order.codAdvance;
+      refundNote = `Order cancelled. Refund of ₹${refundAmount} (advance) is pending. Please process the refund.`;
+      order.paymentStatus = "refund_pending";
+    } else if (
+      order.paymentStatus === "paid" &&
+      order.paymentMethod === "online"
+    ) {
+      // For online payments, refund the total amount
+      refundAmount = order.total || 0;
+      refundNote = `Order cancelled. Refund of ₹${refundAmount} is pending for online payment.`;
+      order.paymentStatus = "refund_pending";
+    } else {
+      // For COD without advance or pending payments
+      refundNote =
+        req.user.role === "admin"
+          ? "Cancelled by admin"
+          : "Cancelled by customer";
+      order.paymentStatus = "pending"; // No refund needed
+    }
+
+    // Store refund amount in order for reference
+    order.refundAmount = refundAmount;
 
     order.orderStatus = "cancelled";
     order.statusHistory.push({
       status: "cancelled",
-      note: "Cancelled by customer",
+      note: refundNote,
       date: new Date(),
     });
+
     await order.save();
 
     res.status(200).json({
       success: true,
       order,
-      message: "Order cancelled. Stock restored.",
+      refundAmount,
+      message: "Order cancelled successfully",
     });
   } catch (error) {
+    console.error("Cancel order error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
