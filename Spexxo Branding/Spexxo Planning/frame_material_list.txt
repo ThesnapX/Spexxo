@@ -1,0 +1,20 @@
+Acetate
+Metal
+Stainless Steel
+Titanium
+Aluminium
+TR90
+TRN
+Polycarbonate
+Nylon
+Injected Plastic
+Ultem
+Grilamid
+Carbon Fiber
+Wood
+Bamboo
+Horn
+Resin
+Acrylic
+Cellulose Propionate
+Mixed Material

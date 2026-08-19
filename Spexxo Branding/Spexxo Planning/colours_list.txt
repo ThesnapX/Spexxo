@@ -1,0 +1,40 @@
+Black — #000000
+White — #FFFFFF
+Grey — #808080
+Silver — #C0C0C0
+Gold — #FFD700
+Rose Gold — #B76E79
+Gunmetal — #2A3439
+Brown — #8B4513
+Tan — #D2B48C
+Beige — #F5F5DC
+Cream — #FFFDD0
+Tortoise — #6B4423
+Havana — #8B5A2B
+Clear — #FFFFFF00
+Transparent — #FFFFFF00
+Crystal — #E8F1F5
+Blue — #0000FF
+Navy Blue — #000080
+Light Blue — #ADD8E6
+Green — #008000
+Olive Green — #808000
+Red — #FF0000
+Burgundy — #800020
+Maroon — #800000
+Pink — #FFC0CB
+Rose — #FF007F
+Purple — #800080
+Violet — #8F00FF
+Yellow — #FFFF00
+Orange — #FFA500
+Amber — #FFBF00
+Champagne — #F7E7CE
+Copper — #B87333
+Bronze — #CD7F32
+Multicolor — #FFFFFF
+Gradient — #FFFFFF
+Pastel — #FFD1DC
+Neon — #39FF14
+Matte Black — #1C1C1C
+Glossy Black — #050505
