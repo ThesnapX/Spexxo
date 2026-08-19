@@ -1,3 +1,5 @@
+// backend/utils/sendEmail.js
+
 import nodemailer from "nodemailer";
 
 const sendEmail = async (options) => {
@@ -6,7 +8,7 @@ const sendEmail = async (options) => {
     const transporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 587,
-      secure: false, // true for 465, false for other ports
+      secure: false,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
@@ -23,13 +25,12 @@ const sendEmail = async (options) => {
 
     // Send email
     const info = await transporter.sendMail(mailOptions);
-    // console.log("Email sent: ", info.messageId);
+    console.log("Email sent: ", info.messageId);
     return info;
   } catch (error) {
     console.error("Email error:", error.message);
+    console.log("Email not sent, but continuing...");
     // Don't throw error, just log it so app doesn't crash
-    // Email failure shouldn't stop the main functionality
-    // console.log("Email not sent, but continuing...");
   }
 };
 

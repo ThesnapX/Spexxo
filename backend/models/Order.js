@@ -28,6 +28,17 @@ const orderSchema = new mongoose.Schema(
         variant: {
           name: String,
           sku: String,
+          price: Number,
+          color: {
+            _id: mongoose.Schema.Types.ObjectId,
+            name: String,
+            hexCode: String,
+          },
+          attributes: {
+            color: String,
+            size: String,
+            material: String,
+          },
         },
         name: String,
         image: String,

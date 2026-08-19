@@ -106,23 +106,51 @@ const productSchema = new mongoose.Schema(
         alt: String,
       },
     ],
+
+    // ... existing code ...
+
     variants: [
       {
-        name: String,
-        sku: String,
-        price: Number,
+        name: {
+          type: String,
+          required: true,
+        },
+        sku: {
+          type: String,
+          unique: true,
+          sparse: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        },
         comparePrice: Number,
         stock: {
           type: Number,
           default: 0,
         },
+        color: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Color",
+        },
+        images: [
+          {
+            url: String,
+            alt: String,
+          },
+        ],
         attributes: {
           color: String,
           size: String,
           material: String,
         },
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
       },
     ],
+
     stock: {
       type: Number,
       default: 0,

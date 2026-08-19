@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/FrameMaterials.jsx
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -10,6 +12,8 @@ import {
   MagnifyingGlassIcon,
   CheckIcon,
   XMarkIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -17,6 +21,8 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const FrameMaterials = () => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFrameMaterial, setEditingFrameMaterial] = useState(null);
   const [formData, setFormData] = useState({
@@ -110,11 +116,40 @@ const FrameMaterials = () => {
     },
   });
 
-  const frameMaterials = (frameMaterialsData || []).filter(
-    (frameMaterial) =>
-      frameMaterial.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      frameMaterial.slug?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Filter and sort frame materials
+  const frameMaterials = (frameMaterialsData || [])
+    .filter(
+      (frameMaterial) =>
+        frameMaterial.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        frameMaterial.slug?.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .sort((a, b) => {
+      let aVal = a[sortField] || "";
+      let bVal = b[sortField] || "";
+      if (typeof aVal === "string") aVal = aVal.toLowerCase();
+      if (typeof bVal === "string") bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return null;
+    return sortOrder === "asc" ? (
+      <ArrowUpIcon className="w-3 h-3 inline ml-1" />
+    ) : (
+      <ArrowDownIcon className="w-3 h-3 inline ml-1" />
+    );
+  };
 
   const openModal = (frameMaterial = null) => {
     if (frameMaterial) {
@@ -267,7 +302,10 @@ const FrameMaterials = () => {
                   <h3 className="font-medium text-text">
                     {frameMaterial.name}
                   </h3>
-                  <p className="text-xs text-text-light mt-1">
+                  <p className="text-xs text-text-light mt-0.5">
+                    ID: {frameMaterial.frameMaterialId || frameMaterial._id}
+                  </p>
+                  <p className="text-xs text-text-light">
                     slug: {frameMaterial.slug}
                   </p>
                   {frameMaterial.description && (

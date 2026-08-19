@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/Colors.jsx
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -10,6 +12,8 @@ import {
   MagnifyingGlassIcon,
   CheckIcon,
   XMarkIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -17,6 +21,8 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const Colors = () => {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingColor, setEditingColor] = useState(null);
   const [formData, setFormData] = useState({
@@ -97,11 +103,41 @@ const Colors = () => {
     },
   });
 
-  const colors = (colorsData || []).filter(
-    (color) =>
-      color.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      color.hexCode?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Filter and sort colors
+  const colors = (colorsData || [])
+    .filter(
+      (color) =>
+        color.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        color.hexCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        color.slug?.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .sort((a, b) => {
+      let aVal = a[sortField] || "";
+      let bVal = b[sortField] || "";
+      if (typeof aVal === "string") aVal = aVal.toLowerCase();
+      if (typeof bVal === "string") bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return null;
+    return sortOrder === "asc" ? (
+      <ArrowUpIcon className="w-3 h-3 inline ml-1" />
+    ) : (
+      <ArrowDownIcon className="w-3 h-3 inline ml-1" />
+    );
+  };
 
   const openModal = (color = null) => {
     if (color) {
@@ -207,7 +243,7 @@ const Colors = () => {
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search colors by name or hex code..."
+            placeholder="Search colors by name, hex code, or slug..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
@@ -268,12 +304,13 @@ const Colors = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium text-text">{color.name}</h3>
-                  <p className="text-xs text-text-light font-mono">
-                    {color.hexCode}
-                  </p>
                   <p className="text-xs text-text-light mt-0.5">
-                    slug: {color.slug}
+                    ID: {color.colorId || color._id}
                   </p>
+                  <p className="text-xs text-text-light font-mono">
+                    Hex: {color.hexCode}
+                  </p>
+                  <p className="text-xs text-text-light">slug: {color.slug}</p>
                   {color.description && (
                     <p className="text-xs text-text-light mt-1 line-clamp-2">
                       {color.description}

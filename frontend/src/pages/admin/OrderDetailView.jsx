@@ -403,15 +403,25 @@ const OrderDetailView = () => {
                       <p className="font-medium text-sm text-text hover:text-primary truncate">
                         {item.name}
                       </p>
-                      <p className="text-xs text-text-light">
-                        SKU: {item.variant?.sku || item.product?.sku || "N/A"} •{" "}
-                        Qty: {item.quantity}
-                      </p>
                       {item.variant?.name && (
-                        <p className="text-xs text-text-light">
+                        <p className="text-xs text-primary font-medium">
                           Variant: {item.variant.name}
+                          {item.variant?.color &&
+                            typeof item.variant.color === "object" &&
+                            item.variant.color.hexCode && (
+                              <span
+                                className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle border"
+                                style={{
+                                  backgroundColor: item.variant.color.hexCode,
+                                }}
+                              />
+                            )}
                         </p>
                       )}
+                      <p className="text-xs text-text-light">
+                        SKU: {item.variant?.sku || item.product?.sku || "N/A"} •
+                        Qty: {item.quantity}
+                      </p>
                     </div>
                   </button>
                   <div className="text-right flex-shrink-0">

@@ -72,7 +72,7 @@ export const createOrder = async (req, res) => {
         price: price,
         quantity: quantity,
         subtotal: itemTotal,
-        variant: item.variant || null,
+        variant: item.variant || null, // This saves variant data
       });
     }
 

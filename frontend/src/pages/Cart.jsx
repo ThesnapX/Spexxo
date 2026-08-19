@@ -261,206 +261,38 @@ const Cart = () => {
                   </div>
                 </div>
               )}
-
-              {/* Cart Items */}
               {cart.items.map((item) => {
                 const isDeactivated = item.product?.isActive === false;
                 const name = item.product?.name || item.name || "Product";
+                const variantName = item.variant?.name || "";
                 const price =
-                  item.price ||
+                  item.variant?.price ||
                   item.product?.comparePrice ||
                   item.product?.price ||
                   0;
                 const image =
                   item.image || item.product?.images?.[0]?.url || "";
-                const stock = item.product?.stock || 0;
-                const isStockExceeded = item.quantity > stock;
-                const isOutOfStock = stock === 0;
-                const canIncrease = stock > 0 && item.quantity < stock;
+                const stock = item.variant?.stock || item.product?.stock || 0;
 
-                return (
-                  <div
-                    key={item._id}
-                    className={`flex items-start gap-4 p-4 rounded-xl ${
-                      isDeactivated
-                        ? "bg-red-50 border border-red-200 opacity-75"
-                        : isStockExceeded
-                          ? "bg-yellow-50 border border-yellow-200"
-                          : "bg-white border border-gray-100"
-                    }`}
-                  >
-                    {/* Product Image */}
-                    <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                      {image ? (
-                        <img
-                          src={image}
-                          alt={name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <svg
-                            className="w-8 h-8"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={1.5}
-                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                      {isDeactivated && (
-                        <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
-                          <span className="bg-red-600 text-white text-[8px] font-bold px-2 py-0.5 rounded-full">
-                            DEACTIVATED
-                          </span>
-                        </div>
-                      )}
-                      {isOutOfStock && !isDeactivated && (
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                          <span className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                            OUT OF STOCK
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Product Details */}
-                    <div className="flex-1 min-w-0">
-                      <Link
-                        to={`/product/${item.product?.slug || "#"}`}
-                        className={`font-medium text-text hover:text-primary transition line-clamp-1 ${
-                          isDeactivated ? "opacity-60" : ""
-                        }`}
-                      >
-                        {name}
-                      </Link>
-                      {item.product?.brand?.name && (
-                        <p className="text-xs text-text-light">
-                          {item.product.brand.name}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1">
-                        <span
-                          className={`font-bold ${isDeactivated ? "text-gray-400" : "text-text"}`}
-                        >
-                          ₹{price.toLocaleString()}
-                        </span>
-                        {isDeactivated && (
-                          <span className="text-xs text-red-500 font-medium">
-                            ⚠️ Unavailable
-                          </span>
-                        )}
-                        {isOutOfStock && !isDeactivated && (
-                          <span className="text-xs text-red-500 font-medium">
-                            Out of Stock
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Quantity & Actions */}
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => {
-                            const newQty = item.quantity - 1;
-                            if (newQty >= 1) {
-                              handleQuantityChange(item._id, newQty, stock);
-                            }
-                          }}
-                          disabled={
-                            isDeactivated || isOutOfStock || item.quantity <= 1
-                          }
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
-                            isDeactivated || isOutOfStock || item.quantity <= 1
-                              ? "text-gray-300 cursor-not-allowed"
-                              : "hover:bg-gray-100 text-text"
-                          }`}
-                        >
-                          <MinusIcon className="w-4 h-4" />
-                        </button>
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            if (!isNaN(val) && val > 0) {
-                              if (val <= stock || stock === 0) {
-                                handleQuantityChange(item._id, val, stock);
-                              } else {
-                                toast.error(
-                                  `Only ${stock} items available in stock`,
-                                );
-                              }
-                            }
-                          }}
-                          disabled={isDeactivated || isOutOfStock}
-                          className={`w-12 text-center text-sm font-medium border rounded-lg py-1 focus:outline-none focus:border-primary ${
-                            isDeactivated || isOutOfStock
-                              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
-                              : "border-gray-200"
-                          }`}
-                          min="1"
-                          max={stock || 99}
-                        />
-                        <div className="relative group">
-                          <button
-                            onClick={() => {
-                              const newQty = item.quantity + 1;
-                              if (stock > 0 && newQty <= stock) {
-                                handleQuantityChange(item._id, newQty, stock);
-                              } else if (stock === 0) {
-                                toast.error("This product is out of stock");
-                              } else {
-                                toast.error(
-                                  `Only ${stock} items available in stock`,
-                                );
-                              }
+                // Display variant info
+                {
+                  variantName && (
+                    <p className="text-xs text-primary font-medium">
+                      Variant: {variantName}
+                      {item.variant?.color &&
+                        typeof item.variant.color === "object" && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
+                            style={{
+                              backgroundColor:
+                                item.variant.color.hexCode || "#000",
                             }}
-                            disabled={
-                              isDeactivated || isOutOfStock || !canIncrease
-                            }
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${
-                              isDeactivated || isOutOfStock || !canIncrease
-                                ? "text-gray-300 cursor-not-allowed"
-                                : "hover:bg-gray-100 text-text"
-                            }`}
-                          >
-                            <PlusIcon className="w-4 h-4" />
-                          </button>
-                          {/* Tooltip - shown only when button is disabled due to stock limit */}
-                          {!isDeactivated &&
-                            !isOutOfStock &&
-                            !canIncrease &&
-                            stock > 0 && (
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                Max stock reached ({stock} available)
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
-                              </div>
-                            )}
-                          {!isDeactivated && isOutOfStock && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                              Out of stock
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-red-600"></div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item._id)}
-                        className="text-red-500 hover:text-red-700 transition p-1"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
+                          />
+                        )}
+                      {item.variant?.sku && ` • SKU: ${item.variant.sku}`}
+                    </p>
+                  );
+                }
               })}
             </div>
 

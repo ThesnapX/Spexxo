@@ -12,6 +12,9 @@ import {
   ExclamationCircleIcon,
   MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
+import VariantManager from "../../components/admin/VariantManager";
+import SearchableMultiSelect from "../../components/admin/SearchableMultiSelect";
+import SearchableSingleSelect from "../../components/admin/SearchableSingleSelect";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -24,11 +27,8 @@ const EditProduct = () => {
   const [existingImages, setExistingImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [categorySearch, setCategorySearch] = useState("");
-  const [brandSearch, setBrandSearch] = useState("");
-  const [showAllCategories, setShowAllCategories] = useState(false);
-  const [showAllBrands, setShowAllBrands] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
+  const [variants, setVariants] = useState([]);
 
   const [form, setForm] = useState({
     name: "",
@@ -101,6 +101,16 @@ const EditProduct = () => {
     },
   });
 
+  // Fetch frame materials from API
+  const { data: frameMaterialsData } = useQuery({
+    queryKey: ["frame-materials"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/frame-materials`);
+      return data.frameMaterials || [];
+    },
+  });
+
+  // Fetch product data
   const { data: productData, isLoading: productLoading } = useQuery({
     queryKey: ["product-edit", id],
     queryFn: async () => {
@@ -140,6 +150,11 @@ const EditProduct = () => {
         ) {
           brandStr = productData.brand._id;
         }
+      }
+
+      // Set variants from product data
+      if (productData.variants && Array.isArray(productData.variants)) {
+        setVariants(productData.variants);
       }
 
       setForm({
@@ -189,21 +204,6 @@ const EditProduct = () => {
       setFormInitialized(true);
     }
   }, [productData, formInitialized]);
-
-  const filteredCategories =
-    categories?.filter((cat) =>
-      cat.name.toLowerCase().includes(categorySearch.toLowerCase()),
-    ) || [];
-  const filteredBrands =
-    brands?.filter((b) =>
-      b.name.toLowerCase().includes(brandSearch.toLowerCase()),
-    ) || [];
-  const displayedCategories = showAllCategories
-    ? filteredCategories
-    : filteredCategories.slice(0, 6);
-  const displayedBrands = showAllBrands
-    ? filteredBrands
-    : filteredBrands.slice(0, 8);
 
   const updateMutation = useMutation({
     mutationFn: async (productData) => {
@@ -262,7 +262,6 @@ const EditProduct = () => {
       else if (dp >= p)
         newErrors.discountedPrice = "Must be less than original price";
     }
-    // Stock validation - ensure it's not negative
     if (form.stock === "" || form.stock === null || form.stock === undefined) {
       newErrors.stock = "Stock is required";
     } else if (Number(form.stock) < 0) {
@@ -273,7 +272,6 @@ const EditProduct = () => {
   };
 
   const handleChange = (field, value) => {
-    // For stock field, prevent negative values
     if (field === "stock") {
       const numValue = Number(value);
       if (value === "" || value === null || value === undefined) {
@@ -291,14 +289,6 @@ const EditProduct = () => {
     if (errors[field]) setErrors({ ...errors, [field]: undefined });
   };
 
-  const toggleMultiSelect = (field, value) => {
-    const current = form[field] ? form[field].split(",").filter(Boolean) : [];
-    let updated = current.includes(value)
-      ? current.filter((v) => v !== value)
-      : [...current, value];
-    setForm({ ...form, [field]: updated.join(",") });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) {
@@ -312,15 +302,13 @@ const EditProduct = () => {
       imageFiles.forEach((f) => fd.append("images", f));
       try {
         const { data } = await axios.post(`${API_URL}/upload/multiple`, fd);
-        allImages = [
-          ...allImages,
-          ...data.images.map((img, i) => ({
-            url: img.url,
-            alt: form.name,
-            isMain: existingImages.length === 0 && i === 0,
-          })),
-        ];
-      } catch {
+        const uploadedImages = data.images.map((img, i) => ({
+          url: img.url,
+          alt: form.name,
+          isMain: existingImages.length === 0 && i === 0,
+        }));
+        allImages = [...allImages, ...uploadedImages];
+      } catch (error) {
         toast.error("Upload failed");
         setUploading(false);
         return;
@@ -336,6 +324,7 @@ const EditProduct = () => {
     if (form.bridge) specs.push({ name: "Bridge", value: `${form.bridge} mm` });
     if (form.temple)
       specs.push({ name: "Temple Length", value: `${form.temple} mm` });
+
     const pd = {
       ...form,
       price: Number(form.price),
@@ -344,6 +333,7 @@ const EditProduct = () => {
         : undefined,
       stock: Number(form.stock),
       images: allImages,
+      variants: variants,
       specifications: specs.length > 0 ? specs : undefined,
     };
     delete pd.discountedPrice;
@@ -351,7 +341,6 @@ const EditProduct = () => {
     setUploading(false);
   };
 
-  // Helper function for input classes - defined BEFORE any conditional returns
   const getInputClass = (field) => {
     return `w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-1 transition ${
       errors[field]
@@ -403,6 +392,7 @@ const EditProduct = () => {
           className="grid grid-cols-1 md:grid-cols-2 gap-4"
           noValidate
         >
+          {/* Product Name */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Product Name <span className="text-red-500">*</span>
@@ -420,6 +410,8 @@ const EditProduct = () => {
               </p>
             )}
           </div>
+
+          {/* SKU */}
           <div>
             <label className="block text-sm font-medium mb-1">SKU</label>
             <input
@@ -429,6 +421,8 @@ const EditProduct = () => {
               className={getInputClass("sku")}
             />
           </div>
+
+          {/* Description */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">
               Description <span className="text-red-500">*</span>
@@ -447,109 +441,35 @@ const EditProduct = () => {
             )}
           </div>
 
+          {/* Categories - Using SearchableMultiSelect */}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Categories{" "}
-              <span className="text-gray-400 text-xs">(Multi Select)</span>
-            </label>
-            <div className="relative mb-2">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={categorySearch}
-                onChange={(e) => setCategorySearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
-              {displayedCategories.map((cat) => {
-                const sel = form.category
-                  ? form.category.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={cat._id}
-                    type="button"
-                    onClick={() => toggleMultiSelect("category", cat._id)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                      sel.includes(cat._id)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                );
-              })}
-              {filteredCategories.length > 6 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllCategories(!showAllCategories)}
-                  className="text-xs text-[#3D96EB] hover:underline mt-1"
-                >
-                  {showAllCategories
-                    ? "Less ↑"
-                    : `All (${filteredCategories.length}) ↓`}
-                </button>
-              )}
-            </div>
+            <SearchableMultiSelect
+              label="Categories (Multi Select)"
+              options={categories || []}
+              selectedValues={
+                form.category ? form.category.split(",").filter(Boolean) : []
+              }
+              onChange={(values) => handleChange("category", values.join(","))}
+              placeholder="Search categories..."
+              renderOption={(cat) => cat.name}
+              getValue={(cat) => cat._id}
+            />
           </div>
 
+          {/* Brand - Using SearchableSingleSelect */}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">Brand</label>
-            <div className="relative mb-2">
-              <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={brandSearch}
-                onChange={(e) => setBrandSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto p-1">
-              <button
-                type="button"
-                onClick={() => handleChange("brand", "")}
-                className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                  !form.brand
-                    ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                    : "border-gray-200 text-gray-600 hover:border-gray-300"
-                }`}
-              >
-                None
-              </button>
-              {displayedBrands.map((b) => (
-                <button
-                  key={b._id}
-                  type="button"
-                  onClick={() =>
-                    handleChange("brand", form.brand === b._id ? "" : b._id)
-                  }
-                  className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                    form.brand === b._id
-                      ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                      : "border-gray-200 text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  {b.name}
-                </button>
-              ))}
-              {filteredBrands.length > 8 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllBrands(!showAllBrands)}
-                  className="text-xs text-[#3D96EB] hover:underline mt-1"
-                >
-                  {showAllBrands
-                    ? "Less ↑"
-                    : `All (${filteredBrands.length}) ↓`}
-                </button>
-              )}
-            </div>
+            <SearchableSingleSelect
+              label="Brand (Optional)"
+              options={brands || []}
+              value={form.brand}
+              onChange={(val) => handleChange("brand", val)}
+              placeholder="Search brands..."
+              renderOption={(brand) => brand.name}
+              getValue={(brand) => brand._id}
+            />
           </div>
 
+          {/* Product Type */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Product Type <span className="text-red-500">*</span>
@@ -564,6 +484,8 @@ const EditProduct = () => {
               <option value="contactlens">Contact Lens</option>
             </select>
           </div>
+
+          {/* Gender */}
           <div>
             <label className="block text-sm font-medium mb-1">Gender</label>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -580,7 +502,15 @@ const EditProduct = () => {
                   <button
                     key={opt.v}
                     type="button"
-                    onClick={() => toggleMultiSelect("gender", opt.v)}
+                    onClick={() => {
+                      const current = form.gender
+                        ? form.gender.split(",").filter(Boolean)
+                        : [];
+                      let updated = current.includes(opt.v)
+                        ? current.filter((v) => v !== opt.v)
+                        : [...current, opt.v];
+                      handleChange("gender", updated.join(","));
+                    }}
                     className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
                       sel.includes(opt.v)
                         ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
@@ -593,6 +523,8 @@ const EditProduct = () => {
               })}
             </div>
           </div>
+
+          {/* Price */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Original Price (₹) <span className="text-red-500">*</span>
@@ -610,6 +542,8 @@ const EditProduct = () => {
               </p>
             )}
           </div>
+
+          {/* Discounted Price */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Discounted Price (₹)
@@ -640,6 +574,17 @@ const EditProduct = () => {
                 </p>
               )}
           </div>
+
+          {/* Variants Section */}
+          <div className="md:col-span-2">
+            <VariantManager
+              variants={variants}
+              onVariantsChange={setVariants}
+              productType={form.productType}
+            />
+          </div>
+
+          {/* Stock */}
           <div>
             <label className="block text-sm font-medium mb-1">
               Stock <span className="text-red-500">*</span>
@@ -664,147 +609,91 @@ const EditProduct = () => {
             </p>
           </div>
 
-          {/* Frame Shape - From API */}
+          {/* Frame Shape - Using SearchableMultiSelect */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Frame Shape
-            </label>
-            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
-              {shapesData?.length > 0 ? (
-                shapesData.map((shape) => {
-                  const sel = form.frameShape
-                    ? form.frameShape.split(",").filter(Boolean)
-                    : [];
-                  return (
-                    <button
-                      key={shape._id}
-                      type="button"
-                      onClick={() =>
-                        toggleMultiSelect("frameShape", shape.name)
-                      }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                        sel.includes(shape.name)
-                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      {shape.name}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-text-light">No shapes available</p>
-              )}
-            </div>
+            <SearchableMultiSelect
+              label="Frame Shape"
+              options={shapesData || []}
+              selectedValues={
+                form.frameShape
+                  ? form.frameShape.split(",").filter(Boolean)
+                  : []
+              }
+              onChange={(values) =>
+                handleChange("frameShape", values.join(","))
+              }
+              placeholder="Search frame shapes..."
+              renderOption={(shape) => shape.name}
+              getValue={(shape) => shape.name}
+              maxHeight="max-h-32"
+            />
           </div>
 
-          {/* Frame Material */}
+          {/* Frame Material - Using SearchableMultiSelect */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Frame Material
-            </label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                "Metal",
-                "Plastic",
-                "Acetate",
-                "Titanium",
-                "Stainless Steel",
-                "TR90",
-              ].map((mat) => {
-                const sel = form.frameMaterial
+            <SearchableMultiSelect
+              label="Frame Material"
+              options={frameMaterialsData || []}
+              selectedValues={
+                form.frameMaterial
                   ? form.frameMaterial.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={mat}
-                    type="button"
-                    onClick={() => toggleMultiSelect("frameMaterial", mat)}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                      sel.includes(mat)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    {mat}
-                  </button>
-                );
-              })}
-            </div>
+                  : []
+              }
+              onChange={(values) =>
+                handleChange("frameMaterial", values.join(","))
+              }
+              placeholder="Search frame materials..."
+              renderOption={(mat) => mat.name}
+              getValue={(mat) => mat.name}
+              maxHeight="max-h-32"
+            />
           </div>
 
-          {/* Frame Color - From API */}
+          {/* Frame Color - Using SearchableMultiSelect */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Frame Color
-            </label>
-            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
-              {colorsData?.length > 0 ? (
-                colorsData.map((color) => {
-                  const sel = form.frameColor
-                    ? form.frameColor.split(",").filter(Boolean)
-                    : [];
-                  return (
-                    <button
-                      key={color._id}
-                      type="button"
-                      onClick={() =>
-                        toggleMultiSelect("frameColor", color.name)
-                      }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                        sel.includes(color.name)
-                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      <span
-                        className="inline-block w-3 h-3 rounded-full mr-1 align-middle"
-                        style={{ backgroundColor: color.hexCode || "#000" }}
-                      ></span>
-                      {color.name}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-text-light">No colors available</p>
+            <SearchableMultiSelect
+              label="Frame Color"
+              options={colorsData || []}
+              selectedValues={
+                form.frameColor
+                  ? form.frameColor.split(",").filter(Boolean)
+                  : []
+              }
+              onChange={(values) =>
+                handleChange("frameColor", values.join(","))
+              }
+              placeholder="Search colors..."
+              renderOption={(color) => (
+                <span className="flex items-center gap-2">
+                  <span
+                    className="w-3 h-3 rounded-full border border-gray-300"
+                    style={{ backgroundColor: color.hexCode || "#000" }}
+                  />
+                  {color.name}
+                </span>
               )}
-            </div>
+              getValue={(color) => color.name}
+              maxHeight="max-h-32"
+            />
           </div>
 
-          {/* Lens Type - From API */}
+          {/* Lens Type - Using SearchableMultiSelect */}
           <div>
-            <label className="block text-sm font-medium mb-1">Lens Type</label>
-            <div className="flex flex-wrap gap-2 mt-2 max-h-32 overflow-y-auto p-1">
-              {lensTypesData?.length > 0 ? (
-                lensTypesData.map((lensType) => {
-                  const sel = form.lensType
-                    ? form.lensType.split(",").filter(Boolean)
-                    : [];
-                  return (
-                    <button
-                      key={lensType._id}
-                      type="button"
-                      onClick={() =>
-                        toggleMultiSelect("lensType", lensType.name)
-                      }
-                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                        sel.includes(lensType.name)
-                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                          : "border-gray-200 text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      {lensType.name}
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="text-xs text-text-light">
-                  No lens types available
-                </p>
-              )}
-            </div>
+            <SearchableMultiSelect
+              label="Lens Type"
+              options={lensTypesData || []}
+              selectedValues={
+                form.lensType ? form.lensType.split(",").filter(Boolean) : []
+              }
+              onChange={(values) => handleChange("lensType", values.join(","))}
+              placeholder="Search lens types..."
+              renderOption={(lens) => lens.name}
+              getValue={(lens) => lens.name}
+              maxHeight="max-h-32"
+            />
           </div>
 
+          {/* Frame Dimensions */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-3">
               Frame Dimensions (mm)
@@ -868,6 +757,7 @@ const EditProduct = () => {
             </div>
           </div>
 
+          {/* Images */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-2">Images</label>
             <div className="flex flex-wrap gap-3 mb-3">
@@ -919,6 +809,7 @@ const EditProduct = () => {
             </div>
           </div>
 
+          {/* Product Flags */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-2">
               Product Flags
@@ -949,6 +840,7 @@ const EditProduct = () => {
             </div>
           </div>
 
+          {/* Submit */}
           <div className="md:col-span-2 flex gap-3 pt-4 border-t">
             <button
               type="submit"

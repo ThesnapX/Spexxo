@@ -136,38 +136,43 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Add to cart with stock validation
+  // Update addToCart function to handle variants
   const addToCart = async (productId, quantity = 1, variant = null) => {
     if (isAuthenticated) {
       try {
-        // First, get fresh product data to check stock
-        const { data: productData } = await axios.get(
-          `${API_URL}/products/${productId}`,
-        );
-        const product = productData.product;
-
-        if (!product) {
-          toast.error("Product not found");
-          return;
-        }
-
-        if (product.isActive === false) {
-          toast.error("This product is currently deactivated");
-          return;
-        }
-
-        if (product.stock < quantity) {
-          toast.error(`Only ${product.stock} items available in stock`);
-          return;
+        // Check stock for variant
+        let stockCheck = 0;
+        if (variant) {
+          // Check variant stock
+          const { data: productData } = await axios.get(
+            `${API_URL}/products/${productId}`,
+          );
+          const foundVariant = productData.product.variants?.find(
+            (v) => v._id === variant._id || v.name === variant.name,
+          );
+          stockCheck = foundVariant?.stock || 0;
+          if (stockCheck < quantity) {
+            toast.error(`Only ${stockCheck} items available for this variant`);
+            return;
+          }
+        } else {
+          // Check main product stock
+          const { data: productData } = await axios.get(
+            `${API_URL}/products/${productId}`,
+          );
+          stockCheck = productData.product.stock || 0;
+          if (stockCheck < quantity) {
+            toast.error(`Only ${stockCheck} items available in stock`);
+            return;
+          }
         }
 
         const { data } = await axios.post(`${API_URL}/cart`, {
           productId,
           quantity,
-          variant,
+          variant, // Pass variant to backend
         });
 
-        // Refresh cart to get updated data with prices
         await refreshCartWithLatestData();
         toast.success("Added to cart! 🛒");
         return data;
@@ -176,65 +181,84 @@ export const CartProvider = ({ children }) => {
         throw error;
       }
     } else {
-      // GUEST - Use localStorage
-      try {
-        const currentCart = { ...cart };
-        if (!currentCart.items) currentCart.items = [];
+      // GUEST CART - Update localStorage
+      const currentCart = { ...cart };
+      if (!currentCart.items) currentCart.items = [];
 
-        // Fetch fresh product info
-        const { data: productData } = await axios.get(
-          `${API_URL}/products/${productId}`,
+      // Fetch fresh product info
+      const { data: productData } = await axios.get(
+        `${API_URL}/products/${productId}`,
+      );
+      const product = productData.product;
+
+      if (!product) {
+        toast.error("Product not found");
+        return;
+      }
+
+      // Check variant stock for guest
+      if (variant) {
+        const foundVariant = product.variants?.find(
+          (v) => v._id === variant._id || v.name === variant.name,
         );
-        const product = productData.product;
-
-        if (!product) {
-          toast.error("Product not found");
+        if (foundVariant && foundVariant.stock < quantity) {
+          toast.error(
+            `Only ${foundVariant.stock} items available for this variant`,
+          );
           return;
         }
+      } else if (product.stock < quantity) {
+        toast.error(`Only ${product.stock} items available in stock`);
+        return;
+      }
 
-        if (product.isActive === false) {
-          toast.error("This product is currently deactivated");
-          return;
-        }
+      // Create a unique key for cart item (product + variant)
+      const variantKey = variant ? JSON.stringify(variant) : "default";
 
-        if (product.stock < quantity) {
+      const existingIndex = currentCart.items.findIndex((item) => {
+        const itemVariantKey = item.variant
+          ? JSON.stringify(item.variant)
+          : "default";
+        return (
+          (item.product?._id || item.product) === productId &&
+          itemVariantKey === variantKey
+        );
+      });
+
+      if (existingIndex > -1) {
+        const newQty = currentCart.items[existingIndex].quantity + quantity;
+        // Check stock again for new total
+        if (variant) {
+          const foundVariant = product.variants?.find(
+            (v) => v._id === variant._id || v.name === variant.name,
+          );
+          if (foundVariant && newQty > foundVariant.stock) {
+            toast.error(
+              `Only ${foundVariant.stock} items available for this variant`,
+            );
+            return;
+          }
+        } else if (newQty > product.stock) {
           toast.error(`Only ${product.stock} items available in stock`);
           return;
         }
-
-        const existingIndex = currentCart.items.findIndex(
-          (item) => (item.product?._id || item.product) === productId,
-        );
-
-        if (existingIndex > -1) {
-          const newQty = currentCart.items[existingIndex].quantity + quantity;
-          if (newQty > product.stock) {
-            toast.error(`Only ${product.stock} items available in stock`);
-            return;
-          }
-          currentCart.items[existingIndex].quantity = newQty;
-          currentCart.items[existingIndex].product = product;
-          currentCart.items[existingIndex].image =
-            product.images?.[0]?.url || "";
-        } else {
-          currentCart.items.push({
-            _id: Date.now().toString(),
-            product: product,
-            quantity,
-            image: product.images?.[0]?.url || "",
-            variant: variant || null,
-          });
-        }
-
-        setCart(currentCart);
-        saveToLocal(currentCart);
-        toast.success("Added to cart! 🛒");
-        return { success: true, cart: currentCart };
-      } catch (error) {
-        console.error("Guest add to cart error:", error);
-        toast.error("Failed to add to cart");
-        return { success: false };
+        currentCart.items[existingIndex].quantity = newQty;
+        currentCart.items[existingIndex].product = product;
+        currentCart.items[existingIndex].variant = variant || null;
+      } else {
+        currentCart.items.push({
+          _id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          product: product,
+          quantity,
+          image: product.images?.[0]?.url || "",
+          variant: variant || null,
+        });
       }
+
+      setCart(currentCart);
+      saveToLocal(currentCart);
+      toast.success("Added to cart! 🛒");
+      return { success: true, cart: currentCart };
     }
   };
 

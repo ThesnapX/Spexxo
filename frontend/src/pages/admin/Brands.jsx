@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/Brands.jsx
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -8,6 +10,9 @@ import {
   TrashIcon,
   XMarkIcon,
   PhotoIcon,
+  MagnifyingGlassIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -18,6 +23,9 @@ const Brands = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
   const [form, setForm] = useState({ name: "", description: "" });
   const queryClient = useQueryClient();
 
@@ -51,6 +59,9 @@ const Brands = () => {
       queryClient.invalidateQueries({ queryKey: ["brands-manage"] });
       toast.success("Brand created!");
       resetForm();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Failed to create brand");
     },
   });
 
@@ -133,10 +144,48 @@ const Brands = () => {
     if (window.confirm("Delete this brand?")) deleteMutation.mutate(id);
   };
 
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  // Filter and sort brands
+  const filteredBrands = (brands || [])
+    .filter((brand) =>
+      brand.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    )
+    .sort((a, b) => {
+      let aVal = a[sortField] || "";
+      let bVal = b[sortField] || "";
+      if (typeof aVal === "string") aVal = aVal.toLowerCase();
+      if (typeof bVal === "string") bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return null;
+    return sortOrder === "asc" ? (
+      <ArrowUpIcon className="w-3 h-3 inline ml-1" />
+    ) : (
+      <ArrowDownIcon className="w-3 h-3 inline ml-1" />
+    );
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-text">Brands</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-text">Brands</h1>
+          <p className="text-sm text-text-light mt-1">
+            {filteredBrands.length} brands found
+          </p>
+        </div>
         <button
           onClick={() => {
             resetForm();
@@ -146,6 +195,20 @@ const Brands = () => {
         >
           <PlusIcon className="w-5 h-5" /> Add Brand
         </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
+        <div className="relative">
+          <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search brands by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
       </div>
 
       {showForm && (
@@ -171,8 +234,6 @@ const Brands = () => {
                 required
               />
             </div>
-
-            {/* Brand Logo Upload */}
             <div>
               <label className="block text-sm font-medium mb-2">
                 Brand Logo
@@ -208,23 +269,8 @@ const Brands = () => {
                     />
                   </label>
                 )}
-                {imagePreview && (
-                  <label className="cursor-pointer text-sm text-[#3D96EB] hover:underline">
-                    Change Logo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                  </label>
-                )}
               </div>
-              <p className="text-xs text-text-light mt-2">
-                Upload brand logo (PNG with transparent background recommended)
-              </p>
             </div>
-
             <div>
               <label className="block text-sm font-medium mb-1">
                 Description
@@ -259,17 +305,21 @@ const Brands = () => {
       )}
 
       {/* Brands Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {isLoading ? (
           <div className="col-span-full text-center p-8">Loading...</div>
-        ) : brands?.length === 0 ? (
+        ) : filteredBrands.length === 0 ? (
           <div className="col-span-full text-center p-12 bg-white rounded-xl border border-gray-100">
             <PhotoIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <h3 className="font-semibold text-text mb-1">No Brands</h3>
-            <p className="text-text-light text-sm">Add your first brand</p>
+            <h3 className="font-semibold text-text mb-1">No Brands Found</h3>
+            <p className="text-text-light text-sm">
+              {searchQuery
+                ? "Try adjusting your search"
+                : "Add your first brand"}
+            </p>
           </div>
         ) : (
-          brands?.map((brand) => (
+          filteredBrands.map((brand) => (
             <div
               key={brand._id}
               className="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md transition"
@@ -292,6 +342,9 @@ const Brands = () => {
                   <h3 className="font-semibold text-text truncate">
                     {brand.name}
                   </h3>
+                  <p className="text-xs text-text-light truncate">
+                    ID: {brand.brandId || brand._id}
+                  </p>
                   {brand.description && (
                     <p className="text-xs text-text-light truncate">
                       {brand.description}

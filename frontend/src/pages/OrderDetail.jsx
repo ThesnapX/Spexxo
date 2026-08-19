@@ -152,8 +152,23 @@ const OrderDetail = () => {
                     <div className="flex-1">
                       <p className="font-medium text-text">{item.name}</p>
                       {item.variant?.name && (
+                        <p className="text-sm text-primary font-medium">
+                          Variant: {item.variant.name}
+                          {item.variant?.color &&
+                            typeof item.variant.color === "object" && (
+                              <span
+                                className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
+                                style={{
+                                  backgroundColor:
+                                    item.variant.color.hexCode || "#000",
+                                }}
+                              />
+                            )}
+                        </p>
+                      )}
+                      {item.variant?.sku && (
                         <p className="text-xs text-text-light">
-                          {item.variant.name}
+                          SKU: {item.variant.sku}
                         </p>
                       )}
                       <p className="text-sm text-text-light">

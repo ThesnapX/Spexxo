@@ -772,19 +772,28 @@ const Checkout = () => {
                 <div className="max-h-60 overflow-y-auto">
                   {cart.items.map((item) => {
                     const name = item.product?.name || item.name || "Product";
+                    const variantName = item.variant?.name || "";
                     const price =
-                      item.product?.comparePrice || item.product?.price || 0;
+                      item.variant?.price ||
+                      item.product?.comparePrice ||
+                      item.product?.price ||
+                      0;
                     const isDeactivated = item.product?.isActive === false;
+
                     return (
                       <div
                         key={item._id}
-                        className={`flex justify-between text-sm py-2 border-b border-gray-50 ${
-                          isDeactivated ? "opacity-50" : ""
-                        }`}
+                        className={`flex justify-between text-sm py-2 border-b border-gray-50 ${isDeactivated ? "opacity-50" : ""}`}
                       >
                         <span className="truncate mr-2">
                           {isDeactivated && "⚠️ "}
-                          {name} × {item.quantity}
+                          {name}
+                          {variantName && (
+                            <span className="text-xs text-primary ml-1">
+                              ({variantName})
+                            </span>
+                          )}
+                          × {item.quantity}
                         </span>
                         <span className="flex-shrink-0">
                           ₹{(price * item.quantity).toLocaleString()}

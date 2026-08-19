@@ -1,4 +1,6 @@
-import { useState } from "react";
+// frontend/src/pages/ProductDetail.jsx
+
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -48,6 +50,8 @@ const ProductDetail = () => {
   const [reviewImages, setReviewImages] = useState([]);
   const [reviewPreviews, setReviewPreviews] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedVariantImages, setSelectedVariantImages] = useState([]);
 
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
@@ -108,8 +112,29 @@ const ProductDetail = () => {
     enabled: !!product?._id,
   });
 
+  // Set default variant when product loads
+  useEffect(() => {
+    if (product?.variants && product.variants.length > 0) {
+      setSelectedVariant(product.variants[0]);
+      if (product.variants[0].images?.length > 0) {
+        setSelectedVariantImages(product.variants[0].images);
+      }
+    }
+  }, [product]);
+
   const displayRelated =
     smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
+
+  // Get display price based on selected variant
+  const displayPrice =
+    selectedVariant?.price || product?.comparePrice || product?.price;
+  const originalPrice = selectedVariant?.comparePrice || product?.price;
+  const displayStock =
+    selectedVariant?.stock !== undefined
+      ? selectedVariant.stock
+      : product?.stock;
+  const isVariantOutOfStock = selectedVariant && selectedVariant.stock <= 0;
+  const isProductOutOfStock = !selectedVariant && (product?.stock || 0) <= 0;
 
   const handleAddToCart = () => {
     if (isDeactivated) {
@@ -118,7 +143,15 @@ const ProductDetail = () => {
       );
       return;
     }
-    addToCart(product._id, quantity);
+    if (selectedVariant && selectedVariant.stock <= 0) {
+      toast.error("Selected variant is out of stock");
+      return;
+    }
+    if (!selectedVariant && (product?.stock || 0) <= 0) {
+      toast.error("This product is out of stock");
+      return;
+    }
+    addToCart(product._id, quantity, selectedVariant);
   };
 
   const handleBuyNow = () => {
@@ -126,7 +159,15 @@ const ProductDetail = () => {
       toast.error("This product is currently deactivated");
       return;
     }
-    addToCart(product._id, quantity);
+    if (selectedVariant && selectedVariant.stock <= 0) {
+      toast.error("Selected variant is out of stock");
+      return;
+    }
+    if (!selectedVariant && (product?.stock || 0) <= 0) {
+      toast.error("This product is out of stock");
+      return;
+    }
+    addToCart(product._id, quantity, selectedVariant);
     navigate("/checkout");
   };
 
@@ -192,10 +233,8 @@ const ProductDetail = () => {
   };
 
   const discountPercent =
-    product?.comparePrice && product?.price > product?.comparePrice
-      ? Math.round(
-          ((product.price - product.comparePrice) / product.price) * 100,
-        )
+    originalPrice && displayPrice && originalPrice > displayPrice
+      ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100)
       : 0;
 
   if (isLoading) {
@@ -232,6 +271,17 @@ const ProductDetail = () => {
       </div>
     );
   }
+
+  // Build WhatsApp message with variant info
+  const whatsappMessage = `Hi Spexxo, I want to order:
+  
+*Product:* ${product.name}
+${selectedVariant ? `*Variant:* ${selectedVariant.name}` : ""}
+${selectedVariant?.sku ? `*SKU:* ${selectedVariant.sku}` : `*SKU:* ${product.sku || "N/A"}`}
+*Price:* ₹${displayPrice?.toLocaleString()}
+*Quantity:* ${quantity}
+
+Please confirm availability.`;
 
   return (
     <>
@@ -279,7 +329,9 @@ const ProductDetail = () => {
               >
                 <img
                   src={
-                    product.images?.[selectedImage]?.url ||
+                    (selectedVariantImages?.length > 0
+                      ? selectedVariantImages[0]?.url
+                      : product.images?.[selectedImage]?.url) ||
                     "https://picsum.photos/800/800"
                   }
                   alt={product.name}
@@ -305,10 +357,22 @@ const ProductDetail = () => {
                     </span>
                   )
                 )}
+                {isVariantOutOfStock && !isDeactivated && (
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                    <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
+                      OUT OF STOCK
+                    </span>
+                  </div>
+                )}
               </div>
-              {product.images?.length > 1 && (
+              {(product.images?.length > 1 ||
+                selectedVariantImages?.length > 0) && (
                 <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-                  {product.images.map((img, index) => (
+                  {/* Show variant images if selected, else show product images */}
+                  {(selectedVariantImages?.length > 0
+                    ? selectedVariantImages
+                    : product.images
+                  ).map((img, index) => (
                     <button
                       key={index}
                       onClick={() => {
@@ -348,21 +412,25 @@ const ProductDetail = () => {
                 <div className="flex items-baseline gap-2">
                   <span
                     className={`text-2xl md:text-3xl font-bold ${
-                      isDeactivated ? "text-gray-400" : "text-text"
+                      isDeactivated || isVariantOutOfStock
+                        ? "text-gray-400"
+                        : "text-text"
                     }`}
                   >
-                    ₹{(product.comparePrice || product.price)?.toLocaleString()}
+                    ₹{displayPrice?.toLocaleString()}
                   </span>
-                  {product.comparePrice && (
+                  {originalPrice && originalPrice > displayPrice && (
                     <span className="text-lg text-gray-400 line-through">
-                      ₹{product.price?.toLocaleString()}
+                      ₹{originalPrice?.toLocaleString()}
                     </span>
                   )}
-                  {discountPercent > 0 && !isDeactivated && (
-                    <span className="text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                      {discountPercent}% off
-                    </span>
-                  )}
+                  {discountPercent > 0 &&
+                    !isDeactivated &&
+                    !isVariantOutOfStock && (
+                      <span className="text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                        {discountPercent}% off
+                      </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="flex">
@@ -383,6 +451,97 @@ const ProductDetail = () => {
                   </span>
                 </div>
               </div>
+
+              {/* Variant Selector */}
+              {product?.variants && product.variants.length > 0 && (
+                <div className="mb-6">
+                  <label className="text-sm font-medium text-text mb-2 block">
+                    Select Variant
+                  </label>
+                  <div className="flex flex-wrap gap-3 max-h-40 overflow-y-auto p-1">
+                    {product.variants.map((variant, index) => {
+                      const isSelected =
+                        selectedVariant?._id === variant._id ||
+                        selectedVariant?.name === variant.name;
+                      const isVariantActive = variant.isActive !== false;
+                      const isVariantStock = variant.stock > 0;
+
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => {
+                            if (isVariantActive) {
+                              setSelectedVariant(variant);
+                              if (variant.images?.length > 0) {
+                                setSelectedVariantImages(variant.images);
+                                setSelectedImage(0);
+                              } else {
+                                setSelectedVariantImages([]);
+                              }
+                            }
+                          }}
+                          disabled={!isVariantActive || !isVariantStock}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition ${
+                            isSelected
+                              ? "border-primary bg-[#EBF4FC] text-primary"
+                              : "border-gray-200 hover:border-gray-300"
+                          } ${!isVariantActive || !isVariantStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          {/* Color swatch if variant has color */}
+                          {variant.color &&
+                            typeof variant.color === "object" &&
+                            variant.color.hexCode && (
+                              <span
+                                className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                style={{
+                                  backgroundColor: variant.color.hexCode,
+                                }}
+                              />
+                            )}
+                          <span className="text-sm font-medium">
+                            {variant.name}
+                          </span>
+                          <span className="text-xs text-text-light">
+                            ₹{variant.price?.toLocaleString()}
+                          </span>
+                          {variant.stock <= 0 && (
+                            <span className="text-xs text-red-500">
+                              (Out of Stock)
+                            </span>
+                          )}
+                          {!isVariantActive && (
+                            <span className="text-xs text-gray-400">
+                              (Inactive)
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Show selected variant details */}
+                  {selectedVariant && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-text-light">
+                        Selected:{" "}
+                        <span className="font-medium text-text">
+                          {selectedVariant.name}
+                        </span>
+                        {selectedVariant.sku &&
+                          ` • SKU: ${selectedVariant.sku}`}
+                        {selectedVariant.stock !== undefined && (
+                          <span
+                            className={`ml-2 ${selectedVariant.stock > 0 ? "text-green-600" : "text-red-500"}`}
+                          >
+                            {selectedVariant.stock > 0
+                              ? `${selectedVariant.stock} in stock`
+                              : "Out of Stock"}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Deactivated Banner */}
               {isDeactivated && (
@@ -427,7 +586,7 @@ const ProductDetail = () => {
                 <span className="text-sm font-medium text-text">Quantity:</span>
                 <div
                   className={`flex items-center border rounded-lg ${
-                    isDeactivated
+                    isDeactivated || isVariantOutOfStock
                       ? "border-gray-200 bg-gray-50"
                       : "border-gray-200"
                   }`}
@@ -435,11 +594,13 @@ const ProductDetail = () => {
                   <button
                     onClick={() => quantity > 1 && setQuantity(quantity - 1)}
                     className={`w-9 h-9 flex items-center justify-center rounded-l-lg ${
-                      isDeactivated
+                      isDeactivated || isVariantOutOfStock
                         ? "text-gray-400 cursor-not-allowed"
                         : "hover:bg-gray-50"
                     }`}
-                    disabled={isDeactivated || quantity <= 1}
+                    disabled={
+                      isDeactivated || isVariantOutOfStock || quantity <= 1
+                    }
                   >
                     <MinusIcon className="w-4 h-4" />
                   </button>
@@ -448,34 +609,38 @@ const ProductDetail = () => {
                     value={quantity}
                     onChange={(e) => {
                       const v = parseInt(e.target.value);
-                      if (v > 0 && v <= (product.stock || 99)) setQuantity(v);
+                      if (v > 0 && v <= (displayStock || 99)) setQuantity(v);
                     }}
                     className={`w-14 text-center text-sm font-medium border-x py-2 focus:outline-none ${
-                      isDeactivated ? "bg-gray-50 text-gray-400" : ""
+                      isDeactivated || isVariantOutOfStock
+                        ? "bg-gray-50 text-gray-400"
+                        : ""
                     }`}
                     min="1"
-                    max={product.stock || 99}
-                    disabled={isDeactivated}
+                    max={displayStock || 99}
+                    disabled={isDeactivated || isVariantOutOfStock}
                   />
                   <button
                     onClick={() => setQuantity(quantity + 1)}
                     className={`w-9 h-9 flex items-center justify-center rounded-r-lg ${
-                      isDeactivated
+                      isDeactivated || isVariantOutOfStock
                         ? "text-gray-400 cursor-not-allowed"
                         : "hover:bg-gray-50"
                     }`}
-                    disabled={isDeactivated}
+                    disabled={isDeactivated || isVariantOutOfStock}
                   >
                     <PlusIcon className="w-4 h-4" />
                   </button>
                 </div>
-                {product.stock > 0 && !isDeactivated && (
+                {displayStock > 0 && !isDeactivated && !isVariantOutOfStock && (
                   <span className="text-xs text-green-600">
-                    {product.stock} in stock
+                    {displayStock} in stock
                   </span>
                 )}
-                {isDeactivated && (
-                  <span className="text-xs text-red-500">Unavailable</span>
+                {(isDeactivated || isVariantOutOfStock) && (
+                  <span className="text-xs text-red-500">
+                    {isDeactivated ? "Unavailable" : "Out of Stock"}
+                  </span>
                 )}
               </div>
 
@@ -483,15 +648,21 @@ const ProductDetail = () => {
               <div className="flex gap-3 mb-6">
                 <button
                   onClick={handleAddToCart}
-                  disabled={isDeactivated}
+                  disabled={
+                    isDeactivated || isVariantOutOfStock || isProductOutOfStock
+                  }
                   className={`flex-1 py-3.5 text-base rounded-full font-semibold transition flex items-center justify-center gap-2 ${
-                    isDeactivated
+                    isDeactivated || isVariantOutOfStock || isProductOutOfStock
                       ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                       : "btn-primary"
                   }`}
                 >
                   <ShoppingBagIcon className="w-5 h-5" />
-                  {isDeactivated ? "Unavailable" : "Add to Cart"}
+                  {isDeactivated
+                    ? "Unavailable"
+                    : isVariantOutOfStock || isProductOutOfStock
+                      ? "Out of Stock"
+                      : "Add to Cart"}
                 </button>
                 <button
                   onClick={handleWishlistClick}
@@ -514,47 +685,49 @@ const ProductDetail = () => {
 
               <button
                 onClick={handleBuyNow}
-                disabled={isDeactivated}
+                disabled={
+                  isDeactivated || isVariantOutOfStock || isProductOutOfStock
+                }
                 className={`w-full py-3.5 rounded-full font-semibold text-base transition mb-6 flex items-center justify-center gap-2 ${
-                  isDeactivated
+                  isDeactivated || isVariantOutOfStock || isProductOutOfStock
                     ? "bg-gray-200 text-gray-500 cursor-not-allowed"
                     : "bg-text text-white hover:bg-gray-800"
                 }`}
               >
                 <BoltIcon className="w-5 h-5" />
-                {isDeactivated ? "Unavailable" : "Buy Now"}
+                {isDeactivated
+                  ? "Unavailable"
+                  : isVariantOutOfStock || isProductOutOfStock
+                    ? "Out of Stock"
+                    : "Buy Now"}
               </button>
 
               {/* WhatsApp Order */}
-              {!isDeactivated && (
-                <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-                  <p className="text-sm font-medium text-green-800 mb-1">
-                    Need prescription glasses?
-                  </p>
-                  <p className="text-xs text-green-600 mb-3">
-                    Order via WhatsApp - send your prescription and we'll handle
-                    the rest.
-                  </p>
-                  <a
-                    href={`https://wa.me/919969538739?text=${encodeURIComponent(
-                      `Hi Spexxo, I want to order:\n\n*Product:* ${product.name}\n*SKU:* ${
-                        product.sku || "N/A"
-                      }\n*Price:* ₹${(
-                        product.comparePrice || product.price
-                      )?.toLocaleString()}\n\nPlease confirm availability.`,
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition"
-                  >
-                    💬 Order on WhatsApp
-                  </a>
-                </div>
-              )}
+              {!isDeactivated &&
+                !isVariantOutOfStock &&
+                !isProductOutOfStock && (
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                    <p className="text-sm font-medium text-green-800 mb-1">
+                      Need prescription glasses?
+                    </p>
+                    <p className="text-xs text-green-600 mb-3">
+                      Order via WhatsApp - send your prescription and we'll
+                      handle the rest.
+                    </p>
+                    <a
+                      href={`https://wa.me/919969538739?text=${encodeURIComponent(whatsappMessage)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-green-600 transition"
+                    >
+                      💬 Order on WhatsApp
+                    </a>
+                  </div>
+                )}
             </div>
           </div>
 
-          {/* Product Details Accordions */}
+          {/* Product Details Accordions - Same as before */}
           <div className="max-w-3xl mb-16">
             <h2 className="text-xl font-bold text-text mb-6">
               Product Details
@@ -679,7 +852,7 @@ const ProductDetail = () => {
             </div>
           </div>
 
-          {/* Related Products */}
+          {/* Related Products - Same as before */}
           {displayRelated.length > 0 && (
             <section className="mb-16">
               <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
@@ -719,7 +892,7 @@ const ProductDetail = () => {
             </section>
           )}
 
-          {/* Reviews */}
+          {/* Reviews - Same as before */}
           <section className="max-w-3xl">
             <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
               Customer Reviews ({product.ratings?.count || 0})
@@ -879,8 +1052,6 @@ const ProductDetail = () => {
                       <p className="font-medium text-sm mb-1">{review.title}</p>
                     )}
                     <p className="text-sm text-text-light">{review.comment}</p>
-
-                    {/* Review Images */}
                     {review.images?.length > 0 && (
                       <div className="flex gap-2 mt-3">
                         {review.images.map((img, i) => (
@@ -893,8 +1064,6 @@ const ProductDetail = () => {
                         ))}
                       </div>
                     )}
-
-                    {/* Admin Reply */}
                     {review.adminReply && (
                       <div className="mt-3 bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <div className="flex items-center gap-2 mb-1">
