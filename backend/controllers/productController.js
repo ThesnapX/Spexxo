@@ -1,3 +1,5 @@
+// backend/controllers/productController.js
+
 import Product from "../models/Product.js";
 import Category from "../models/Category.js";
 import Brand from "../models/Brand.js";
@@ -26,7 +28,7 @@ export const getProducts = async (req, res) => {
       isNewArrival,
       isBestSeller,
       includeInactive,
-      hideOutOfStock = "true", // ✅ NEW: Hide out of stock by default
+      hideOutOfStock = "true",
     } = req.query;
 
     const query = {};
@@ -36,7 +38,7 @@ export const getProducts = async (req, res) => {
       query.isActive = true;
     }
 
-    // ✅ NEW: Hide out of stock products by default
+    // Hide out of stock products by default
     if (hideOutOfStock !== "false") {
       query.stock = { $gt: 0 };
     }
@@ -57,7 +59,107 @@ export const getProducts = async (req, res) => {
       query.$and = [{ $or: searchTerms }];
     }
 
-    // ... rest of the filter logic (same as before) ...
+    // Category filter
+    if (category) {
+      const cat = await Category.findOne({ slug: category });
+      if (cat) {
+        const catId = cat._id.toString();
+        query.$and = query.$and || [];
+        query.$and.push({ category: { $regex: catId, $options: "i" } });
+      } else {
+        query._id = { $in: [] };
+      }
+    }
+
+    // Brand filter
+    if (brand) {
+      const brandSlugs = brand.split(",").filter(Boolean);
+      const brands = await Brand.find({ slug: { $in: brandSlugs } });
+      if (brands.length > 0) {
+        const brandIds = brands.map((b) => b._id.toString());
+        query.$and = query.$and || [];
+        query.$and.push({ brand: { $in: brandIds } });
+      } else {
+        query._id = { $in: [] };
+      }
+    }
+
+    // Gender filter
+    if (gender) {
+      const genders = gender.split(",").filter(Boolean);
+      if (genders.length > 0) {
+        query.$and = query.$and || [];
+        query.$and.push({ gender: { $in: genders } });
+      }
+    }
+
+    // Product type
+    if (productType) {
+      query.$and = query.$and || [];
+      query.$and.push({ productType });
+    }
+
+    // Frame shape
+    if (frameShape) {
+      const shapes = frameShape.split(",").filter(Boolean);
+      if (shapes.length > 0) {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: shapes.map((s) => ({
+            frameShape: { $regex: s, $options: "i" },
+          })),
+        });
+      }
+    }
+
+    // Lens type
+    if (lensType) {
+      const types = lensType.split(",").filter(Boolean);
+      if (types.length > 0) {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: types.map((t) => ({ lensType: { $regex: t, $options: "i" } })),
+        });
+      }
+    }
+
+    // Price range
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    // Rating
+    if (rating) query["ratings.average"] = { $gte: Number(rating) };
+
+    // Flags
+    if (isFeatured) query.isFeatured = true;
+    if (isTrending) query.isTrending = true;
+    if (isNewArrival) query.isNewArrival = true;
+    if (isBestSeller) query.isBestSeller = true;
+
+    // ✅ FIX: Define sortOption properly
+    let sortOption = { createdAt: -1 };
+    switch (sort) {
+      case "price-low":
+        sortOption = { price: 1 };
+        break;
+      case "price-high":
+        sortOption = { price: -1 };
+        break;
+      case "rating":
+        sortOption = { "ratings.average": -1 };
+        break;
+      case "popular":
+        sortOption = { "ratings.count": -1 };
+        break;
+      case "newest":
+        sortOption = { createdAt: -1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
 
     const skip = (Number(page) - 1) * Number(limit);
 
@@ -67,11 +169,33 @@ export const getProducts = async (req, res) => {
         .sort(sortOption)
         .skip(skip)
         .limit(Number(limit))
-        .lean(), // ✅ Added lean() for better performance
+        .lean(),
       Product.countDocuments(query),
     ]);
 
-    // ... rest of the code (same as before) ...
+    // Get all categories for name lookup
+    const allCategories = await Category.find({});
+    const categoryMap = {};
+    allCategories.forEach((cat) => {
+      categoryMap[cat._id.toString()] = cat;
+    });
+
+    const productsWithCategories = products.map((product) => {
+      const productObj = { ...product };
+      if (productObj.category) {
+        const categoryIds = productObj.category.split(",").filter(Boolean);
+        productObj.categories = categoryIds
+          .map((id) => {
+            const cat = categoryMap[id];
+            return cat
+              ? { _id: cat._id, name: cat.name, slug: cat.slug }
+              : null;
+          })
+          .filter(Boolean);
+        productObj.category = productObj.categories[0] || null;
+      }
+      return productObj;
+    });
 
     res.status(200).json({
       success: true,
@@ -167,7 +291,6 @@ export const updateProduct = async (req, res) => {
         .json({ success: false, message: "Product not found" });
     }
 
-    // Return the updated product with a flag that it was updated
     res.status(200).json({
       success: true,
       product,
