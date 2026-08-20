@@ -1,3 +1,5 @@
+// frontend/src/App.jsx
+
 import { Routes, Route } from "react-router-dom";
 import { Suspense, lazy, useEffect } from "react";
 import Layout from "./components/layout/Layout";
@@ -56,12 +58,10 @@ const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
 
-// Maintenance Mode
-import MaintenanceMode from "./components/common/MaintenanceMode";
+// ❌ REMOVE THIS IMPORT - No longer needed
+// import MaintenanceMode from "./components/common/MaintenanceMode";
 
 function App() {
-  const isMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === "true";
-
   const { refreshCartWithLatestData } = useCart();
 
   // Listen for product update events (from admin)
@@ -79,9 +79,11 @@ function App() {
     };
   }, [refreshCartWithLatestData]);
 
-  if (isMaintenance) {
-    return <MaintenanceMode />;
-  }
+  // ❌ REMOVE THIS - No maintenance mode check
+  // const isMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === "true";
+  // if (isMaintenance) {
+  //   return <MaintenanceMode />;
+  // }
 
   return (
     <Suspense fallback={<Loading />}>
@@ -158,8 +160,6 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
-
-          {/* Product Management - All under Products dropdown */}
           <Route path="products" element={<Products />} />
           <Route path="products/add" element={<AddProduct />} />
           <Route path="products/edit/:id" element={<EditProduct />} />
@@ -170,8 +170,6 @@ function App() {
           <Route path="colors" element={<Colors />} />
           <Route path="lens-types" element={<LensTypes />} />
           <Route path="frame-materials" element={<FrameMaterials />} />
-
-          {/* Other Admin Routes */}
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetailAdmin />} />
           <Route path="reviews" element={<Reviews />} />
