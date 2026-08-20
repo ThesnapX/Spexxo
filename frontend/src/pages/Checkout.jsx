@@ -259,13 +259,38 @@ const Checkout = () => {
     if (paymentMethod === "online") {
       setLoading(true);
       try {
-        const amountInPaise = Math.round(grandTotal * 100);
+        // ✅ STEP 1: Create order in our database first
+        const orderData = {
+          shippingAddress: form,
+          couponCode: couponCodeApplied || undefined,
+          paymentMethod: "online",
+          paymentStatus: "pending",
+          isCOD: false,
+          orderStatus: "pending",
+        };
+
+        const { data: orderResponse } = await axios.post(
+          `${API_URL}/orders`,
+          orderData,
+        );
+
+        const createdOrder = orderResponse.order;
+        console.log("Order created:", createdOrder);
+
+        // ✅ STEP 2: Create Razorpay order with our order ID
+        const { data: razorpayData } = await axios.post(
+          `${API_URL}/payment/create-order`,
+          { orderId: createdOrder._id },
+        );
+
+        console.log("Razorpay order created:", razorpayData);
+
+        const amountInPaise = Math.round(createdOrder.total * 100);
         setProcessingPayment(true);
 
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.onload = () => {
-          // Get product names for notes
           const productNames = cart.items
             .map((item) => item.product?.name || item.name)
             .join(", ");
@@ -275,8 +300,9 @@ const Checkout = () => {
             amount: amountInPaise,
             currency: "INR",
             name: "Spexxo",
-            description: productNames || "Spexxo Eyewear",
+            description: `Order ${createdOrder.orderNumber}`,
             image: "/images/logo.png",
+            order_id: razorpayData.razorpayOrderId, // ✅ This is important!
             prefill: {
               name: form.fullName,
               email: user?.email || "customer@spexxo.com",
@@ -293,25 +319,20 @@ const Checkout = () => {
             handler: async function (response) {
               try {
                 setProcessingPayment(false);
-                const orderData = {
-                  shippingAddress: form,
-                  couponCode: couponCodeApplied || undefined,
-                  paymentMethod: "online",
-                  paymentStatus: "paid",
-                  isCOD: false,
-                  orderStatus: "pending",
-                  razorpay_payment_id: response.razorpay_payment_id,
+
+                // ✅ STEP 3: Verify payment with order ID
+                const verifyData = {
                   razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
+                  orderId: createdOrder._id, // ✅ Send our order ID
                 };
 
-                const { data } = await axios.post(
-                  `${API_URL}/orders`,
-                  orderData,
-                );
+                await axios.post(`${API_URL}/payment/verify`, verifyData);
+
                 await clearCart();
                 toast.success("Payment successful! Order placed!");
-                navigate(`/account/orders/${data.order._id}`);
+                navigate(`/account/orders/${createdOrder._id}`);
               } catch (error) {
                 console.error("Order creation error:", error);
                 toast.error(
@@ -337,7 +358,32 @@ const Checkout = () => {
       setLoading(true);
       try {
         // For COD with advance payment
+        // COD Payment with advance
         if (advanceAmount > 0) {
+          // ✅ STEP 1: Create order first
+          const orderData = {
+            shippingAddress: form,
+            couponCode: couponCodeApplied || undefined,
+            paymentMethod: "cod",
+            paymentStatus: "pending",
+            isCOD: true,
+            orderStatus: "pending",
+            codAdvance: advanceAmount,
+            remainingCOD: remainingCOD,
+          };
+
+          const { data: orderResponse } = await axios.post(
+            `${API_URL}/orders`,
+            orderData,
+          );
+          const createdOrder = orderResponse.order;
+
+          // ✅ STEP 2: Create Razorpay order for advance
+          const { data: razorpayData } = await axios.post(
+            `${API_URL}/payment/create-order`,
+            { orderId: createdOrder._id },
+          );
+
           const advanceAmountInPaise = advanceAmount * 100;
           setProcessingPayment(true);
 
@@ -349,8 +395,9 @@ const Checkout = () => {
               amount: advanceAmountInPaise,
               currency: "INR",
               name: "Spexxo",
-              description: "10% Advance Payment (COD Order)",
+              description: `10% Advance - Order ${createdOrder.orderNumber}`,
               image: "/images/logo.png",
+              order_id: razorpayData.razorpayOrderId, // ✅ This is important!
               prefill: {
                 name: form.fullName,
                 email: user?.email || "customer@spexxo.com",
@@ -361,45 +408,32 @@ const Checkout = () => {
                 ondismiss: function () {
                   setProcessingPayment(false);
                   setLoading(false);
-                  toast.error(
-                    "Advance payment is required for COD orders. Please complete the payment.",
-                  );
+                  toast.error("Advance payment is required for COD orders.");
                 },
               },
               handler: async function (response) {
                 try {
                   setProcessingPayment(false);
-                  // Create order with COD advance payment - status set to "pending"
-                  const orderData = {
-                    shippingAddress: form,
-                    couponCode: couponCodeApplied || undefined,
-                    paymentMethod: "cod",
-                    paymentStatus: "paid",
-                    isCOD: true,
-                    orderStatus: "pending", // Changed from "confirmed" to "pending"
-                    codAdvance: advanceAmount,
-                    remainingCOD: remainingCOD,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_signature: response.razorpay_signature,
-                  };
 
-                  const { data } = await axios.post(
-                    `${API_URL}/orders`,
-                    orderData,
-                  );
+                  // ✅ STEP 3: Verify COD advance payment
+                  await axios.post(`${API_URL}/payment/verify-cod-advance`, {
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                    orderId: createdOrder._id,
+                    isCODAdvance: true,
+                  });
+
                   await clearCart();
                   toast.success(
                     "Order placed with 10% advance! Remaining ₹" +
                       remainingCOD.toLocaleString() +
                       " on delivery.",
                   );
-                  navigate(`/account/orders/${data.order._id}`);
+                  navigate(`/account/orders/${createdOrder._id}`);
                 } catch (error) {
                   console.error("COD order creation error:", error);
-                  toast.error(
-                    "Order creation failed after advance payment. Contact support.",
-                  );
+                  toast.error("Order creation failed after advance payment.");
                   navigate("/account/orders");
                 }
               },

@@ -75,7 +75,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed", "refund_pending", "refunded"], // Added refund_pending and refunded
+      enum: ["pending", "paid", "failed", "refund_pending", "refunded"],
       default: "pending",
     },
     paymentDetails: {
@@ -145,7 +145,7 @@ const orderSchema = new mongoose.Schema(
     codAdvance: { type: Number, default: 0 },
     amountToPay: { type: Number },
     remainingCOD: { type: Number },
-    refundAmount: { type: Number, default: 0 }, // ✅ ADD THIS FIELD
+    refundAmount: { type: Number, default: 0 },
   },
   {
     timestamps: true,
@@ -162,13 +162,14 @@ orderSchema.pre("validate", async function (next) {
       this.orderId = `ORD-${nextNumber}`;
     }
 
-    // Generate orderNumber
+    // Generate orderNumber with 8 digits after ORD
     if (!this.orderNumber) {
       const date = new Date();
       const year = date.getFullYear().toString();
+      // Get count and pad to 8 digits
       const count = await mongoose.model("Order").countDocuments();
-      const nextNumber = (count + 1).toString().padStart(10, "0");
-      this.orderNumber = `ORD-${year}${nextNumber}`;
+      const nextNumber = (count + 1).toString().padStart(8, "0");
+      this.orderNumber = `ORD-${nextNumber}`;
     }
   }
   next();

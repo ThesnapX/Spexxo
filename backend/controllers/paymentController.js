@@ -39,12 +39,14 @@ export const createRazorpayOrder = async (req, res) => {
 
     // Create Razorpay order with proper details
     const amount = Math.round(order.total * 100); // Convert to paise
-    const receipt = `receipt_${order.orderNumber}`;
+
+    // ✅ Use orderNumber as receipt (this is what shows in Razorpay dashboard)
+    const receipt = order.orderNumber || `ORD-${Date.now()}`;
 
     const razorpayOrder = await razorpay.orders.create({
       amount,
       currency: "INR",
-      receipt,
+      receipt: receipt,
       notes: {
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
@@ -60,6 +62,7 @@ export const createRazorpayOrder = async (req, res) => {
     order.paymentDetails = {
       transactionId: razorpayOrder.id,
       paymentGateway: "razorpay",
+      razorpayOrderId: razorpayOrder.id,
     };
     await order.save();
 
@@ -138,7 +141,7 @@ export const verifyRazorpayPayment = async (req, res) => {
     };
     order.statusHistory.push({
       status: "confirmed",
-      note: "Payment received via Razorpay",
+      note: `Payment received via Razorpay. Payment ID: ${razorpay_payment_id}`,
       date: new Date(),
     });
 
@@ -218,7 +221,7 @@ export const verifyCODAdvance = async (req, res) => {
       };
       order.statusHistory.push({
         status: "confirmed",
-        note: `10% advance payment (₹${order.codAdvance}) received via Razorpay`,
+        note: `10% advance payment (₹${order.codAdvance}) received via Razorpay. Payment ID: ${razorpay_payment_id}`,
         date: new Date(),
       });
     }
