@@ -1,3 +1,5 @@
+// backend/routes/uploadRoutes.js
+
 import express from "express";
 import {
   uploadImage,
@@ -8,7 +10,10 @@ import { upload } from "../middleware/upload.js";
 
 const router = express.Router();
 
+// Single image upload
 router.post("/single", protect, admin, upload.single("image"), uploadImage);
+
+// Multiple images upload
 router.post(
   "/multiple",
   protect,

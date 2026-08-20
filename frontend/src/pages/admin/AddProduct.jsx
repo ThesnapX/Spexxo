@@ -187,17 +187,38 @@ const AddProduct = () => {
 
     let uploadedImages = [];
     if (imageFiles.length > 0) {
-      const fd = new FormData();
-      imageFiles.forEach((file) => fd.append("images", file));
       try {
-        const { data } = await axios.post(`${API_URL}/upload/multiple`, fd);
+        const fd = new FormData();
+        imageFiles.forEach((file) => fd.append("images", file));
+
+        console.log("Uploading images...", imageFiles.length);
+
+        const { data } = await axios.post(`${API_URL}/upload/multiple`, fd, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 30000, // 30 seconds timeout
+        });
+
+        console.log("Upload response:", data);
+
         uploadedImages = data.images.map((img, i) => ({
           url: img.url,
           alt: form.name,
           isMain: i === 0,
         }));
       } catch (error) {
-        toast.error("Image upload failed");
+        console.error("Upload error:", error);
+        // Check if it's a network error
+        if (error.code === "ERR_NETWORK") {
+          toast.error(
+            "Network error. Please check your connection and try again.",
+          );
+        } else if (error.response?.data?.message) {
+          toast.error(error.response.data.message);
+        } else {
+          toast.error("Image upload failed. Please try again.");
+        }
         setUploading(false);
         return;
       }
