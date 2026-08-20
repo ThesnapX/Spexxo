@@ -1,3 +1,5 @@
+/* frontend/src/index.css */
+
 @import "tailwindcss";
 
 @theme {
@@ -22,7 +24,13 @@
     box-sizing: border-box;
   }
 
+  /* ============================================ */
+  /* FIX: Remove Horizontal Scroll */
+  /* ============================================ */
+  html,
   body {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
     font-family: var(--font-poppins);
     color: var(--color-text);
     background-color: var(--color-background);
@@ -30,262 +38,9 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    font-family: var(--font-poppins);
-    font-weight: 600;
-  }
-}
-
-@layer utilities {
-  .container-custom {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
-  }
-
-  .btn-primary {
-    @apply bg-primary text-white px-6 py-3 font-medium transition-all duration-300 hover:bg-primary-dark hover:shadow-lg active:scale-95;
-  }
-
-  .btn-outline {
-    @apply border-2 border-primary text-primary px-6 py-3 font-medium transition-all duration-300 hover:bg-primary hover:text-white active:scale-95;
-  }
-
-  .btn-secondary {
-    @apply bg-text text-white px-6 py-3 font-medium transition-all duration-300 hover:bg-gray-800 active:scale-95;
-  }
-}
-
-/* Scrollbar Styling */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #3d96ea;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #2b7dd3;
-}
-
-/* Smooth Scroll */
-html {
-  scroll-behavior: smooth;
-}
-/* Product Carousel */
-.product-carousel .swiper-button-next,
-.product-carousel .swiper-button-prev {
-  /* width: 40px !important;
-  height: 40px !important;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  color: #0b1c39 !important;
-  top: 45% !important; */
-}
-
-.product-carousel .swiper-button-next::after,
-.product-carousel .swiper-button-prev::after {
-  /* font-size: 16px !important;
-  font-weight: bold; */
-}
-
-.product-carousel .swiper-button-next:hover,
-.product-carousel .swiper-button-prev:hover {
-  background: #3d96eb;
-  color: white !important;
-}
-
-.product-carousel .swiper-button-disabled {
-  opacity: 0 !important;
-}
-
-/* Brands Carousel */
-.brands-carousel .swiper-wrapper {
-  align-items: center;
-}
-
-/* Hero Slider */
-.hero-slider .swiper-pagination-bullet {
-  width: 8px !important;
-  height: 8px !important;
-  background: white !important;
-  opacity: 0.6 !important;
-  margin: 0 4px !important;
-}
-
-.hero-slider .swiper-pagination-bullet-active {
-  opacity: 1 !important;
-  background: #ffffff !important;
-  width: 24px !important;
-  border-radius: 4px !important;
-}
-
-.hero-slider .swiper-pagination {
-  bottom: 12px !important;
-}
-
-.hero-slider .hero-prev:hover,
-.hero-slider .hero-next:hover {
-  background: white !important;
-  transform: translateY(-50%) scale(1.05) !important;
-}
-
-.hero-slider .hero-prev:active,
-.hero-slider .hero-next:active {
-  transform: translateY(-50%) scale(0.95) !important;
-}
-/* Smooth scale transitions for all cards */
-.hover\:scale-\[1\.02\]:hover {
-  transform: scale(1.02);
-}
-
-.hover\:scale-\[1\.03\]:hover {
-  transform: scale(1.03);
-}
-
-.hover\:scale-110:hover {
-  transform: scale(1.1);
-}
-
-.active\:scale-\[0\.98\]:active {
-  transform: scale(0.98);
-}
-
-.active\:scale-95:active {
-  transform: scale(0.95);
-}
-
-.active\:scale-90:active {
-  transform: scale(0.9);
-}
-
-/* Hero Slider Arrow Styles */
-.hero-slider .hero-prev,
-.hero-slider .hero-next {
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.hero-slider .hero-prev > div,
-.hero-slider .hero-next > div {
-  transition: all 0.2s ease;
-}
-
-.hero-slider .hero-prev:active > div,
-.hero-slider .hero-next:active > div {
-  transform: scale(0.9);
-}
-
-/* Product Carousel Arrow Styles */
-.product-carousel .swiper-button-next,
-.product-carousel .swiper-button-prev {
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: all 0.2s ease;
-}
-
-.product-carousel .swiper-button-next:active,
-.product-carousel .swiper-button-prev:active {
-  transform: scale(0.9);
-}
-
-/* Hero Pagination Dots */
-.hero-slider .swiper-pagination-bullet {
-  width: 8px !important;
-  height: 8px !important;
-  background: white !important;
-  opacity: 0.6 !important;
-  margin: 0 4px !important;
-  transition: all 0.3s ease;
-}
-
-.hero-slider .swiper-pagination-bullet-active {
-  opacity: 1 !important;
-  background: #ffffff !important;
-  width: 24px !important;
-  border-radius: 4px !important;
-}
-
-.hero-slider .swiper-pagination {
-  bottom: 12px !important;
-}
-
-/* Product Carousel */
-.product-carousel .swiper-button-next,
-.product-carousel .swiper-button-prev {
-  width: 40px !important;
-  height: 40px !important;
-  background: white;
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  color: #0b1c39 !important;
-  top: 45% !important;
-}
-
-.product-carousel .swiper-button-next::after,
-.product-carousel .swiper-button-prev::after {
-  font-size: 16px !important;
-  font-weight: bold;
-}
-
-.product-carousel .swiper-button-next:hover,
-.product-carousel .swiper-button-prev:hover {
-  background: #3d96eb;
-  color: white !important;
-  transform: scale(1.05);
-}
-
-.product-carousel .swiper-button-disabled {
-  opacity: 0 !important;
-  pointer-events: none;
-}
-
-/* Brands Carousel */
-.brands-carousel .swiper-wrapper {
-  align-items: center;
-}
-@import "tailwindcss";
-
-@theme {
-  --color-primary: #3d96ea;
-  --color-primary-dark: #2b7dd3;
-  --color-primary-light: #6bb5f5;
-  --color-background: #ffffff;
-  --color-text: #0b1c39;
-  --color-text-light: #6b7280;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --font-poppins: "Poppins", sans-serif;
-  --font-playfair: "Playfair Display", serif;
-  --font-montserrat: "Montserrat", sans-serif;
-}
-
-@layer base {
   * {
-    margin: 0;
-    padding: 0;
+    max-width: 100%;
     box-sizing: border-box;
-  }
-
-  body {
-    font-family: var(--font-poppins);
-    color: var(--color-text);
-    background-color: var(--color-background);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   h1,
@@ -314,10 +69,6 @@ html {
 
   .btn-secondary {
     @apply bg-text text-white px-6 py-3 rounded-full font-medium transition-all duration-300 hover:bg-gray-800 active:scale-95 inline-flex items-center gap-2;
-  }
-
-  .btn-secondary {
-    @apply bg-text text-white px-6 py-3 rounded-full font-medium transition-all duration-300 hover:bg-gray-800 active:scale-95 inline-block;
   }
 }
 
@@ -352,6 +103,60 @@ html {
 .hero-slider .swiper-button-next,
 .hero-slider .swiper-button-prev {
   display: none !important;
+}
+
+/* Hero Slider Images - Responsive */
+.hero-slider .swiper-slide a {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-slider .swiper-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Mobile - Portrait */
+@media (max-width: 640px) {
+  .hero-slider .swiper-slide img {
+    height: 180px;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .hero-slider .swiper-pagination {
+    bottom: 6px !important;
+  }
+
+  .hero-slider .swiper-pagination-bullet {
+    width: 6px !important;
+    height: 6px !important;
+    margin: 0 3px !important;
+  }
+
+  .hero-slider .swiper-pagination-bullet-active {
+    width: 16px !important;
+  }
+}
+
+/* Mobile Landscape & Tablets */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .hero-slider .swiper-slide img {
+    height: 280px;
+    object-fit: cover;
+    object-position: center;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1025px) {
+  .hero-slider .swiper-slide img {
+    height: 450px;
+    object-fit: cover;
+    object-position: center;
+  }
 }
 
 /* Hero pagination dots */
@@ -403,6 +208,14 @@ html {
   transform: scale(0.9);
 }
 
+/* Navigation arrows - hidden on mobile */
+@media (max-width: 640px) {
+  .hero-prev,
+  .hero-next {
+    display: none !important;
+  }
+}
+
 /* ============================================ */
 /* PRODUCT CAROUSEL */
 /* ============================================ */
@@ -442,10 +255,128 @@ html {
   pointer-events: none;
 }
 
+/* Product Carousel responsive arrows */
+@media (max-width: 640px) {
+  .product-carousel .swiper-button-next,
+  .product-carousel .swiper-button-prev {
+    width: 28px !important;
+    height: 28px !important;
+    top: 38% !important;
+  }
+
+  .product-carousel .swiper-button-next::after,
+  .product-carousel .swiper-button-prev::after {
+    font-size: 12px !important;
+  }
+}
+
 /* ============================================ */
 /* BRANDS CAROUSEL */
 /* ============================================ */
 
 .brands-carousel .swiper-wrapper {
   align-items: center;
+}
+
+/* ============================================ */
+/* CARD ANIMATIONS */
+/* ============================================ */
+
+.hover\:scale-\[1\.02\]:hover {
+  transform: scale(1.02);
+}
+
+.hover\:scale-\[1\.03\]:hover {
+  transform: scale(1.03);
+}
+
+.hover\:scale-110:hover {
+  transform: scale(1.1);
+}
+
+.active\:scale-\[0\.98\]:active {
+  transform: scale(0.98);
+}
+
+.active\:scale-95:active {
+  transform: scale(0.95);
+}
+
+.active\:scale-90:active {
+  transform: scale(0.9);
+}
+
+/* ============================================ */
+/* RESPONSIVE FIXES FOR SPECIFIC PAGES */
+/* ============================================ */
+
+/* Register Page - Fix horizontal scroll */
+.register-page {
+  overflow-x: hidden;
+}
+
+.register-page .container-custom {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Ensure all inputs don't overflow */
+input,
+select,
+textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ============================================ */
+/* CART PAGE - Loading State */
+/* ============================================ */
+
+.cart-loading {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================ */
+/* SHOP PAGE - Product Grid */
+/* ============================================ */
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+/* ============================================ */
+/* UTILITY - Prevent Overflow */
+/* ============================================ */
+
+.overflow-hidden-x {
+  overflow-x: hidden;
+}
+
+.max-w-full {
+  max-width: 100%;
+}
+
+/* Fix for any unexpected horizontal scroll */
+#root {
+  overflow-x: hidden;
+  max-width: 100vw;
 }

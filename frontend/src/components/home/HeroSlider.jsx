@@ -10,6 +10,7 @@ const HeroSlider = () => {
       image: "images/hero-banner/eyeglass.png",
       link: "/shop/eyeglasses",
       alt: "Eyeglasses Collection",
+      // mobileImage: "images/hero-banner/eyeglass-mobile.png", // Optional: mobile specific
     },
     {
       id: 2,

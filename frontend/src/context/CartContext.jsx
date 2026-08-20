@@ -162,41 +162,21 @@ export const CartProvider = ({ children }) => {
   const addToCart = async (productId, quantity = 1, variant = null) => {
     if (isAuthenticated) {
       try {
-        // First, get fresh product data to check stock
-        const { data: productData } = await axios.get(
-          `${API_URL}/products/${productId}`,
-        );
-        const product = productData.product;
+        // ✅ Optimistic update - immediately update UI
+        const tempItem = {
+          _id: `temp-${Date.now()}`,
+          product: { _id: productId, isActive: true },
+          quantity,
+          variant,
+          price: 0,
+          subtotal: 0,
+          isTemp: true,
+        };
 
-        if (!product) {
-          toast.error("Product not found");
-          return;
-        }
-
-        if (product.isActive === false) {
-          toast.error("This product is currently deactivated");
-          return;
-        }
-
-        // Check variant stock if variant is selected
-        let stockToCheck = product.stock;
-        if (variant) {
-          const variantId = variant._id || variant.id;
-          const foundVariant = product.variants?.find(
-            (v) =>
-              v._id?.toString() === variantId?.toString() ||
-              v.name === variant.name ||
-              v.sku === variant.sku,
-          );
-          if (foundVariant) {
-            stockToCheck = foundVariant.stock || 0;
-          }
-        }
-
-        if (stockToCheck < quantity) {
-          toast.error(`Only ${stockToCheck} items available in stock`);
-          return;
-        }
+        setCart((prev) => ({
+          ...prev,
+          items: [...(prev.items || []), tempItem],
+        }));
 
         const { data } = await axios.post(`${API_URL}/cart`, {
           productId,
@@ -204,10 +184,13 @@ export const CartProvider = ({ children }) => {
           variant,
         });
 
+        // ✅ Refresh with actual data
         await refreshCartWithLatestData();
         toast.success("Added to cart! 🛒");
         return data;
       } catch (error) {
+        // ✅ Revert on error
+        await refreshCartWithLatestData();
         toast.error(error.response?.data?.message || "Failed to add to cart");
         throw error;
       }
