@@ -265,12 +265,17 @@ const Checkout = () => {
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.onload = () => {
+          // Get product names for notes
+          const productNames = cart.items
+            .map((item) => item.product?.name || item.name)
+            .join(", ");
+
           const options = {
             key: RAZORPAY_KEY,
             amount: amountInPaise,
             currency: "INR",
             name: "Spexxo",
-            description: "Eyewear Purchase",
+            description: productNames || "Spexxo Eyewear",
             image: "/images/logo.png",
             prefill: {
               name: form.fullName,
@@ -288,14 +293,13 @@ const Checkout = () => {
             handler: async function (response) {
               try {
                 setProcessingPayment(false);
-                // Create order with payment details - status set to "pending"
                 const orderData = {
                   shippingAddress: form,
                   couponCode: couponCodeApplied || undefined,
                   paymentMethod: "online",
                   paymentStatus: "paid",
                   isCOD: false,
-                  orderStatus: "pending", // Changed from "confirmed" to "pending"
+                  orderStatus: "pending",
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_signature: response.razorpay_signature,

@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/Orders.jsx
+
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -35,6 +37,14 @@ const Orders = () => {
     shipped: "bg-orange-100 text-orange-700",
     delivered: "bg-green-100 text-green-700",
     cancelled: "bg-red-100 text-red-700",
+  };
+
+  const paymentStatusColors = {
+    pending: "bg-yellow-100 text-yellow-700",
+    paid: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
+    refund_pending: "bg-orange-100 text-orange-700",
+    refunded: "bg-gray-100 text-gray-700",
   };
 
   const statusIcons = {
@@ -106,6 +116,9 @@ const Orders = () => {
                   Status
                 </th>
                 <th className="text-left p-4 text-sm font-medium text-text-light">
+                  Payment Status
+                </th>
+                <th className="text-left p-4 text-sm font-medium text-text-light">
                   Date
                 </th>
                 <th className="text-right p-4 text-sm font-medium text-text-light">
@@ -116,7 +129,7 @@ const Orders = () => {
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan="8" className="p-8 text-center">
+                  <td colSpan="9" className="p-8 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-text-light">Loading orders...</span>
@@ -125,7 +138,7 @@ const Orders = () => {
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-12 text-center text-text-light">
+                  <td colSpan="9" className="p-12 text-center text-text-light">
                     <div className="flex flex-col items-center gap-2">
                       <TruckIcon className="w-12 h-12 text-gray-300" />
                       <p className="font-medium">No orders found</p>
@@ -178,6 +191,18 @@ const Orders = () => {
                       >
                         {statusIcons[order.orderStatus]}
                         {order.orderStatus}
+                      </span>
+                    </td>
+                    {/* ✅ ADDED: Payment Status Column */}
+                    <td className="p-4">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${paymentStatusColors[order.paymentStatus] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {order.paymentStatus === "refund_pending"
+                          ? "Refund Pending"
+                          : order.paymentStatus === "refunded"
+                            ? "Refunded"
+                            : order.paymentStatus}
                       </span>
                     </td>
                     <td className="p-4 text-xs text-text-light">

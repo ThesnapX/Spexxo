@@ -1,3 +1,5 @@
+// backend/controllers/paymentController.js
+
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import Order from "../models/Order.js";
@@ -17,7 +19,7 @@ export const createRazorpayOrder = async (req, res) => {
 
     const order = await Order.findById(orderId).populate(
       "user",
-      "email phone firstName",
+      "email phone firstName lastName",
     );
 
     if (!order) {
@@ -32,7 +34,10 @@ export const createRazorpayOrder = async (req, res) => {
         .json({ success: false, message: "Order already paid" });
     }
 
-    // Create Razorpay order
+    // Get product names for notes
+    const productNames = order.items.map((item) => item.name).join(", ");
+
+    // Create Razorpay order with proper details
     const amount = Math.round(order.total * 100); // Convert to paise
     const receipt = `receipt_${order.orderNumber}`;
 
@@ -43,6 +48,11 @@ export const createRazorpayOrder = async (req, res) => {
       notes: {
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
+        customerName:
+          `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim(),
+        customerEmail: order.user?.email || "",
+        customerPhone: order.user?.phone || "",
+        products: productNames || "Spexxo Eyewear",
       },
     });
 
@@ -61,9 +71,16 @@ export const createRazorpayOrder = async (req, res) => {
       orderNumber: order.orderNumber,
       key: process.env.RAZORPAY_KEY_ID,
       prefill: {
-        name: order.user?.firstName + " " + order.user?.lastName || "Customer",
+        name:
+          `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim() ||
+          "Customer",
         email: order.user?.email || "",
         contact: order.user?.phone || "",
+      },
+      notes: {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        products: productNames || "Spexxo Eyewear",
       },
     });
   } catch (error) {

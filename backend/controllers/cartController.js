@@ -1,3 +1,7 @@
+// backend/controllers/cartController.js
+
+// backend/controllers/cartController.js
+
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 
@@ -9,7 +13,7 @@ export const getCart = async (req, res) => {
     let cart = await Cart.findOne({ user: req.user._id }).populate({
       path: "items.product",
       select:
-        "name slug price comparePrice images stock isInStock brand isActive",
+        "name slug price comparePrice images stock isInStock brand isActive productType sku",
       populate: {
         path: "brand",
         select: "name slug",
@@ -20,25 +24,61 @@ export const getCart = async (req, res) => {
       cart = await Cart.create({ user: req.user._id, items: [] });
     }
 
-    // Calculate prices dynamically from product data
-    const itemsWithPrices = cart.items.map((item) => {
-      const product = item.product;
-      const currentPrice = product?.comparePrice || product?.price || 0;
-      return {
-        ...(item.toObject ? item.toObject() : item),
-        price: currentPrice,
-        subtotal: currentPrice * item.quantity,
-      };
-    });
+    // Filter out items with null products and calculate prices dynamically
+    const activeItems = cart.items.filter((item) => item.product !== null);
+
+    // If there are items with null products (deleted), remove them
+    if (activeItems.length !== cart.items.length) {
+      cart.items = activeItems;
+      await cart.save();
+    }
+
+    // Build response with proper data
+    const itemsWithPrices = activeItems
+      .map((item) => {
+        const product = item.product;
+        // If product is null or undefined, skip it
+        if (!product) return null;
+
+        const currentPrice = product.comparePrice || product.price || 0;
+
+        // Ensure we have all required fields
+        return {
+          _id: item._id,
+          product: {
+            _id: product._id,
+            name: product.name || "Product",
+            slug: product.slug || "",
+            price: product.price || 0,
+            comparePrice: product.comparePrice || null,
+            images: product.images || [],
+            stock: product.stock || 0,
+            isInStock: product.isInStock !== false,
+            isActive: product.isActive !== false,
+            brand: product.brand || null,
+            productType: product.productType || "",
+            sku: product.sku || "",
+          },
+          quantity: item.quantity || 1,
+          variant: item.variant || null,
+          price: currentPrice,
+          subtotal: currentPrice * (item.quantity || 1),
+        };
+      })
+      .filter((item) => item !== null);
 
     res.status(200).json({
       success: true,
       cart: {
-        ...cart.toObject(),
+        _id: cart._id,
+        user: cart.user,
         items: itemsWithPrices,
+        createdAt: cart.createdAt,
+        updatedAt: cart.updatedAt,
       },
     });
   } catch (error) {
+    console.error("Get cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -74,10 +114,25 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    if (!product.isInStock || product.stock < quantity) {
+    // Check stock - if variant is selected, check variant stock
+    let stockToCheck = product.stock;
+    if (variant) {
+      const variantId = variant._id || variant.id;
+      const foundVariant = product.variants?.find(
+        (v) =>
+          v._id?.toString() === variantId?.toString() ||
+          v.name === variant.name ||
+          v.sku === variant.sku,
+      );
+      if (foundVariant) {
+        stockToCheck = foundVariant.stock || 0;
+      }
+    }
+
+    if (stockToCheck < quantity) {
       return res.status(400).json({
         success: false,
-        message: "Product out of stock or insufficient quantity",
+        message: `Only ${stockToCheck} items available in stock`,
       });
     }
 
@@ -86,24 +141,39 @@ export const addToCart = async (req, res) => {
       cart = await Cart.create({ user: req.user._id, items: [] });
     }
 
-    const itemIndex = cart.items.findIndex(
-      (item) =>
-        item.product.toString() === productId &&
-        (variant ? item.variant?.sku === variant.sku : true),
-    );
+    // Find existing item with same product and variant
+    const itemIndex = cart.items.findIndex((item) => {
+      const isSameProduct = item.product.toString() === productId;
+      if (!variant) return isSameProduct && !item.variant;
 
-    // Get current price from product
-    const currentPrice = product.comparePrice || product.price;
+      const isSameVariant =
+        item.variant?.sku === variant.sku ||
+        item.variant?.name === variant.name ||
+        (item.variant?._id &&
+          variant._id &&
+          item.variant._id.toString() === variant._id.toString());
+      return isSameProduct && isSameVariant;
+    });
 
     if (itemIndex > -1) {
-      cart.items[itemIndex].quantity += quantity;
-      // Remove price assignment - will use product price dynamically
+      const newQuantity = cart.items[itemIndex].quantity + quantity;
+      // Check stock again for new quantity
+      if (newQuantity > stockToCheck) {
+        return res.status(400).json({
+          success: false,
+          message: `Only ${stockToCheck} items available in stock`,
+        });
+      }
+      cart.items[itemIndex].quantity = newQuantity;
+      // Update variant if provided
+      if (variant) {
+        cart.items[itemIndex].variant = variant;
+      }
     } else {
       cart.items.push({
         product: productId,
         quantity,
-        variant,
-        // Remove price - will use product price dynamically
+        variant: variant || null,
       });
     }
 
@@ -113,7 +183,7 @@ export const addToCart = async (req, res) => {
     const populatedCart = await Cart.findById(cart._id).populate({
       path: "items.product",
       select:
-        "name slug price comparePrice images stock isInStock brand isActive",
+        "name slug price comparePrice images stock isInStock brand isActive productType sku",
       populate: {
         path: "brand",
         select: "name slug",
@@ -121,15 +191,19 @@ export const addToCart = async (req, res) => {
     });
 
     // Calculate prices dynamically
-    const itemsWithPrices = populatedCart.items.map((item) => {
-      const product = item.product;
-      const currentPrice = product?.comparePrice || product?.price || 0;
-      return {
-        ...(item.toObject ? item.toObject() : item),
-        price: currentPrice,
-        subtotal: currentPrice * item.quantity,
-      };
-    });
+    const itemsWithPrices = populatedCart.items
+      .filter((item) => item.product !== null)
+      .map((item) => {
+        const product = item.product;
+        if (!product) return null;
+        const currentPrice = product.comparePrice || product.price || 0;
+        return {
+          ...(item.toObject ? item.toObject() : item),
+          price: currentPrice,
+          subtotal: currentPrice * item.quantity,
+        };
+      })
+      .filter((item) => item !== null);
 
     res.status(200).json({
       success: true,
@@ -139,6 +213,7 @@ export const addToCart = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Add to cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -169,11 +244,27 @@ export const updateCartItem = async (req, res) => {
 
     // Check stock
     const product = await Product.findById(item.product);
-    if (product && quantity > product.stock) {
-      return res.status(400).json({
-        success: false,
-        message: `Only ${product.stock} items available in stock`,
-      });
+    if (product) {
+      let stockToCheck = product.stock;
+      if (item.variant) {
+        const variantId = item.variant._id || item.variant.id;
+        const foundVariant = product.variants?.find(
+          (v) =>
+            v._id?.toString() === variantId?.toString() ||
+            v.name === item.variant.name ||
+            v.sku === item.variant.sku,
+        );
+        if (foundVariant) {
+          stockToCheck = foundVariant.stock || 0;
+        }
+      }
+
+      if (quantity > stockToCheck) {
+        return res.status(400).json({
+          success: false,
+          message: `Only ${stockToCheck} items available in stock`,
+        });
+      }
     }
 
     item.quantity = quantity;
@@ -182,23 +273,26 @@ export const updateCartItem = async (req, res) => {
     const populatedCart = await Cart.findById(cart._id).populate({
       path: "items.product",
       select:
-        "name slug price comparePrice images stock isInStock brand isActive",
+        "name slug price comparePrice images stock isInStock brand isActive productType sku",
       populate: {
         path: "brand",
         select: "name slug",
       },
     });
 
-    // Calculate prices dynamically
-    const itemsWithPrices = populatedCart.items.map((item) => {
-      const product = item.product;
-      const currentPrice = product?.comparePrice || product?.price || 0;
-      return {
-        ...(item.toObject ? item.toObject() : item),
-        price: currentPrice,
-        subtotal: currentPrice * item.quantity,
-      };
-    });
+    const itemsWithPrices = populatedCart.items
+      .filter((item) => item.product !== null)
+      .map((item) => {
+        const product = item.product;
+        if (!product) return null;
+        const currentPrice = product.comparePrice || product.price || 0;
+        return {
+          ...(item.toObject ? item.toObject() : item),
+          price: currentPrice,
+          subtotal: currentPrice * item.quantity,
+        };
+      })
+      .filter((item) => item !== null);
 
     res.status(200).json({
       success: true,
@@ -208,6 +302,7 @@ export const updateCartItem = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Update cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -236,23 +331,26 @@ export const removeFromCart = async (req, res) => {
     const populatedCart = await Cart.findById(cart._id).populate({
       path: "items.product",
       select:
-        "name slug price comparePrice images stock isInStock brand isActive",
+        "name slug price comparePrice images stock isInStock brand isActive productType sku",
       populate: {
         path: "brand",
         select: "name slug",
       },
     });
 
-    // Calculate prices dynamically
-    const itemsWithPrices = populatedCart.items.map((item) => {
-      const product = item.product;
-      const currentPrice = product?.comparePrice || product?.price || 0;
-      return {
-        ...(item.toObject ? item.toObject() : item),
-        price: currentPrice,
-        subtotal: currentPrice * item.quantity,
-      };
-    });
+    const itemsWithPrices = populatedCart.items
+      .filter((item) => item.product !== null)
+      .map((item) => {
+        const product = item.product;
+        if (!product) return null;
+        const currentPrice = product.comparePrice || product.price || 0;
+        return {
+          ...(item.toObject ? item.toObject() : item),
+          price: currentPrice,
+          subtotal: currentPrice * item.quantity,
+        };
+      })
+      .filter((item) => item !== null);
 
     res.status(200).json({
       success: true,
@@ -262,6 +360,7 @@ export const removeFromCart = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Remove from cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -284,6 +383,7 @@ export const clearCart = async (req, res) => {
       message: "Cart cleared",
     });
   } catch (error) {
+    console.error("Clear cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,

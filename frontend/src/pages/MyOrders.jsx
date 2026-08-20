@@ -1,3 +1,5 @@
+// frontend/src/pages/MyOrders.jsx
+
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -27,6 +29,14 @@ const MyOrders = () => {
     shipped: "bg-orange-100 text-orange-700",
     delivered: "bg-green-100 text-green-700",
     cancelled: "bg-red-100 text-red-700",
+  };
+
+  const paymentStatusColors = {
+    pending: "bg-yellow-100 text-yellow-700",
+    paid: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
+    refund_pending: "bg-orange-100 text-orange-700",
+    refunded: "bg-gray-100 text-gray-700",
   };
 
   return (
@@ -83,11 +93,21 @@ const MyOrders = () => {
                         })}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.orderStatus] || "bg-gray-100 text-gray-700"}`}
                       >
                         {order.orderStatus}
+                      </span>
+                      {/* ✅ ADDED: Payment Status Badge */}
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${paymentStatusColors[order.paymentStatus] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {order.paymentStatus === "refund_pending"
+                          ? "Refund Pending"
+                          : order.paymentStatus === "refunded"
+                            ? "Refunded"
+                            : order.paymentStatus}
                       </span>
                     </div>
                   </div>
