@@ -36,6 +36,7 @@ const Cart = () => {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCartLoading, setIsCartLoading] = useState(true);
 
   // Check for deactivated items
   const hasDeactivated =
@@ -51,6 +52,33 @@ const Cart = () => {
   useEffect(() => {
     refreshCartWithLatestData();
   }, []);
+
+  useEffect(() => {
+    if (loading) {
+      setIsCartLoading(true);
+    } else {
+      const timer = setTimeout(() => setIsCartLoading(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (!loading && cart?.items) {
+      setIsCartLoading(false);
+    }
+  }, [loading, cart]);
+
+  // Replace the loading check with:
+  if (isCartLoading || loading) {
+    return (
+      <div className="pt-24">
+        <div className="container-custom text-center py-20">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-text-light mt-4">Loading your cart...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -262,13 +290,15 @@ const Cart = () => {
                 </div>
               )}
               {cart.items.map((item) => {
-                // ✅ Check if product exists
+                // Check if product exists
                 if (!item.product) {
-                  return null; // Skip items without product
+                  return null;
                 }
 
                 const isDeactivated = item.product?.isActive === false;
                 const name = item.product?.name || item.name || "Product";
+
+                // Use variant price if available, otherwise use product price
                 const price =
                   item.price ||
                   item.product?.comparePrice ||
@@ -276,9 +306,31 @@ const Cart = () => {
                   0;
                 const image =
                   item.image || item.product?.images?.[0]?.url || "";
-                const stock = item.product?.stock || 0;
-                const isStockExceeded = item.quantity > stock;
+
+                // Check variant stock properly
+                let stock = item.product?.stock || 0;
+                let variantName = null;
+                let variantSku = null;
+                let variantColor = null;
+
+                if (item.variant) {
+                  // Find variant in product's variants array
+                  const foundVariant = item.product?.variants?.find(
+                    (v) =>
+                      v._id?.toString() === item.variant._id?.toString() ||
+                      v.name === item.variant.name ||
+                      v.sku === item.variant.sku,
+                  );
+                  if (foundVariant) {
+                    stock = foundVariant.stock || 0;
+                    variantName = foundVariant.name;
+                    variantSku = foundVariant.sku;
+                    variantColor = foundVariant.color;
+                  }
+                }
+
                 const isOutOfStock = stock === 0;
+                const isStockExceeded = item.quantity > stock;
                 const canIncrease = stock > 0 && item.quantity < stock;
 
                 return (
@@ -351,20 +403,26 @@ const Cart = () => {
                           {item.product.brand.name}
                         </p>
                       )}
-                      {item.variant?.name && (
-                        <p className="text-xs text-primary font-medium">
-                          Variant: {item.variant.name}
-                          {item.variant?.color &&
-                            typeof item.variant.color === "object" && (
+                      {/* Show variant details */}
+                      {item.variant && (
+                        <div className="mt-1 space-y-0.5">
+                          <p className="text-xs text-primary font-medium">
+                            Variant: {variantName || item.variant.name}
+                            {variantColor?.hexCode && (
                               <span
                                 className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
                                 style={{
-                                  backgroundColor:
-                                    item.variant.color.hexCode || "#000",
+                                  backgroundColor: variantColor.hexCode,
                                 }}
                               />
                             )}
-                        </p>
+                          </p>
+                          {variantSku && (
+                            <p className="text-xs text-text-light">
+                              SKU: {variantSku}
+                            </p>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-center gap-2 mt-1">
                         <span
@@ -392,7 +450,7 @@ const Cart = () => {
                           onClick={() => {
                             const newQty = item.quantity - 1;
                             if (newQty >= 1) {
-                              handleQuantityChange(item._id, newQty, stock);
+                              updateQuantity(item._id, newQty);
                             }
                           }}
                           disabled={
@@ -413,7 +471,7 @@ const Cart = () => {
                             const val = parseInt(e.target.value);
                             if (!isNaN(val) && val > 0) {
                               if (val <= stock || stock === 0) {
-                                handleQuantityChange(item._id, val, stock);
+                                updateQuantity(item._id, val);
                               } else {
                                 toast.error(
                                   `Only ${stock} items available in stock`,
@@ -435,7 +493,7 @@ const Cart = () => {
                             onClick={() => {
                               const newQty = item.quantity + 1;
                               if (stock > 0 && newQty <= stock) {
-                                handleQuantityChange(item._id, newQty, stock);
+                                updateQuantity(item._id, newQty);
                               } else if (stock === 0) {
                                 toast.error("This product is out of stock");
                               } else {

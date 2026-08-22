@@ -1,7 +1,11 @@
 // frontend/src/components/common/ProductCard.jsx
 
 import { Link } from "react-router-dom";
-import { HeartIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
+import {
+  HeartIcon,
+  ShoppingBagIcon,
+  EyeIcon,
+} from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
@@ -36,22 +40,55 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
   if (!product) return null;
 
   const isDeactivated = product.isActive === false;
+  const hasVariants = product.variants && product.variants.length > 0;
+
+  // Check stock for simple products
   const isOutOfStock =
-    !isDeactivated &&
+    !hasVariants &&
     (product.stock === 0 ||
       product.stock === null ||
       product.stock === undefined);
 
-  const discount =
-    product.comparePrice && product.price > product.comparePrice
-      ? Math.round(
-          ((product.price - product.comparePrice) / product.price) * 100,
-        )
-      : 0;
+  // ✅ FIXED: Get display price and original price
+  let displayPrice = product.price || 0;
+  let originalPrice = product.price || 0;
+  let hasDiscount = false;
+  let discountPercent = 0;
 
-  const displayPrice = product.comparePrice || product.price;
-  const hasDiscount =
-    product.comparePrice && product.comparePrice < product.price;
+  // For variable products, get the lowest price among variants
+  if (hasVariants) {
+    const variantPrices = product.variants.map((v) => v.price || 0);
+    const variantComparePrices = product.variants.map(
+      (v) => v.comparePrice || 0,
+    );
+    const minPrice = Math.min(...variantPrices);
+    const minCompare = Math.min(...variantComparePrices);
+
+    // If compare price exists and is less than price, it's a sale
+    if (minCompare > 0 && minCompare < minPrice) {
+      displayPrice = minCompare;
+      originalPrice = minPrice;
+      hasDiscount = true;
+      discountPercent = Math.round(((minPrice - minCompare) / minPrice) * 100);
+    } else {
+      displayPrice = minPrice;
+      originalPrice = minPrice;
+    }
+  } else {
+    // Simple product
+    // If comparePrice exists and is less than price, it's a sale
+    if (product.comparePrice && product.comparePrice < product.price) {
+      displayPrice = product.comparePrice;
+      originalPrice = product.price;
+      hasDiscount = true;
+      discountPercent = Math.round(
+        ((product.price - product.comparePrice) / product.price) * 100,
+      );
+    } else {
+      displayPrice = product.price || 0;
+      originalPrice = product.price || 0;
+    }
+  }
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -126,11 +163,17 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             </span>
           ) : (
             showSaleBadge &&
-            discount > 0 && (
+            hasDiscount && (
               <span className="bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                {discount}% OFF
+                {discountPercent}% OFF
               </span>
             )
+          )}
+          {hasVariants && !isDeactivated && (
+            <span className="bg-purple-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span className="text-[10px]">📦</span>
+              {product.variants.length} Variants
+            </span>
           )}
         </div>
 
@@ -171,7 +214,9 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             {product.name}
           </h3>
         </Link>
-        <div className="flex items-center gap-2 mb-3">
+
+        {/* ✅ FIXED: Price with discount display */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span
             className={`font-bold ${
               isDeactivated || isOutOfStock ? "text-gray-400" : "text-text"
@@ -179,33 +224,52 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           >
             ₹{displayPrice?.toLocaleString()}
           </span>
-          {hasDiscount && (
-            <span className="text-sm text-gray-400 line-through">
-              ₹{product.price?.toLocaleString()}
+          {hasDiscount &&
+            !isDeactivated &&
+            !isOutOfStock &&
+            originalPrice > displayPrice && (
+              <span className="text-sm text-gray-400 line-through">
+                ₹{originalPrice?.toLocaleString()}
+              </span>
+            )}
+          {hasDiscount && !isDeactivated && !isOutOfStock && (
+            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+              {discountPercent}% off
             </span>
           )}
-          {discount > 0 && !isDeactivated && !isOutOfStock && (
-            <span className="text-xs font-semibold text-green-600">
-              ({discount}% off)
+          {hasVariants && !isDeactivated && (
+            <span className="text-xs text-purple-500 font-medium">
+              ({product.variants.length} variants)
             </span>
           )}
         </div>
-        <button
-          onClick={handleAddToCart}
-          disabled={isDeactivated || isOutOfStock}
-          className={`w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-            isDeactivated || isOutOfStock
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-              : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-          }`}
-        >
-          <ShoppingBagIcon className="w-4 h-4" />
-          {isDeactivated
-            ? "Unavailable"
-            : isOutOfStock
-              ? "Out of Stock"
-              : "Add to Cart"}
-        </button>
+
+        {/* Show "View Product" for variant products */}
+        {hasVariants ? (
+          <Link
+            to={`/product/${product.slug}`}
+            className="w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 bg-purple-500/10 text-purple-600 hover:bg-purple-500 hover:text-white"
+          >
+            <EyeIcon className="w-4 h-4" /> View Product
+          </Link>
+        ) : (
+          <button
+            onClick={handleAddToCart}
+            disabled={isDeactivated || isOutOfStock}
+            className={`w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
+              isDeactivated || isOutOfStock
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+            }`}
+          >
+            <ShoppingBagIcon className="w-4 h-4" />
+            {isDeactivated
+              ? "Unavailable"
+              : isOutOfStock
+                ? "Out of Stock"
+                : "Add to Cart"}
+          </button>
+        )}
         {isDeactivated && (
           <p className="text-xs text-red-500 text-center mt-1">
             ⚠️ Product deactivated

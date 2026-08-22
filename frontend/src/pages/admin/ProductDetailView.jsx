@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/ProductDetailView.jsx
+
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +37,7 @@ const ProductDetailView = () => {
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState("");
 
-  // Fetch product
+  // ✅ Fetch product
   const {
     data: productData,
     isLoading,
@@ -49,7 +51,16 @@ const ProductDetailView = () => {
     enabled: !!id,
   });
 
-  // Fetch reviews
+  // ✅ Fetch colors for variant display and frame color
+  const { data: colorsData } = useQuery({
+    queryKey: ["colors"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/colors`);
+      return data.colors || [];
+    },
+  });
+
+  // ✅ Fetch reviews
   const { data: reviewsData, refetch: refetchReviews } = useQuery({
     queryKey: ["admin-product-reviews", id],
     queryFn: async () => {
@@ -63,7 +74,7 @@ const ProductDetailView = () => {
     enabled: !!id,
   });
 
-  // Fetch orders containing this product
+  // ✅ Fetch orders containing this product
   const { data: ordersData } = useQuery({
     queryKey: ["admin-product-orders", id],
     queryFn: async () => {
@@ -106,13 +117,7 @@ const ProductDetailView = () => {
     },
   });
 
-  const product = productData;
-  const reviews = reviewsData || [];
-  const productOrders = ordersData || [];
-
   // --- Review Mutations ---
-
-  // Toggle review visibility (hide/unhide)
   const toggleReviewMutation = useMutation({
     mutationFn: async ({ reviewId, isHidden }) => {
       await axios.put(`${API_URL}/reviews/${reviewId}/toggle`, { isHidden });
@@ -128,7 +133,6 @@ const ProductDetailView = () => {
     },
   });
 
-  // Delete review
   const deleteReviewMutation = useMutation({
     mutationFn: async (reviewId) => {
       await axios.delete(`${API_URL}/reviews/${reviewId}`);
@@ -144,7 +148,6 @@ const ProductDetailView = () => {
     },
   });
 
-  // Reply to review
   const replyReviewMutation = useMutation({
     mutationFn: async ({ reviewId, reply }) => {
       await axios.put(`${API_URL}/reviews/${reviewId}/reply`, { reply });
@@ -161,6 +164,30 @@ const ProductDetailView = () => {
       toast.error(error.response?.data?.message || "Failed to add reply");
     },
   });
+
+  const product = productData;
+  const reviews = reviewsData || [];
+  const productOrders = ordersData || [];
+  const colors = colorsData || [];
+  const variants = product?.variants || [];
+
+  // ✅ Helper function to get color details from color names
+  const getColorDetails = (colorValue) => {
+    if (!colorValue) return [];
+    const colorNames = colorValue
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+    return colorNames.map((name) => {
+      const color = colors.find(
+        (c) => c.name.toLowerCase() === name.toLowerCase(),
+      );
+      return color || { name, hexCode: "#cccccc" };
+    });
+  };
+
+  // ✅ Get frame colors with swatches
+  const frameColors = getColorDetails(product?.frameColor);
 
   const handleToggleReview = (reviewId, currentHidden) => {
     if (
@@ -377,11 +404,12 @@ const ProductDetailView = () => {
       </div>
 
       {/* Tab Content */}
-
       {/* META TAB */}
       {activeTab === "meta" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold mb-4">Product Meta</h2>
+
+          {/* Product Attributes Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-gray-50 p-4 rounded-xl">
               <p className="text-xs text-text-light">Name</p>
@@ -390,22 +418,6 @@ const ProductDetailView = () => {
             <div className="bg-gray-50 p-4 rounded-xl">
               <p className="text-xs text-text-light">SKU</p>
               <p className="font-medium">{product.sku || "N/A"}</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Original Price</p>
-              <p className="font-medium">₹{product.price?.toLocaleString()}</p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Discounted Price</p>
-              <p className="font-medium text-green-600">
-                {product.comparePrice
-                  ? `₹${product.comparePrice.toLocaleString()}`
-                  : "No discount"}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Stock</p>
-              <p className="font-medium">{product.stock || 0}</p>
             </div>
             <div className="bg-gray-50 p-4 rounded-xl">
               <p className="text-xs text-text-light">Product Type</p>
@@ -419,53 +431,288 @@ const ProductDetailView = () => {
                   : product.gender || "N/A"}
               </p>
             </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Frame Shape</p>
-              <p className="font-medium">
-                {typeof product.frameShape === "string"
-                  ? product.frameShape.split(",").join(", ")
-                  : product.frameShape || "N/A"}
-              </p>
+          </div>
+
+          {/* ✅ Attributes Section - Frame Shape, Frame Material, Lens Type, Frame Color */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-md font-semibold text-text mb-4">Attributes</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Frame Shape */}
+              {product.frameShape && (
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs text-text-light">Frame Shape</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {product.frameShape.split(",").map((shape, i) => (
+                      <span
+                        key={i}
+                        className="text-sm font-medium text-text bg-white px-2 py-1 rounded-full"
+                      >
+                        {shape.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Frame Material */}
+              {product.frameMaterial && (
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs text-text-light">Frame Material</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {product.frameMaterial.split(",").map((material, i) => (
+                      <span
+                        key={i}
+                        className="text-sm font-medium text-text bg-white px-2 py-1 rounded-full"
+                      >
+                        {material.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Lens Type */}
+              {product.lensType && (
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs text-text-light">Lens Type</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {product.lensType.split(",").map((lens, i) => (
+                      <span
+                        key={i}
+                        className="text-sm font-medium text-text bg-white px-2 py-1 rounded-full"
+                      >
+                        {lens.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ Frame Color - With Color Swatches */}
+              {frameColors.length > 0 && (
+                <div className="bg-gray-50 p-4 rounded-xl">
+                  <p className="text-xs text-text-light">Frame Color</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {frameColors.map((color, i) => (
+                      <span
+                        key={i}
+                        className="flex items-center gap-2 text-sm font-medium text-text bg-white px-2 py-1 rounded-full"
+                      >
+                        <span
+                          className="w-3 h-3 rounded-full border border-gray-300 flex-shrink-0"
+                          style={{
+                            backgroundColor: color.hexCode || "#cccccc",
+                          }}
+                        />
+                        {color.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Frame Material</p>
-              <p className="font-medium">
-                {typeof product.frameMaterial === "string"
-                  ? product.frameMaterial.split(",").join(", ")
-                  : product.frameMaterial || "N/A"}
-              </p>
+          </div>
+
+          {/* Price Section */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-md font-semibold text-text mb-4">
+              Pricing & Stock
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <p className="text-xs text-text-light">Original Price</p>
+                <p className="font-medium">
+                  ₹{product.price?.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <p className="text-xs text-text-light">Discounted Price</p>
+                <p className="font-medium text-green-600">
+                  {product.comparePrice
+                    ? `₹${product.comparePrice.toLocaleString()}`
+                    : "No discount"}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <p className="text-xs text-text-light">Stock</p>
+                <p className="font-medium">{product.stock || 0}</p>
+              </div>
             </div>
+          </div>
+
+          {/* Description */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-md font-semibold text-text mb-2">
+              Description
+            </h3>
             <div className="bg-gray-50 p-4 rounded-xl">
-              <p className="text-xs text-text-light">Lens Type</p>
-              <p className="font-medium">
-                {typeof product.lensType === "string"
-                  ? product.lensType.split(",").join(", ")
-                  : product.lensType || "N/A"}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-xl col-span-2">
-              <p className="text-xs text-text-light">Description</p>
-              <p className="font-medium">
+              <p className="text-sm text-text-light">
                 {product.description || "No description"}
               </p>
             </div>
-            {product.specifications?.length > 0 && (
-              <div className="bg-gray-50 p-4 rounded-xl col-span-2">
-                <p className="text-xs text-text-light mb-2">Specifications</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {product.specifications.map((spec, i) => (
-                    <div
-                      key={i}
-                      className="bg-white p-3 rounded-lg text-center"
-                    >
-                      <p className="text-xs text-text-light">{spec.name}</p>
-                      <p className="font-medium text-sm">{spec.value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+
+          {/* Specifications */}
+          {product.specifications?.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-md font-semibold text-text mb-4">
+                Specifications
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {product.specifications.map((spec, i) => (
+                  <div
+                    key={i}
+                    className="bg-gray-50 p-3 rounded-lg text-center"
+                  >
+                    <p className="text-xs text-text-light">{spec.name}</p>
+                    <p className="font-medium text-sm">{spec.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ✅ Variants Section */}
+          {variants && variants.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-md font-semibold text-text mb-4">
+                Variant Details ({variants.length})
+              </h3>
+              <div className="space-y-4">
+                {variants.map((variant, index) => {
+                  // Find color info
+                  const color = colors?.find(
+                    (c) =>
+                      c._id === variant.color?._id || c._id === variant.color,
+                  );
+                  return (
+                    <div
+                      key={index}
+                      className="bg-gray-50 p-4 rounded-xl border border-gray-200"
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        {color && color.hexCode && (
+                          <span
+                            className="w-6 h-6 rounded-full border border-gray-300 flex-shrink-0"
+                            style={{ backgroundColor: color.hexCode || "#000" }}
+                          />
+                        )}
+                        <h4 className="font-medium text-text">
+                          {variant.name}
+                        </h4>
+                        {variant.isDefault && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
+                        {!variant.isActive && (
+                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-text-light">SKU</p>
+                          <p className="font-medium">{variant.sku || "N/A"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-text-light">Price</p>
+                          <p className="font-medium">
+                            ₹{variant.price?.toLocaleString()}
+                          </p>
+                        </div>
+                        {variant.comparePrice && (
+                          <div>
+                            <p className="text-xs text-text-light">
+                              Compare Price
+                            </p>
+                            <p className="font-medium line-through text-gray-400">
+                              ₹{variant.comparePrice?.toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs text-text-light">Stock</p>
+                          <p
+                            className={`font-medium ${variant.stock > 0 ? "text-green-600" : "text-red-500"}`}
+                          >
+                            {variant.stock || 0}
+                          </p>
+                        </div>
+                        {color && color.name && (
+                          <div>
+                            <p className="text-xs text-text-light">Color</p>
+                            <p className="font-medium flex items-center gap-2">
+                              {color.hexCode && (
+                                <span
+                                  className="w-3 h-3 rounded-full border border-gray-300 inline-block"
+                                  style={{ backgroundColor: color.hexCode }}
+                                />
+                              )}
+                              {color.name}
+                            </p>
+                          </div>
+                        )}
+                        {variant.frameShape && (
+                          <div>
+                            <p className="text-xs text-text-light">
+                              Frame Shape
+                            </p>
+                            <p className="font-medium">{variant.frameShape}</p>
+                          </div>
+                        )}
+                        {variant.frameMaterial && (
+                          <div>
+                            <p className="text-xs text-text-light">
+                              Frame Material
+                            </p>
+                            <p className="font-medium">
+                              {variant.frameMaterial}
+                            </p>
+                          </div>
+                        )}
+                        {variant.lensType && (
+                          <div>
+                            <p className="text-xs text-text-light">Lens Type</p>
+                            <p className="font-medium">{variant.lensType}</p>
+                          </div>
+                        )}
+                        {variant.frameColor && (
+                          <div>
+                            <p className="text-xs text-text-light">
+                              Frame Color
+                            </p>
+                            <p className="font-medium">{variant.frameColor}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Variant Images */}
+                      {variant.images && variant.images.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs text-text-light mb-2">
+                            Variant Images
+                          </p>
+                          <div className="flex gap-2 flex-wrap">
+                            {variant.images.map((img, i) => (
+                              <img
+                                key={i}
+                                src={img.url}
+                                alt={variant.name}
+                                className="w-12 h-12 rounded-lg object-cover border"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

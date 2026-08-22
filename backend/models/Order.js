@@ -40,21 +40,7 @@ const orderSchema = new mongoose.Schema(
             material: String,
           },
         },
-        name: String,
-        image: String,
-        price: {
-          type: Number,
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          required: true,
-          min: 1,
-        },
-        subtotal: {
-          type: Number,
-          required: true,
-        },
+        // ... other fields
       },
     ],
     shippingAddress: {

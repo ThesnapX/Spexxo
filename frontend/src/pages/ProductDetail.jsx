@@ -16,8 +16,8 @@ import {
   PlusIcon,
   PhotoIcon,
   BoltIcon,
-  CheckBadgeIcon,
   ExclamationCircleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   HeartIcon as HeartSolid,
@@ -37,10 +37,11 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [showZoom, setShowZoom] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [openAccordion, setOpenAccordion] = useState("description");
+  const [selectedVariant, setSelectedVariant] = useState(null);
+  const [selectedVariantImages, setSelectedVariantImages] = useState([]);
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
     title: "",
@@ -50,8 +51,6 @@ const ProductDetail = () => {
   const [reviewImages, setReviewImages] = useState([]);
   const [reviewPreviews, setReviewPreviews] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState(null);
-  const [selectedVariantImages, setSelectedVariantImages] = useState([]);
 
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
@@ -67,6 +66,18 @@ const ProductDetail = () => {
 
   const product = data?.product;
   const isDeactivated = product?.isActive === false;
+
+  // Fetch colors for display
+  const { data: colorsData } = useQuery({
+    queryKey: ["colors"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/colors`);
+      return data.colors || [];
+    },
+    enabled: !!product,
+  });
+
+  const colors = colorsData || [];
 
   const { data: reviewsData, refetch: refetchReviews } = useQuery({
     queryKey: ["reviews", product?._id],
@@ -115,32 +126,166 @@ const ProductDetail = () => {
   // Set default variant when product loads
   useEffect(() => {
     if (product?.variants && product.variants.length > 0) {
-      setSelectedVariant(product.variants[0]);
-      if (product.variants[0].images?.length > 0) {
-        setSelectedVariantImages(product.variants[0].images);
+      // Find the default variant or use the first one
+      const defaultVariant =
+        product.variants.find((v) => v.isDefault) || product.variants[0];
+      setSelectedVariant(defaultVariant);
+      if (defaultVariant.images?.length > 0) {
+        setSelectedVariantImages(defaultVariant.images);
+        setSelectedImage(0);
+      } else {
+        setSelectedVariantImages([]);
+        setSelectedImage(0);
       }
+    } else {
+      // Reset variant selection for simple products
+      setSelectedVariant(null);
+      setSelectedVariantImages([]);
+      setSelectedImage(0);
     }
   }, [product]);
+
+  // Update images when selected variant changes
+  useEffect(() => {
+    if (selectedVariant) {
+      if (selectedVariant.images?.length > 0) {
+        setSelectedVariantImages(selectedVariant.images);
+        setSelectedImage(0);
+      } else {
+        setSelectedVariantImages([]);
+        setSelectedImage(0);
+      }
+    }
+  }, [selectedVariant]);
+
+  // ✅ NEW: Preselect variant from cart if product is in cart
+  const { cart } = useCart();
+  useEffect(() => {
+    if (product && cart?.items?.length > 0 && product.variants?.length > 0) {
+      // Find if this product is in the cart
+      const cartItem = cart.items.find(
+        (item) => item.product?._id === product._id,
+      );
+
+      if (cartItem && cartItem.variant) {
+        // Find the matching variant in the product's variants
+        const matchingVariant = product.variants?.find(
+          (v) =>
+            v._id?.toString() === cartItem.variant._id?.toString() ||
+            v.name === cartItem.variant.name ||
+            v.sku === cartItem.variant.sku,
+        );
+
+        if (matchingVariant) {
+          setSelectedVariant(matchingVariant);
+          if (matchingVariant.images?.length > 0) {
+            setSelectedVariantImages(matchingVariant.images);
+            setSelectedImage(0);
+          }
+        }
+      }
+    }
+  }, [product, cart]);
 
   const displayRelated =
     smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
 
-  // Get display price based on selected variant
-  const displayPrice =
-    selectedVariant?.price || product?.comparePrice || product?.price;
-  const originalPrice = selectedVariant?.comparePrice || product?.price;
-  const displayStock =
-    selectedVariant?.stock !== undefined
-      ? selectedVariant.stock
-      : product?.stock;
+  // Get display price - use variant price or fallback to main product price
+  const getDisplayPrice = () => {
+    if (selectedVariant?.price) {
+      return selectedVariant.price;
+    }
+    return product?.comparePrice || product?.price || 0;
+  };
+
+  const getOriginalPrice = () => {
+    if (selectedVariant?.comparePrice) {
+      return selectedVariant.comparePrice;
+    }
+    return product?.price || 0;
+  };
+
+  const getComparePrice = () => {
+    if (selectedVariant?.comparePrice) {
+      return selectedVariant.comparePrice;
+    }
+    return product?.comparePrice || 0;
+  };
+
+  const displayPrice = getDisplayPrice();
+  const originalPrice = getOriginalPrice();
+  const comparePrice = getComparePrice();
+
+  const getDisplayStock = () => {
+    if (selectedVariant?.stock !== undefined) {
+      return selectedVariant.stock;
+    }
+    return product?.stock || 0;
+  };
+
+  const displayStock = getDisplayStock();
   const isVariantOutOfStock = selectedVariant && selectedVariant.stock <= 0;
   const isProductOutOfStock = !selectedVariant && (product?.stock || 0) <= 0;
 
+  // Helper function to get color details from color ID or name
+  const getColorDetails = (colorId) => {
+    if (!colorId) return null;
+    // If colorId is an object (populated)
+    if (typeof colorId === "object" && colorId !== null) {
+      return colorId;
+    }
+    // If colorId is a string (ID)
+    const color = colors.find((c) => c._id === colorId);
+    return color || null;
+  };
+
+  // Get variant attributes for display
+  const getVariantAttributes = () => {
+    if (selectedVariant) {
+      return {
+        frameShape: selectedVariant.frameShape || null,
+        frameMaterial: selectedVariant.frameMaterial || null,
+        lensType: selectedVariant.lensType || null,
+        frameColor: selectedVariant.frameColor || null,
+        frameWidth: selectedVariant.frameWidth || null,
+        lensWidth: selectedVariant.lensWidth || null,
+        frameHeight: selectedVariant.frameHeight || null,
+        bridge: selectedVariant.bridge || null,
+      };
+    }
+    // Fallback to product-level attributes
+    return {
+      frameShape: product?.frameShape || null,
+      frameMaterial: product?.frameMaterial || null,
+      lensType: product?.lensType || null,
+      frameColor: product?.frameColor || null,
+      frameWidth: product?.frameWidth || null,
+      lensWidth: product?.lensWidth || null,
+      frameHeight: product?.frameHeight || null,
+      bridge: product?.bridge || null,
+    };
+  };
+
+  const variantAttributes = getVariantAttributes();
+
+  // Helper function to get attribute values as array
+  const getAttributeValues = (value) => {
+    if (!value) return [];
+    return value
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  };
+
+  // Get color details for frame colors
+  const getColorInfo = (colorName) => {
+    if (!colorName) return null;
+    return colors.find((c) => c.name.toLowerCase() === colorName.toLowerCase());
+  };
+
   const handleAddToCart = () => {
     if (isDeactivated) {
-      toast.error(
-        "This product is currently deactivated and cannot be added to cart",
-      );
+      toast.error("This product is currently deactivated");
       return;
     }
     if (selectedVariant && selectedVariant.stock <= 0) {
@@ -232,10 +377,31 @@ const ProductDetail = () => {
     }
   };
 
-  const discountPercent =
-    originalPrice && displayPrice && originalPrice > displayPrice
-      ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100)
-      : 0;
+  // Only show discount if comparePrice exists and is less than price
+  const hasDiscount = comparePrice > 0 && comparePrice < displayPrice;
+  const discountPercent = hasDiscount
+    ? Math.round(((displayPrice - comparePrice) / displayPrice) * 100)
+    : 0;
+
+  // Get frame colors with color swatches
+  const getFrameColorsWithSwatches = (frameColorValue) => {
+    if (!frameColorValue) return [];
+    const colors = getAttributeValues(frameColorValue);
+    return colors.map((colorName) => {
+      const colorInfo = getColorInfo(colorName);
+      return {
+        name: colorName,
+        hexCode: colorInfo?.hexCode || "#cccccc",
+      };
+    });
+  };
+
+  const frameColorDetails = getFrameColorsWithSwatches(
+    variantAttributes.frameColor,
+  );
+  const frameShapes = getAttributeValues(variantAttributes.frameShape);
+  const frameMaterials = getAttributeValues(variantAttributes.frameMaterial);
+  const lensTypes = getAttributeValues(variantAttributes.lensType);
 
   if (isLoading) {
     return (
@@ -272,7 +438,6 @@ const ProductDetail = () => {
     );
   }
 
-  // Build WhatsApp message with variant info
   const whatsappMessage = `Hi Spexxo, I want to order:
   
 *Product:* ${product.name}
@@ -330,7 +495,7 @@ Please confirm availability.`;
                 <img
                   src={
                     (selectedVariantImages?.length > 0
-                      ? selectedVariantImages[0]?.url
+                      ? selectedVariantImages[selectedImage]?.url
                       : product.images?.[selectedImage]?.url) ||
                     "https://picsum.photos/800/800"
                   }
@@ -351,7 +516,7 @@ Please confirm availability.`;
                     Deactivated
                   </span>
                 ) : (
-                  discountPercent > 0 && (
+                  hasDiscount && (
                     <span className="absolute top-4 left-4 bg-red-500 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
                       {discountPercent}% OFF
                     </span>
@@ -368,7 +533,6 @@ Please confirm availability.`;
               {(product.images?.length > 1 ||
                 selectedVariantImages?.length > 0) && (
                 <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-                  {/* Show variant images if selected, else show product images */}
                   {(selectedVariantImages?.length > 0
                     ? selectedVariantImages
                     : product.images
@@ -419,18 +583,16 @@ Please confirm availability.`;
                   >
                     ₹{displayPrice?.toLocaleString()}
                   </span>
-                  {originalPrice && originalPrice > displayPrice && (
+                  {comparePrice > 0 && comparePrice < displayPrice && (
                     <span className="text-lg text-gray-400 line-through">
-                      ₹{originalPrice?.toLocaleString()}
+                      ₹{comparePrice?.toLocaleString()}
                     </span>
                   )}
-                  {discountPercent > 0 &&
-                    !isDeactivated &&
-                    !isVariantOutOfStock && (
-                      <span className="text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                        {discountPercent}% off
-                      </span>
-                    )}
+                  {hasDiscount && (
+                    <span className="text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                      {discountPercent}% off
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="flex">
@@ -455,70 +617,94 @@ Please confirm availability.`;
               {/* Variant Selector */}
               {product?.variants && product.variants.length > 0 && (
                 <div className="mb-6">
-                  <label className="text-sm font-medium text-text mb-2 block">
+                  <label className="text-sm font-medium text-text mb-3 block">
                     Select Variant
                   </label>
-                  <div className="flex flex-wrap gap-3 max-h-40 overflow-y-auto p-1">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {product.variants.map((variant, index) => {
                       const isSelected =
                         selectedVariant?._id === variant._id ||
                         selectedVariant?.name === variant.name;
                       const isVariantActive = variant.isActive !== false;
                       const isVariantStock = variant.stock > 0;
+                      const color = getColorDetails(variant.color);
+                      const isDisabled = !isVariantActive || !isVariantStock;
+                      const variantPrice = variant.price || displayPrice;
+                      const variantCompare = variant.comparePrice || 0;
 
                       return (
                         <button
                           key={index}
                           onClick={() => {
-                            if (isVariantActive) {
+                            if (!isDisabled) {
                               setSelectedVariant(variant);
-                              if (variant.images?.length > 0) {
-                                setSelectedVariantImages(variant.images);
-                                setSelectedImage(0);
-                              } else {
-                                setSelectedVariantImages([]);
-                              }
                             }
                           }}
-                          disabled={!isVariantActive || !isVariantStock}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 transition ${
-                            isSelected
-                              ? "border-primary bg-[#EBF4FC] text-primary"
-                              : "border-gray-200 hover:border-gray-300"
-                          } ${!isVariantActive || !isVariantStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                          disabled={isDisabled}
+                          className={`
+                            relative p-3 rounded-xl border-2 transition-all text-left
+                            ${
+                              isSelected
+                                ? "border-primary bg-[#EBF4FC] ring-2 ring-primary/20"
+                                : "border-gray-200 hover:border-gray-300"
+                            }
+                            ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                          `}
                         >
-                          {/* Color swatch if variant has color */}
-                          {variant.color &&
-                            typeof variant.color === "object" &&
-                            variant.color.hexCode && (
+                          {/* Color Swatch */}
+                          <div className="flex items-center gap-2 mb-1.5">
+                            {color?.hexCode ? (
                               <span
-                                className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
-                                style={{
-                                  backgroundColor: variant.color.hexCode,
-                                }}
+                                className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
+                                style={{ backgroundColor: color.hexCode }}
                               />
+                            ) : (
+                              <span className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0 bg-gray-100" />
                             )}
-                          <span className="text-sm font-medium">
-                            {variant.name}
-                          </span>
-                          <span className="text-xs text-text-light">
-                            ₹{variant.price?.toLocaleString()}
-                          </span>
-                          {variant.stock <= 0 && (
-                            <span className="text-xs text-red-500">
-                              (Out of Stock)
+                            <span className="text-sm font-medium text-text truncate">
+                              {variant.name}
                             </span>
-                          )}
-                          {!isVariantActive && (
-                            <span className="text-xs text-gray-400">
-                              (Inactive)
-                            </span>
+                          </div>
+
+                          {/* Price */}
+                          <div className="text-xs text-text-light">
+                            ₹{variantPrice?.toLocaleString()}
+                            {variantCompare > 0 &&
+                              variantCompare < variantPrice && (
+                                <span className="text-gray-400 line-through ml-1.5">
+                                  ₹{variantCompare?.toLocaleString()}
+                                </span>
+                              )}
+                          </div>
+
+                          {/* Stock Status */}
+                          <div className="text-xs mt-1">
+                            {variant.stock > 0 ? (
+                              <span className="text-green-600">
+                                {variant.stock} in stock
+                              </span>
+                            ) : (
+                              <span className="text-red-500">Out of Stock</span>
+                            )}
+                            {!isVariantActive && (
+                              <span className="text-gray-400 ml-2">
+                                (Inactive)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Selected Checkmark */}
+                          {isSelected && !isDisabled && (
+                            <div className="absolute top-2 right-2">
+                              <CheckCircleIcon className="w-4 h-4 text-primary" />
+                            </div>
                           )}
                         </button>
                       );
                     })}
                   </div>
-                  {/* Show selected variant details */}
+
+                  {/* Selected Variant Details */}
                   {selectedVariant && (
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm text-text-light">
@@ -530,7 +716,11 @@ Please confirm availability.`;
                           ` • SKU: ${selectedVariant.sku}`}
                         {selectedVariant.stock !== undefined && (
                           <span
-                            className={`ml-2 ${selectedVariant.stock > 0 ? "text-green-600" : "text-red-500"}`}
+                            className={`ml-2 ${
+                              selectedVariant.stock > 0
+                                ? "text-green-600"
+                                : "text-red-500"
+                            }`}
                           >
                             {selectedVariant.stock > 0
                               ? `${selectedVariant.stock} in stock`
@@ -538,6 +728,17 @@ Please confirm availability.`;
                           </span>
                         )}
                       </p>
+                      {/* Show variant attributes if any */}
+                      {selectedVariant.frameShape && (
+                        <p className="text-xs text-text-light mt-1">
+                          Frame Shape: {selectedVariant.frameShape}
+                        </p>
+                      )}
+                      {selectedVariant.lensType && (
+                        <p className="text-xs text-text-light">
+                          Lens Type: {selectedVariant.lensType}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -554,30 +755,7 @@ Please confirm availability.`;
                   </div>
                   <p className="text-sm text-red-600 mt-1">
                     This product is not available for purchase at the moment.
-                    Please check back later.
                   </p>
-                </div>
-              )}
-
-              {/* Frame Size */}
-              {product.specifications?.length > 0 && (
-                <div className="mb-5">
-                  <label className="text-sm font-medium text-text mb-2 block">
-                    Frame Size
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {product.specifications.map((spec, i) => (
-                      <div
-                        key={i}
-                        className="px-3 py-2 bg-gray-50 rounded-lg text-center"
-                      >
-                        <p className="text-xs text-text-light">{spec.name}</p>
-                        <p className="text-sm font-semibold text-text">
-                          {spec.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -727,12 +905,13 @@ Please confirm availability.`;
             </div>
           </div>
 
-          {/* Product Details Accordions - Same as before */}
+          {/* Product Details Accordions */}
           <div className="max-w-3xl mb-16">
             <h2 className="text-xl font-bold text-text mb-6">
               Product Details
             </h2>
             <div className="space-y-3">
+              {/* Description */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -761,6 +940,184 @@ Please confirm availability.`;
                   </div>
                 </div>
               </div>
+
+              {/* Dynamic Attributes - Updates based on selected variant */}
+              {(frameShapes.length > 0 ||
+                frameMaterials.length > 0 ||
+                lensTypes.length > 0 ||
+                frameColorDetails.length > 0 ||
+                variantAttributes.frameWidth ||
+                variantAttributes.lensWidth ||
+                variantAttributes.frameHeight ||
+                variantAttributes.bridge) && (
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                  <button
+                    onClick={() =>
+                      setOpenAccordion(
+                        openAccordion === "attributes" ? "" : "attributes",
+                      )
+                    }
+                    className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 transition"
+                  >
+                    <span className="font-semibold text-text">
+                      Attributes
+                      {selectedVariant && (
+                        <span className="text-xs text-primary ml-2 font-normal">
+                          (for {selectedVariant.name})
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDownIcon
+                      className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                        openAccordion === "attributes" ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  <div
+                    className={`overflow-hidden transition-all duration-300 ${
+                      openAccordion === "attributes"
+                        ? "max-h-[2000px] opacity-100"
+                        : "max-h-0 opacity-0"
+                    }`}
+                  >
+                    <div className="px-5 pb-5 space-y-3">
+                      {/* Frame Shape */}
+                      {frameShapes.length > 0 && (
+                        <div className="flex items-start gap-4">
+                          <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
+                            Frame Shape
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {frameShapes.map((shape, i) => (
+                              <span
+                                key={i}
+                                className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-text"
+                              >
+                                {shape}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Frame Material */}
+                      {frameMaterials.length > 0 && (
+                        <div className="flex items-start gap-4">
+                          <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
+                            Frame Material
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {frameMaterials.map((material, i) => (
+                              <span
+                                key={i}
+                                className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-text"
+                              >
+                                {material}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Lens Type */}
+                      {lensTypes.length > 0 && (
+                        <div className="flex items-start gap-4">
+                          <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
+                            Lens Type
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {lensTypes.map((lens, i) => (
+                              <span
+                                key={i}
+                                className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-text"
+                              >
+                                {lens}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Frame Color - With Color Swatches */}
+                      {frameColorDetails.length > 0 && (
+                        <div className="flex items-start gap-4">
+                          <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
+                            Frame Color
+                          </h4>
+                          <div className="flex flex-wrap gap-3">
+                            {frameColorDetails.map((color, i) => (
+                              <span
+                                key={i}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-sm text-text"
+                              >
+                                <span
+                                  className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                  style={{ backgroundColor: color.hexCode }}
+                                />
+                                {color.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dimensions */}
+                      {(variantAttributes.frameWidth ||
+                        variantAttributes.lensWidth ||
+                        variantAttributes.frameHeight ||
+                        variantAttributes.bridge) && (
+                        <>
+                          <div className="border-t border-gray-200 my-2"></div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {variantAttributes.frameWidth && (
+                              <div className="bg-gray-50 p-3 rounded-lg text-center">
+                                <p className="text-xs text-text-light">
+                                  Frame Width
+                                </p>
+                                <p className="font-medium text-sm">
+                                  {variantAttributes.frameWidth} mm
+                                </p>
+                              </div>
+                            )}
+                            {variantAttributes.lensWidth && (
+                              <div className="bg-gray-50 p-3 rounded-lg text-center">
+                                <p className="text-xs text-text-light">
+                                  Lens Width
+                                </p>
+                                <p className="font-medium text-sm">
+                                  {variantAttributes.lensWidth} mm
+                                </p>
+                              </div>
+                            )}
+                            {variantAttributes.frameHeight && (
+                              <div className="bg-gray-50 p-3 rounded-lg text-center">
+                                <p className="text-xs text-text-light">
+                                  Frame Height
+                                </p>
+                                <p className="font-medium text-sm">
+                                  {variantAttributes.frameHeight} mm
+                                </p>
+                              </div>
+                            )}
+                            {variantAttributes.bridge && (
+                              <div className="bg-gray-50 p-3 rounded-lg text-center">
+                                <p className="text-xs text-text-light">
+                                  Bridge
+                                </p>
+                                <p className="font-medium text-sm">
+                                  {variantAttributes.bridge} mm
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Specifications */}
               {product.specifications?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <button
@@ -803,6 +1160,8 @@ Please confirm availability.`;
                   </div>
                 </div>
               )}
+
+              {/* FAQ */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -852,7 +1211,7 @@ Please confirm availability.`;
             </div>
           </div>
 
-          {/* Related Products - Same as before */}
+          {/* Related Products */}
           {displayRelated.length > 0 && (
             <section className="mb-16">
               <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
@@ -892,7 +1251,7 @@ Please confirm availability.`;
             </section>
           )}
 
-          {/* Reviews - Same as before */}
+          {/* Reviews */}
           <section className="max-w-3xl">
             <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
               Customer Reviews ({product.ratings?.count || 0})

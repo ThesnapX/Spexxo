@@ -38,25 +38,89 @@ export const getProducts = async (req, res) => {
       query.isActive = true;
     }
 
-    // Hide out of stock products by default
-    if (hideOutOfStock !== "false") {
-      query.stock = { $gt: 0 };
+    // Stock filter - check both main stock AND variants
+    if (hideOutOfStock !== "false" && includeInactive !== "true") {
+      query.$or = [
+        { stock: { $gt: 0 } },
+        { variants: { $elemMatch: { stock: { $gt: 0 } } } },
+      ];
     }
 
-    // Search - must use $and to combine with other filters
-    if (search) {
-      const searchTerms = [
-        { name: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { sku: { $regex: search, $options: "i" } },
-        { frameShape: { $regex: search, $options: "i" } },
-        { frameMaterial: { $regex: search, $options: "i" } },
-        { frameColor: { $regex: search, $options: "i" } },
-        { lensType: { $regex: search, $options: "i" } },
-        { gender: { $regex: search, $options: "i" } },
-        { productType: { $regex: search, $options: "i" } },
+    // ✅ FIXED: PRICE FILTER - Handles both simple and variant products
+    // A product matches if:
+    // 1. It's a simple product with product.price in range, OR
+    // 2. It has at least one variant with price in range
+    if (minPrice || maxPrice) {
+      const priceFilter = {};
+      if (minPrice) priceFilter.$gte = Number(minPrice);
+      if (maxPrice) priceFilter.$lte = Number(maxPrice);
+
+      // Build price conditions
+      const priceConditions = [
+        // Simple product: check product.price
+        { price: priceFilter },
       ];
-      query.$and = [{ $or: searchTerms }];
+
+      // If variants exist, check if any variant price is in range
+      if (priceFilter.$gte !== undefined || priceFilter.$lte !== undefined) {
+        priceConditions.push({
+          variants: {
+            $elemMatch: {
+              price: priceFilter,
+            },
+          },
+        });
+      }
+
+      // If we already have $or from stock filter
+      if (query.$or) {
+        // Combine stock filter with price using $and
+        const stockOr = query.$or;
+        delete query.$or;
+        query.$and = [{ $or: stockOr }, { $or: priceConditions }];
+      } else {
+        query.$or = priceConditions;
+      }
+    }
+
+    // ✅ UNIVERSAL SEARCH
+    if (search) {
+      const searchRegex = { $regex: search, $options: "i" };
+
+      const matchingCategories = await Category.find({
+        name: searchRegex,
+      }).select("_id");
+
+      const matchingBrands = await Brand.find({
+        name: searchRegex,
+      }).select("_id");
+
+      const categoryIds = matchingCategories.map((c) => c._id.toString());
+      const brandIds = matchingBrands.map((b) => b._id.toString());
+
+      const searchTerms = [
+        { name: searchRegex },
+        { description: searchRegex },
+        { sku: searchRegex },
+        { frameShape: searchRegex },
+        { frameMaterial: searchRegex },
+        { lensType: searchRegex },
+        { frameColor: searchRegex },
+        { gender: searchRegex },
+        { productType: searchRegex },
+        ...categoryIds.map((id) => ({
+          category: { $regex: id, $options: "i" },
+        })),
+        ...brandIds.map((id) => ({ brand: id })),
+      ];
+
+      if (query.$or) {
+        const existingOr = query.$or;
+        delete query.$or;
+        query.$and = [{ $or: existingOr }, { $or: searchTerms }];
+      } else {
+        query.$or = searchTerms;
+      }
     }
 
     // Category filter
@@ -64,8 +128,11 @@ export const getProducts = async (req, res) => {
       const cat = await Category.findOne({ slug: category });
       if (cat) {
         const catId = cat._id.toString();
-        query.$and = query.$and || [];
-        query.$and.push({ category: { $regex: catId, $options: "i" } });
+        if (query.$and) {
+          query.$and.push({ category: { $regex: catId, $options: "i" } });
+        } else {
+          query.category = { $regex: catId, $options: "i" };
+        }
       } else {
         query._id = { $in: [] };
       }
@@ -77,8 +144,11 @@ export const getProducts = async (req, res) => {
       const brands = await Brand.find({ slug: { $in: brandSlugs } });
       if (brands.length > 0) {
         const brandIds = brands.map((b) => b._id.toString());
-        query.$and = query.$and || [];
-        query.$and.push({ brand: { $in: brandIds } });
+        if (query.$and) {
+          query.$and.push({ brand: { $in: brandIds } });
+        } else {
+          query.brand = { $in: brandIds };
+        }
       } else {
         query._id = { $in: [] };
       }
@@ -88,27 +158,34 @@ export const getProducts = async (req, res) => {
     if (gender) {
       const genders = gender.split(",").filter(Boolean);
       if (genders.length > 0) {
-        query.$and = query.$and || [];
-        query.$and.push({ gender: { $in: genders } });
+        if (query.$and) {
+          query.$and.push({ gender: { $in: genders } });
+        } else {
+          query.gender = { $in: genders };
+        }
       }
     }
 
     // Product type
     if (productType) {
-      query.$and = query.$and || [];
-      query.$and.push({ productType });
+      if (query.$and) {
+        query.$and.push({ productType: productType });
+      } else {
+        query.productType = productType;
+      }
     }
 
     // Frame shape
     if (frameShape) {
       const shapes = frameShape.split(",").filter(Boolean);
       if (shapes.length > 0) {
-        query.$and = query.$and || [];
-        query.$and.push({
-          $or: shapes.map((s) => ({
-            frameShape: { $regex: s, $options: "i" },
-          })),
-        });
+        if (query.$and) {
+          query.$and.push({
+            frameShape: { $regex: shapes.join("|"), $options: "i" },
+          });
+        } else {
+          query.frameShape = { $regex: shapes.join("|"), $options: "i" };
+        }
       }
     }
 
@@ -116,30 +193,64 @@ export const getProducts = async (req, res) => {
     if (lensType) {
       const types = lensType.split(",").filter(Boolean);
       if (types.length > 0) {
-        query.$and = query.$and || [];
-        query.$and.push({
-          $or: types.map((t) => ({ lensType: { $regex: t, $options: "i" } })),
-        });
+        if (query.$and) {
+          query.$and.push({
+            lensType: { $regex: types.join("|"), $options: "i" },
+          });
+        } else {
+          query.lensType = { $regex: types.join("|"), $options: "i" };
+        }
       }
     }
 
-    // Price range
-    if (minPrice || maxPrice) {
-      query.price = {};
-      if (minPrice) query.price.$gte = Number(minPrice);
-      if (maxPrice) query.price.$lte = Number(maxPrice);
+    // Rating
+    if (rating) {
+      if (query.$and) {
+        query.$and.push({ "ratings.average": { $gte: Number(rating) } });
+      } else {
+        query["ratings.average"] = { $gte: Number(rating) };
+      }
     }
 
-    // Rating
-    if (rating) query["ratings.average"] = { $gte: Number(rating) };
-
     // Flags
-    if (isFeatured) query.isFeatured = true;
-    if (isTrending) query.isTrending = true;
-    if (isNewArrival) query.isNewArrival = true;
-    if (isBestSeller) query.isBestSeller = true;
+    if (isFeatured === "true") {
+      if (query.$and) {
+        query.$and.push({ isFeatured: true });
+      } else {
+        query.isFeatured = true;
+      }
+    }
+    if (isTrending === "true") {
+      if (query.$and) {
+        query.$and.push({ isTrending: true });
+      } else {
+        query.isTrending = true;
+      }
+    }
+    if (isBestSeller === "true") {
+      if (query.$and) {
+        query.$and.push({ isBestSeller: true });
+      } else {
+        query.isBestSeller = true;
+      }
+    }
 
-    // ✅ FIX: Define sortOption properly
+    // New Arrivals
+    if (isNewArrival === "true") {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const newArrivalCondition = {
+        $or: [{ isNewArrival: true }, { createdAt: { $gte: thirtyDaysAgo } }],
+      };
+
+      if (query.$and) {
+        query.$and.push(newArrivalCondition);
+      } else {
+        query.$and = [newArrivalCondition];
+      }
+    }
+
+    // Sort options
     let sortOption = { createdAt: -1 };
     switch (sort) {
       case "price-low":

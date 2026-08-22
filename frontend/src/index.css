@@ -380,3 +380,41 @@ textarea {
   overflow-x: hidden;
   max-width: 100vw;
 }
+
+/* ============================================ */
+/* PRODUCT CAROUSEL - CUSTOM ARROWS */
+/* ============================================ */
+
+.product-carousel .swiper-button-prev-custom,
+.product-carousel .swiper-button-next-custom {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.product-carousel:hover .swiper-button-prev-custom,
+.product-carousel:hover .swiper-button-next-custom {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .product-carousel .swiper-button-prev-custom,
+  .product-carousel .swiper-button-next-custom {
+    opacity: 1;
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .product-carousel .swiper-button-prev-custom {
+    left: -8px !important;
+  }
+
+  .product-carousel .swiper-button-next-custom {
+    right: -8px !important;
+  }
+}
+
+/* Hide default Swiper navigation arrows */
+.product-carousel .swiper-button-next,
+.product-carousel .swiper-button-prev {
+  display: none !important;
+}

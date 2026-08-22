@@ -30,7 +30,7 @@ const SearchableSingleSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Live search - filter options based on search input
+  // ✅ REMOVED SORTING - Keep options in original order
   const filteredOptions = options.filter((opt) =>
     String(renderOption(opt)).toLowerCase().includes(search.toLowerCase()),
   );
@@ -39,7 +39,7 @@ const SearchableSingleSelect = ({
   const selectedLabelText = selectedLabel ? renderOption(selectedLabel) : "";
 
   const handleSelect = (val) => {
-    onChange(val);
+    onChange(val || "");
     setIsOpen(false);
     setSearch("");
     setTimeout(() => inputRef.current?.blur(), 50);
@@ -113,7 +113,7 @@ const SearchableSingleSelect = ({
         </div>
       </div>
 
-      {/* Dropdown with live search results */}
+      {/* Dropdown with live search results - NO SORTING */}
       {isOpen && (
         <div className="absolute z-20 left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
           <div className="overflow-y-auto max-h-48">
@@ -145,6 +145,7 @@ const SearchableSingleSelect = ({
                 No options found
               </div>
             ) : (
+              // ✅ REMOVED .sort() - keeping original order
               filteredOptions.map((opt) => {
                 const val = getValue(opt);
                 const isSelected = value === val;

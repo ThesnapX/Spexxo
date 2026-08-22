@@ -39,13 +39,9 @@ const SearchableMultiSelect = ({
   // Helper function to get display text for search
   const getDisplayText = (item) => {
     const result = renderOption(item);
-    // If renderOption returns a React element, extract the text content
     if (typeof result === "object" && result !== null) {
-      // For color swatch elements, extract the color name from the children
       if (result.props?.children) {
-        // If children is an array (span with swatch and name)
         if (Array.isArray(result.props.children)) {
-          // Find the text node in the children
           for (const child of result.props.children) {
             if (typeof child === "string") return child;
             if (
@@ -56,22 +52,26 @@ const SearchableMultiSelect = ({
             }
           }
         }
-        // If children is a string directly
         if (typeof result.props.children === "string") {
           return result.props.children;
         }
       }
-      // Fallback: try to get name or string representation
       return item.name || String(item);
     }
-    // If renderOption returns a string directly
     return String(result || "");
   };
 
-  // Live search - filter options based on search input
+  // ✅ REMOVED SORTING - Keep options in original order
   const filteredOptions = options.filter((opt) => {
     const displayText = getDisplayText(opt).toLowerCase();
     return displayText.includes(search.toLowerCase());
+  });
+
+  // ✅ FIX: Create a map for quick lookup
+  const optionsMap = {};
+  options.forEach((opt) => {
+    const val = getValue(opt);
+    optionsMap[val] = opt;
   });
 
   const handleToggle = (item) => {
@@ -90,9 +90,19 @@ const SearchableMultiSelect = ({
     onChange(current.filter((v) => v !== val));
   };
 
-  const selectedLabels = options
-    .filter((opt) => selectedValues.includes(getValue(opt)))
-    .map((opt) => renderOption(opt));
+  // ✅ FIX: Build selected labels in the order of selectedValues
+  // This ensures the swatch stays with the correct color
+  const selectedLabels = selectedValues
+    .filter((val) => optionsMap[val]) // Only include if option still exists
+    .map((val) => {
+      const opt = optionsMap[val];
+      return renderOption(opt);
+    });
+
+  // ✅ FIX: Keep track of which option a selected value belongs to
+  const getSelectedOption = (val) => {
+    return optionsMap[val] || null;
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
@@ -106,9 +116,8 @@ const SearchableMultiSelect = ({
     }
   };
 
-  // Get color swatch for display in dropdown
   const getColorSwatch = (opt) => {
-    if (opt.hexCode) {
+    if (opt?.hexCode) {
       return (
         <span
           className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
@@ -119,12 +128,6 @@ const SearchableMultiSelect = ({
     return null;
   };
 
-  // Check if an option has a color (for displaying swatch in selected pills)
-  const hasColor = (opt) => {
-    return opt.hexCode !== undefined;
-  };
-
-  // Get label text for display
   const getLabelText = (label) => {
     if (typeof label === "string") return label;
     if (typeof label === "object" && label !== null) {
@@ -140,6 +143,12 @@ const SearchableMultiSelect = ({
       }
     }
     return String(label || "");
+  };
+
+  // ✅ FIX: Get the color swatch for a specific selected value
+  const getColorSwatchForValue = (val) => {
+    const opt = optionsMap[val];
+    return getColorSwatch(opt);
   };
 
   return (
@@ -159,26 +168,18 @@ const SearchableMultiSelect = ({
         }}
       >
         <div className="flex flex-wrap items-center gap-1.5 p-2 min-h-[42px]">
-          {/* Selected items as pills */}
+          {/* ✅ FIX: Selected items as pills - maintain correct order */}
           {selectedLabels.map((label, idx) => {
             const val = selectedValues[idx];
             const labelText = getLabelText(label);
-
-            // Find the original option to get color if needed
-            const originalOpt = options.find((opt) => getValue(opt) === val);
-            const hasColorSwatch = originalOpt?.hexCode;
+            const colorSwatch = getColorSwatchForValue(val);
 
             return (
               <span
                 key={idx}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#EBF4FC] text-primary rounded-full text-xs font-medium border border-primary/20"
               >
-                {hasColorSwatch && (
-                  <span
-                    className="w-3 h-3 rounded-full border border-gray-200 flex-shrink-0"
-                    style={{ backgroundColor: hasColorSwatch }}
-                  />
-                )}
+                {colorSwatch}
                 <span className="max-w-[120px] truncate">{labelText}</span>
                 <button
                   type="button"
@@ -212,7 +213,7 @@ const SearchableMultiSelect = ({
         </div>
       </div>
 
-      {/* Dropdown with live search results */}
+      {/* Dropdown with live search results - NO SORTING */}
       {isOpen && (
         <div
           className={`absolute z-20 left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden ${maxHeight}`}
@@ -238,6 +239,7 @@ const SearchableMultiSelect = ({
                 )}
               </div>
             ) : (
+              // ✅ REMOVED .sort() - keeping original order
               filteredOptions.map((opt) => {
                 const val = getValue(opt);
                 const isSelected = selectedValues.includes(val);

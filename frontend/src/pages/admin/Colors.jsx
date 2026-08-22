@@ -112,7 +112,18 @@ const Colors = () => {
     }
   };
 
-  // Filter and sort colors
+  // ✅ FIX: Keep color swatch with the correct color
+  const renderColorOption = (color) => (
+    <span className="flex items-center gap-2">
+      <span
+        className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+        style={{ backgroundColor: color.hexCode || "#000000" }}
+      />
+      {color.name}
+    </span>
+  );
+
+  // Filter and sort colors - color swatch stays with its color
   const colors = (colorsData || [])
     .filter(
       (color) =>
@@ -359,7 +370,7 @@ const Colors = () => {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal - Same as before */}
       {isModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"

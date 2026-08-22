@@ -46,19 +46,20 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
       return;
     }
 
-    // Find selected color object
-    const selectedColor = colors.find((c) => c._id === variantForm.color);
-
+    // ✅ FIX: Only store the color ID, and ensure images are stored as objects
     const newVariant = {
       name: variantForm.name,
-      sku: variantForm.sku || "",
+      sku: variantForm.sku || undefined,
       price: parseFloat(variantForm.price),
       comparePrice: variantForm.comparePrice
         ? parseFloat(variantForm.comparePrice)
         : undefined,
       stock: parseInt(variantForm.stock) || 0,
-      color: selectedColor || null,
-      images: variantForm.images || [],
+      color: variantForm.color || null,
+      images: variantForm.images.map((img) => ({
+        url: img,
+        alt: variantForm.name,
+      })),
       isActive: variantForm.isActive !== false,
     };
 
@@ -99,7 +100,7 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
       comparePrice: variant.comparePrice || "",
       stock: variant.stock || "0",
       color: variant.color?._id || variant.color || "",
-      images: variant.images || [],
+      images: variant.images?.map((img) => img.url || img) || [],
       isActive: variant.isActive !== false,
     });
     setEditingVariantIndex(index);
@@ -368,6 +369,23 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
                           />
                         )}
                       </p>
+                    )}
+                    {variant.images && variant.images.length > 0 && (
+                      <div className="flex gap-1 mt-1">
+                        {variant.images.slice(0, 3).map((img, i) => (
+                          <img
+                            key={i}
+                            src={img.url || img}
+                            alt=""
+                            className="w-5 h-5 rounded object-cover border"
+                          />
+                        ))}
+                        {variant.images.length > 3 && (
+                          <span className="text-xs text-text-light">
+                            +{variant.images.length - 3}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

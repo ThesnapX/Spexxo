@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/Products.jsx
+
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -17,6 +19,7 @@ import {
   StarIcon,
   EyeSlashIcon,
   EyeIcon as EyeIconShow,
+  Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -100,6 +103,60 @@ const Products = () => {
       });
   };
 
+  // Helper function to get total stock (main + variants)
+  const getTotalStock = (product) => {
+    let total = product.stock || 0;
+    if (product.variants && product.variants.length > 0) {
+      product.variants.forEach((v) => {
+        total += v.stock || 0;
+      });
+    }
+    return total;
+  };
+
+  // ✅ Helper function to get display price with discount
+  const getDisplayPrice = (product) => {
+    let displayPrice = product.price || 0;
+    let originalPrice = product.price || 0;
+    let hasDiscount = false;
+    let discountPercent = 0;
+
+    if (product.variants && product.variants.length > 0) {
+      const variantPrices = product.variants.map((v) => v.price || 0);
+      const variantComparePrices = product.variants.map(
+        (v) => v.comparePrice || 0,
+      );
+      const minPrice = Math.min(...variantPrices);
+      const minCompare = Math.min(...variantComparePrices);
+
+      if (minCompare > 0 && minCompare < minPrice) {
+        displayPrice = minCompare;
+        originalPrice = minPrice;
+        hasDiscount = true;
+        discountPercent = Math.round(
+          ((minPrice - minCompare) / minPrice) * 100,
+        );
+      } else {
+        displayPrice = minPrice;
+        originalPrice = minPrice;
+      }
+    } else {
+      if (product.comparePrice && product.comparePrice < product.price) {
+        displayPrice = product.comparePrice;
+        originalPrice = product.price;
+        hasDiscount = true;
+        discountPercent = Math.round(
+          ((product.price - product.comparePrice) / product.price) * 100,
+        );
+      } else {
+        displayPrice = product.price || 0;
+        originalPrice = product.price || 0;
+      }
+    }
+
+    return { displayPrice, originalPrice, hasDiscount, discountPercent };
+  };
+
   // Filter products - includes ALL products
   const products = (productsData?.products || []).filter((product) => {
     // Search filter
@@ -127,11 +184,19 @@ const Products = () => {
     // Product type filter
     if (productTypeFilter && product.productType !== productTypeFilter)
       return false;
-    // Stock filter
-    if (stockFilter === "in-stock" && (product.stock || 0) <= 0) return false;
-    if (stockFilter === "out-of-stock" && (product.stock || 0) > 0)
-      return false;
-    if (stockFilter === "low-stock" && (product.stock || 0) > 3) return false;
+    // Stock filter - Check both main stock and variant stock
+    if (stockFilter === "in-stock") {
+      const totalStock = getTotalStock(product);
+      if (totalStock <= 0) return false;
+    }
+    if (stockFilter === "out-of-stock") {
+      const totalStock = getTotalStock(product);
+      if (totalStock > 0) return false;
+    }
+    if (stockFilter === "low-stock") {
+      const totalStock = getTotalStock(product);
+      if (totalStock > 3) return false;
+    }
     // Status filter - already handled by API, but also filter locally
     if (statusFilter === "active" && !product.isActive) return false;
     if (statusFilter === "inactive" && product.isActive) return false;
@@ -344,15 +409,19 @@ const Products = () => {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {products.map((product) => {
-            const discountPercent =
-              product.comparePrice && product.price > product.comparePrice
-                ? Math.round(
-                    ((product.price - product.comparePrice) / product.price) *
-                      100,
-                  )
-                : 0;
             const brandDisplay = getBrandName(product);
             const isDeactivated = !product.isActive;
+            const hasVariants = product.variants && product.variants.length > 0;
+            const variantCount = hasVariants ? product.variants.length : 0;
+            const totalStock = getTotalStock(product);
+
+            // Get price with discount
+            const {
+              displayPrice,
+              originalPrice,
+              hasDiscount,
+              discountPercent,
+            } = getDisplayPrice(product);
 
             return (
               <div
@@ -387,11 +456,18 @@ const Products = () => {
                       Inactive
                     </span>
                   ) : (
-                    discountPercent > 0 && (
+                    hasDiscount && (
                       <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
                         {discountPercent}% OFF
                       </span>
                     )
+                  )}
+                  {/* Has Variants Badge - Top Right */}
+                  {hasVariants && !isDeactivated && (
+                    <span className="absolute top-2 right-2 bg-purple-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                      <Squares2X2Icon className="w-3 h-3" />
+                      {variantCount} Variants
+                    </span>
                   )}
                   {isDeactivated && (
                     <div className="absolute inset-0 bg-gray-400/10 flex items-center justify-center">
@@ -416,45 +492,60 @@ const Products = () => {
                         • Inactive
                       </span>
                     )}
+                    {hasVariants && !isDeactivated && (
+                      <span className="ml-2 text-xs text-purple-500 font-medium">
+                        • {variantCount} Variants
+                      </span>
+                    )}
                   </p>
                   <h3 className="font-medium text-sm text-text mb-2 line-clamp-1">
                     {product.name}
                   </h3>
-                  <div className="flex items-center gap-2 mb-2">
+
+                  {/* ✅ FIXED: Price with discount display */}
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span
                       className={`font-bold ${
                         isDeactivated ? "text-gray-400" : "text-text"
                       }`}
                     >
-                      ₹
-                      {(
-                        product.comparePrice || product.price
-                      )?.toLocaleString()}
+                      ₹{displayPrice?.toLocaleString()}
                     </span>
-                    {product.comparePrice && !isDeactivated && (
+                    {hasDiscount && !isDeactivated && (
                       <span className="text-sm text-gray-400 line-through">
-                        ₹{product.price?.toLocaleString()}
+                        ₹{originalPrice?.toLocaleString()}
+                      </span>
+                    )}
+                    {hasDiscount && !isDeactivated && (
+                      <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                        {discountPercent}% off
+                      </span>
+                    )}
+                    {hasVariants && !isDeactivated && (
+                      <span className="text-xs text-purple-500 font-medium ml-1">
+                        (from {variantCount} variants)
                       </span>
                     )}
                   </div>
+
                   <div className="flex items-center gap-2 mb-3">
                     <span
                       className={`text-xs font-medium ${
-                        (product.stock || 0) > 10
+                        totalStock > 10
                           ? "text-green-600"
-                          : (product.stock || 0) > 0
+                          : totalStock > 0
                             ? "text-orange-600"
                             : "text-red-600"
                       }`}
                     >
-                      {product.stock || 0} in stock
+                      {totalStock} in stock
                     </span>
-                    {(product.stock || 0) === 0 && (
+                    {totalStock === 0 && (
                       <span className="text-xs text-red-500">
                         Out of Stock!
                       </span>
                     )}
-                    {(product.stock || 0) > 0 && (product.stock || 0) <= 3 && (
+                    {totalStock > 0 && totalStock <= 3 && (
                       <span className="text-xs text-orange-500">
                         Low Stock!
                       </span>
@@ -479,6 +570,13 @@ const Products = () => {
                     {product.isBestSeller && (
                       <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-[10px] rounded-full">
                         Best Seller
+                      </span>
+                    )}
+                    {/* Has Variants Tag - In the tags section */}
+                    {hasVariants && !isDeactivated && (
+                      <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-[10px] rounded-full flex items-center gap-0.5">
+                        <Squares2X2Icon className="w-2.5 h-2.5" />
+                        {variantCount} Variants
                       </span>
                     )}
                   </div>

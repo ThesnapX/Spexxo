@@ -1,3 +1,5 @@
+// frontend/src/pages/Home.jsx
+
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -14,6 +16,30 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const Home = () => {
   const [showAuthPopup, setShowAuthPopup] = useState(false);
+
+  // Helper function to get the minimum price from variants or main product
+  const getDisplayPrice = (product) => {
+    if (product.variants && product.variants.length > 0) {
+      const prices = product.variants.map((v) => v.price || 0);
+      return Math.min(...prices);
+    }
+    return product.comparePrice || product.price || 0;
+  };
+
+  // Helper function to get the minimum compare price from variants or main product
+  const getDisplayComparePrice = (product) => {
+    if (product.variants && product.variants.length > 0) {
+      const comparePrices = product.variants.map((v) => v.comparePrice || 0);
+      const minCompare = Math.min(...comparePrices);
+      return minCompare > 0 ? minCompare : 0;
+    }
+    return product.comparePrice || 0;
+  };
+
+  // Helper function to check if product has variants
+  const hasVariants = (product) => {
+    return product.variants && product.variants.length > 0;
+  };
 
   return (
     <>
@@ -32,6 +58,9 @@ const Home = () => {
         apiParams={{ isTrending: true, sort: "rating" }}
         linkTo="/shop?isTrending=true"
         onRequireAuth={() => setShowAuthPopup(true)}
+        getDisplayPrice={getDisplayPrice}
+        getDisplayComparePrice={getDisplayComparePrice}
+        hasVariants={hasVariants}
       />
 
       <FeaturesSection />
@@ -45,6 +74,9 @@ const Home = () => {
         linkTo="/shop?isFeatured=true"
         showSaleBadge={true}
         onRequireAuth={() => setShowAuthPopup(true)}
+        getDisplayPrice={getDisplayPrice}
+        getDisplayComparePrice={getDisplayComparePrice}
+        hasVariants={hasVariants}
       />
 
       <ProductCarousel
@@ -54,6 +86,9 @@ const Home = () => {
         apiParams={{ isNewArrival: true, sort: "newest" }}
         linkTo="/shop?isNewArrival=true"
         onRequireAuth={() => setShowAuthPopup(true)}
+        getDisplayPrice={getDisplayPrice}
+        getDisplayComparePrice={getDisplayComparePrice}
+        hasVariants={hasVariants}
       />
 
       <BrandsSection />
@@ -65,6 +100,9 @@ const Home = () => {
         apiParams={{ isBestSeller: true, sort: "popular" }}
         linkTo="/shop?isBestSeller=true"
         onRequireAuth={() => setShowAuthPopup(true)}
+        getDisplayPrice={getDisplayPrice}
+        getDisplayComparePrice={getDisplayComparePrice}
+        hasVariants={hasVariants}
       />
 
       <AuthPopup

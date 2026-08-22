@@ -11,10 +11,15 @@ import {
   XMarkIcon,
   ExclamationCircleIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  CubeIcon,
+  Squares2X2Icon,
 } from "@heroicons/react/24/outline";
-import VariantManager from "../../components/admin/VariantManager";
 import SearchableMultiSelect from "../../components/admin/SearchableMultiSelect";
 import SearchableSingleSelect from "../../components/admin/SearchableSingleSelect";
+import VariantForm from "../../components/admin/VariantForm";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -29,6 +34,9 @@ const EditProduct = () => {
   const [errors, setErrors] = useState({});
   const [formInitialized, setFormInitialized] = useState(false);
   const [variants, setVariants] = useState([]);
+  const [productType, setProductType] = useState("simple");
+  const [showVariantForm, setShowVariantForm] = useState(false);
+  const [editingVariantIndex, setEditingVariantIndex] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -38,7 +46,7 @@ const EditProduct = () => {
     category: "",
     brand: "",
     gender: "",
-    productType: "eyeglasses",
+    productCategory: "eyeglasses",
     frameShape: "",
     frameMaterial: "",
     frameColor: "",
@@ -51,8 +59,6 @@ const EditProduct = () => {
     stock: "10",
     isFeatured: false,
     isTrending: false,
-    isNewArrival: false,
-    isBestSeller: false,
     sku: "",
   });
 
@@ -152,10 +158,12 @@ const EditProduct = () => {
         }
       }
 
-      // Set variants from product data
+      // Set variants from product data (keep as is)
       if (productData.variants && Array.isArray(productData.variants)) {
         setVariants(productData.variants);
       }
+
+      setProductType(productData.productType || "simple");
 
       setForm({
         name: productData.name || "",
@@ -165,7 +173,10 @@ const EditProduct = () => {
         category: catStr,
         brand: brandStr,
         gender: productData.gender || "",
-        productType: productData.productType || "eyeglasses",
+        productCategory:
+          productData.productCategory ||
+          productData.productTypeOld ||
+          "eyeglasses",
         frameShape: productData.frameShape || "",
         frameMaterial: productData.frameMaterial || "",
         frameColor: productData.frameColor || "",
@@ -196,14 +207,49 @@ const EditProduct = () => {
             : "10",
         isFeatured: productData.isFeatured || false,
         isTrending: productData.isTrending || false,
-        isNewArrival: productData.isNewArrival || false,
-        isBestSeller: productData.isBestSeller || false,
         sku: productData.sku || "",
       });
       setExistingImages(productData.images || []);
       setFormInitialized(true);
     }
   }, [productData, formInitialized]);
+
+  // Add variant functions
+  const handleAddVariant = (variantData) => {
+    setVariants([...variants, variantData]);
+    setShowVariantForm(false);
+    toast.success("Variant added!");
+  };
+
+  const handleEditVariant = (index) => {
+    setEditingVariantIndex(index);
+    setShowVariantForm(true);
+  };
+
+  const handleUpdateVariant = (variantData) => {
+    const updatedVariants = [...variants];
+    updatedVariants[editingVariantIndex] = variantData;
+    setVariants(updatedVariants);
+    setShowVariantForm(false);
+    setEditingVariantIndex(null);
+    toast.success("Variant updated!");
+  };
+
+  const handleDeleteVariant = (index) => {
+    if (window.confirm("Delete this variant?")) {
+      setVariants(variants.filter((_, i) => i !== index));
+      toast.success("Variant deleted");
+    }
+  };
+
+  const openVariantForm = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setEditingVariantIndex(null);
+    setShowVariantForm(true);
+  };
 
   const updateMutation = useMutation({
     mutationFn: async (productData) => {
@@ -253,20 +299,33 @@ const EditProduct = () => {
     if (!form.name.trim()) newErrors.name = "Product name is required";
     if (!form.description.trim())
       newErrors.description = "Description is required";
-    if (!form.price || Number(form.price) <= 0)
-      newErrors.price = "Price must be greater than 0";
-    if (form.discountedPrice) {
-      const dp = Number(form.discountedPrice);
-      const p = Number(form.price);
-      if (dp <= 0) newErrors.discountedPrice = "Must be > 0";
-      else if (dp >= p)
-        newErrors.discountedPrice = "Must be less than original price";
+
+    if (productType === "simple") {
+      if (!form.price || Number(form.price) <= 0)
+        newErrors.price = "Price must be greater than 0";
+      if (form.discountedPrice) {
+        const dp = Number(form.discountedPrice);
+        const p = Number(form.price);
+        if (dp <= 0) newErrors.discountedPrice = "Must be > 0";
+        else if (dp >= p)
+          newErrors.discountedPrice = "Must be less than original price";
+      }
+      if (
+        form.stock === "" ||
+        form.stock === null ||
+        form.stock === undefined
+      ) {
+        newErrors.stock = "Stock is required";
+      } else if (Number(form.stock) < 0) {
+        newErrors.stock = "Stock cannot be negative";
+      }
+    } else {
+      // Variable products - validate variants
+      if (variants.length === 0) {
+        newErrors.variants = "At least one variant is required";
+      }
     }
-    if (form.stock === "" || form.stock === null || form.stock === undefined) {
-      newErrors.stock = "Stock is required";
-    } else if (Number(form.stock) < 0) {
-      newErrors.stock = "Stock cannot be negative";
-    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -296,6 +355,8 @@ const EditProduct = () => {
       return;
     }
     setUploading(true);
+
+    // Upload new images
     let allImages = [...existingImages];
     if (imageFiles.length > 0) {
       const fd = new FormData();
@@ -314,6 +375,8 @@ const EditProduct = () => {
         return;
       }
     }
+
+    // Build specifications
     const specs = [];
     if (form.frameWidth)
       specs.push({ name: "Frame Width", value: `${form.frameWidth} mm` });
@@ -325,18 +388,60 @@ const EditProduct = () => {
     if (form.temple)
       specs.push({ name: "Temple Length", value: `${form.temple} mm` });
 
+    // Clean variants if variable product
+    let cleanedVariants = undefined;
+    if (productType === "variable" && variants.length > 0) {
+      cleanedVariants = variants.map((variant) => ({
+        name: variant.name,
+        sku: variant.sku || undefined,
+        price: parseFloat(variant.price),
+        comparePrice: variant.comparePrice
+          ? parseFloat(variant.comparePrice)
+          : undefined,
+        stock: parseInt(variant.stock) || 0,
+        color: variant.color || null,
+        frameShape: variant.frameShape || "",
+        frameMaterial: variant.frameMaterial || "",
+        lensType: variant.lensType || "",
+        frameColor: variant.frameColor || "",
+        frameWidth: variant.frameWidth
+          ? parseFloat(variant.frameWidth)
+          : undefined,
+        lensWidth: variant.lensWidth
+          ? parseFloat(variant.lensWidth)
+          : undefined,
+        frameHeight: variant.frameHeight
+          ? parseFloat(variant.frameHeight)
+          : undefined,
+        bridge: variant.bridge ? parseFloat(variant.bridge) : undefined,
+        images:
+          variant.images?.map((img) => ({
+            url: img.url || img,
+            alt: variant.name,
+          })) || [],
+        isDefault: variant.isDefault || false,
+        isActive: variant.isActive !== false,
+      }));
+    }
+
     const pd = {
       ...form,
-      price: Number(form.price),
-      comparePrice: form.discountedPrice
-        ? Number(form.discountedPrice)
-        : undefined,
-      stock: Number(form.stock),
+      price: productType === "simple" ? Number(form.price) : undefined,
+      comparePrice:
+        productType === "simple" && form.discountedPrice
+          ? Number(form.discountedPrice)
+          : undefined,
+      stock: productType === "simple" ? Number(form.stock) : undefined,
       images: allImages,
-      variants: variants,
+      variants: cleanedVariants,
+      brand: form.brand || null,
+      category: form.category || null,
+      productType: productType,
+      productCategory: form.productCategory,
       specifications: specs.length > 0 ? specs : undefined,
     };
     delete pd.discountedPrice;
+
     updateMutation.mutate(pd);
     setUploading(false);
   };
@@ -387,43 +492,81 @@ const EditProduct = () => {
         <h1 className="text-2xl font-bold text-text">Edit Product</h1>
       </div>
       <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 md:grid-cols-2 gap-4"
-          noValidate
-        >
-          {/* Product Name */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Product Name <span className="text-red-500">*</span>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Product Type Selector */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-text mb-2">
+              Product Type <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => handleChange("name", e.target.value)}
-              className={getInputClass("name")}
-            />
-            {errors.name && (
-              <p className="text-red-500 text-xs mt-1">
-                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
-                {errors.name}
-              </p>
+            <div className="grid grid-cols-2 gap-4 max-w-md">
+              <button
+                type="button"
+                onClick={() => setProductType("simple")}
+                className={`p-4 rounded-xl border-2 transition text-center ${
+                  productType === "simple"
+                    ? "border-primary bg-[#EBF4FC] text-primary"
+                    : "border-gray-200 hover:border-gray-300 text-text"
+                }`}
+              >
+                <CubeIcon className="w-8 h-8 mx-auto mb-2" />
+                <p className="font-medium">Simple Product</p>
+                <p className="text-xs text-text-light mt-1">
+                  One variant with single price & stock
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductType("variable")}
+                className={`p-4 rounded-xl border-2 transition text-center ${
+                  productType === "variable"
+                    ? "border-primary bg-[#EBF4FC] text-primary"
+                    : "border-gray-200 hover:border-gray-300 text-text"
+                }`}
+              >
+                <Squares2X2Icon className="w-8 h-8 mx-auto mb-2" />
+                <p className="font-medium">Variable Product</p>
+                <p className="text-xs text-text-light mt-1">
+                  Multiple variants with different prices & stocks
+                </p>
+              </button>
+            </div>
+            {errors.variants && (
+              <p className="text-red-500 text-xs mt-2">{errors.variants}</p>
             )}
           </div>
 
-          {/* SKU */}
-          <div>
-            <label className="block text-sm font-medium mb-1">SKU</label>
-            <input
-              type="text"
-              value={form.sku}
-              onChange={(e) => handleChange("sku", e.target.value)}
-              className={getInputClass("sku")}
-            />
+          {/* Product Name */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Product Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                className={getInputClass("name")}
+              />
+              {errors.name && (
+                <p className="text-red-500 text-xs mt-1">
+                  <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
+                  {errors.name}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">SKU</label>
+              <input
+                type="text"
+                value={form.sku}
+                onChange={(e) => handleChange("sku", e.target.value)}
+                className={getInputClass("sku")}
+              />
+            </div>
           </div>
 
           {/* Description */}
-          <div className="md:col-span-2">
+          <div>
             <label className="block text-sm font-medium mb-1">
               Description <span className="text-red-500">*</span>
             </label>
@@ -441,8 +584,8 @@ const EditProduct = () => {
             )}
           </div>
 
-          {/* Categories - Using SearchableMultiSelect */}
-          <div className="md:col-span-2">
+          {/* Categories */}
+          <div>
             <SearchableMultiSelect
               label="Categories (Multi Select)"
               options={categories || []}
@@ -456,8 +599,8 @@ const EditProduct = () => {
             />
           </div>
 
-          {/* Brand - Using SearchableSingleSelect */}
-          <div className="md:col-span-2">
+          {/* Brand */}
+          <div>
             <SearchableSingleSelect
               label="Brand (Optional)"
               options={brands || []}
@@ -469,296 +612,360 @@ const EditProduct = () => {
             />
           </div>
 
-          {/* Product Type */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Product Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={form.productType}
-              onChange={(e) => handleChange("productType", e.target.value)}
-              className={getInputClass("productType")}
-            >
-              <option value="eyeglasses">Eyeglasses</option>
-              <option value="sunglasses">Sunglasses</option>
-              <option value="contactlens">Contact Lens</option>
-            </select>
-          </div>
-
-          {/* Gender */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Gender</label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                { v: "men", l: "👨 Men" },
-                { v: "women", l: "👩 Women" },
-                { v: "kids", l: "👶 Kids" },
-                { v: "unisex", l: "👤 Unisex" },
-              ].map((opt) => {
-                const sel = form.gender
-                  ? form.gender.split(",").filter(Boolean)
-                  : [];
-                return (
-                  <button
-                    key={opt.v}
-                    type="button"
-                    onClick={() => {
-                      const current = form.gender
-                        ? form.gender.split(",").filter(Boolean)
-                        : [];
-                      let updated = current.includes(opt.v)
-                        ? current.filter((v) => v !== opt.v)
-                        : [...current, opt.v];
-                      handleChange("gender", updated.join(","));
-                    }}
-                    className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                      sel.includes(opt.v)
-                        ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    {opt.l}
-                  </button>
-                );
-              })}
+          {/* Gender & Product Category */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Gender</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {[
+                  { v: "men", l: "👨 Men" },
+                  { v: "women", l: "👩 Women" },
+                  { v: "kids", l: "👶 Kids" },
+                  { v: "unisex", l: "👤 Unisex" },
+                ].map((opt) => {
+                  const sel = form.gender
+                    ? form.gender.split(",").filter(Boolean)
+                    : [];
+                  return (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => {
+                        const current = form.gender
+                          ? form.gender.split(",").filter(Boolean)
+                          : [];
+                        let updated = current.includes(opt.v)
+                          ? current.filter((v) => v !== opt.v)
+                          : [...current, opt.v];
+                        handleChange("gender", updated.join(","));
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                        sel.includes(opt.v)
+                          ? "border-[#3D96EB] bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                          : "border-gray-200 text-gray-600 hover:border-gray-300"
+                      }`}
+                    >
+                      {opt.l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Product Category <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.productCategory}
+                onChange={(e) =>
+                  handleChange("productCategory", e.target.value)
+                }
+                className={getInputClass("productCategory")}
+              >
+                <option value="eyeglasses">Eyeglasses</option>
+                <option value="sunglasses">Sunglasses</option>
+                <option value="contactlens">Contact Lens</option>
+              </select>
             </div>
           </div>
 
-          {/* Price */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Original Price (₹) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={form.price}
-              onChange={(e) => handleChange("price", e.target.value)}
-              className={getInputClass("price")}
-            />
-            {errors.price && (
-              <p className="text-red-500 text-xs mt-1">
-                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
-                {errors.price}
-              </p>
-            )}
-          </div>
-
-          {/* Discounted Price */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Discounted Price (₹)
-            </label>
-            <input
-              type="number"
-              value={form.discountedPrice}
-              onChange={(e) => handleChange("discountedPrice", e.target.value)}
-              className={getInputClass("discountedPrice")}
-            />
-            {errors.discountedPrice && (
-              <p className="text-red-500 text-xs mt-1">
-                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
-                {errors.discountedPrice}
-              </p>
-            )}
-            {form.price &&
-              form.discountedPrice &&
-              !errors.discountedPrice &&
-              Number(form.discountedPrice) < Number(form.price) && (
-                <p className="text-green-600 text-xs mt-1">
-                  {Math.round(
-                    ((Number(form.price) - Number(form.discountedPrice)) /
-                      Number(form.price)) *
-                      100,
-                  )}
-                  % off
-                </p>
-              )}
-          </div>
-
-          {/* Variants Section */}
-          <div className="md:col-span-2">
-            <VariantManager
-              variants={variants}
-              onVariantsChange={setVariants}
-              productType={form.productType}
-            />
-          </div>
-
-          {/* Stock */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Stock <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={form.stock}
-              onChange={(e) => handleChange("stock", e.target.value)}
-              className={getInputClass("stock")}
-              placeholder="e.g. 10"
-              min="0"
-              step="1"
-            />
-            {errors.stock && (
-              <p className="text-red-500 text-xs mt-1">
-                <ExclamationCircleIcon className="w-3 h-3 inline" />{" "}
-                {errors.stock}
-              </p>
-            )}
-            <p className="text-xs text-text-light mt-1">
-              Set to 0 for out of stock
-            </p>
-          </div>
-
-          {/* Frame Shape - Using SearchableMultiSelect */}
-          <div>
-            <SearchableMultiSelect
-              label="Frame Shape"
-              options={shapesData || []}
-              selectedValues={
-                form.frameShape
-                  ? form.frameShape.split(",").filter(Boolean)
-                  : []
-              }
-              onChange={(values) =>
-                handleChange("frameShape", values.join(","))
-              }
-              placeholder="Search frame shapes..."
-              renderOption={(shape) => shape.name}
-              getValue={(shape) => shape.name}
-              maxHeight="max-h-32"
-            />
-          </div>
-
-          {/* Frame Material - Using SearchableMultiSelect */}
-          <div>
-            <SearchableMultiSelect
-              label="Frame Material"
-              options={frameMaterialsData || []}
-              selectedValues={
-                form.frameMaterial
-                  ? form.frameMaterial.split(",").filter(Boolean)
-                  : []
-              }
-              onChange={(values) =>
-                handleChange("frameMaterial", values.join(","))
-              }
-              placeholder="Search frame materials..."
-              renderOption={(mat) => mat.name}
-              getValue={(mat) => mat.name}
-              maxHeight="max-h-32"
-            />
-          </div>
-
-          {/* Frame Color - Using SearchableMultiSelect */}
-          <div>
-            <SearchableMultiSelect
-              label="Frame Color"
-              options={colorsData || []}
-              selectedValues={
-                form.frameColor
-                  ? form.frameColor.split(",").filter(Boolean)
-                  : []
-              }
-              onChange={(values) =>
-                handleChange("frameColor", values.join(","))
-              }
-              placeholder="Search colors..."
-              renderOption={(color) => (
-                <span className="flex items-center gap-2">
-                  <span
-                    className="w-3 h-3 rounded-full border border-gray-300"
-                    style={{ backgroundColor: color.hexCode || "#000" }}
+          {/* SIMPLE PRODUCT FIELDS */}
+          {productType === "simple" && (
+            <>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Price <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={(e) => handleChange("price", e.target.value)}
+                    className={getInputClass("price")}
                   />
-                  {color.name}
-                </span>
+                  {errors.price && (
+                    <p className="text-red-500 text-xs mt-1">{errors.price}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Discounted Price
+                  </label>
+                  <input
+                    type="number"
+                    value={form.discountedPrice}
+                    onChange={(e) =>
+                      handleChange("discountedPrice", e.target.value)
+                    }
+                    className={getInputClass("discountedPrice")}
+                  />
+                  {errors.discountedPrice && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.discountedPrice}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Stock <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={form.stock}
+                    onChange={(e) => handleChange("stock", e.target.value)}
+                    className={getInputClass("stock")}
+                    min="0"
+                    step="1"
+                  />
+                  {errors.stock && (
+                    <p className="text-red-500 text-xs mt-1">{errors.stock}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Simple Product Attributes */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <SearchableMultiSelect
+                    label="Frame Shape"
+                    options={shapesData || []}
+                    selectedValues={
+                      form.frameShape
+                        ? form.frameShape.split(",").filter(Boolean)
+                        : []
+                    }
+                    onChange={(values) =>
+                      handleChange("frameShape", values.join(","))
+                    }
+                    placeholder="Search frame shapes..."
+                    renderOption={(shape) => shape.name}
+                    getValue={(shape) => shape.name}
+                    maxHeight="max-h-32"
+                  />
+                </div>
+                <div>
+                  <SearchableMultiSelect
+                    label="Frame Material"
+                    options={frameMaterialsData || []}
+                    selectedValues={
+                      form.frameMaterial
+                        ? form.frameMaterial.split(",").filter(Boolean)
+                        : []
+                    }
+                    onChange={(values) =>
+                      handleChange("frameMaterial", values.join(","))
+                    }
+                    placeholder="Search frame materials..."
+                    renderOption={(mat) => mat.name}
+                    getValue={(mat) => mat.name}
+                    maxHeight="max-h-32"
+                  />
+                </div>
+                <div>
+                  <SearchableMultiSelect
+                    label="Lens Type"
+                    options={lensTypesData || []}
+                    selectedValues={
+                      form.lensType
+                        ? form.lensType.split(",").filter(Boolean)
+                        : []
+                    }
+                    onChange={(values) =>
+                      handleChange("lensType", values.join(","))
+                    }
+                    placeholder="Search lens types..."
+                    renderOption={(lens) => lens.name}
+                    getValue={(lens) => lens.name}
+                    maxHeight="max-h-32"
+                  />
+                </div>
+                <div>
+                  <SearchableMultiSelect
+                    label="Frame Color"
+                    options={colorsData || []}
+                    selectedValues={
+                      form.frameColor
+                        ? form.frameColor.split(",").filter(Boolean)
+                        : []
+                    }
+                    onChange={(values) =>
+                      handleChange("frameColor", values.join(","))
+                    }
+                    placeholder="Search frame colors..."
+                    renderOption={(color) => (
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="w-4 h-4 rounded-full border border-gray-300"
+                          style={{ backgroundColor: color.hexCode || "#000" }}
+                        />
+                        {color.name}
+                      </span>
+                    )}
+                    getValue={(color) => color.name}
+                    maxHeight="max-h-32"
+                  />
+                </div>
+              </div>
+
+              {/* Simple Product Dimensions */}
+              <div className="grid grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-xs text-text-light mb-1">
+                    Frame Width
+                  </label>
+                  <input
+                    type="number"
+                    value={form.frameWidth}
+                    onChange={(e) => handleChange("frameWidth", e.target.value)}
+                    className={getInputClass("frameWidth")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-light mb-1">
+                    Lens Width
+                  </label>
+                  <input
+                    type="number"
+                    value={form.lensWidth}
+                    onChange={(e) => handleChange("lensWidth", e.target.value)}
+                    className={getInputClass("lensWidth")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-light mb-1">
+                    Frame Height
+                  </label>
+                  <input
+                    type="number"
+                    value={form.frameHeight}
+                    onChange={(e) =>
+                      handleChange("frameHeight", e.target.value)
+                    }
+                    className={getInputClass("frameHeight")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-light mb-1">
+                    Bridge
+                  </label>
+                  <input
+                    type="number"
+                    value={form.bridge}
+                    onChange={(e) => handleChange("bridge", e.target.value)}
+                    className={getInputClass("bridge")}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-light mb-1">
+                    Temple
+                  </label>
+                  <input
+                    type="number"
+                    value={form.temple}
+                    onChange={(e) => handleChange("temple", e.target.value)}
+                    className={getInputClass("temple")}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* VARIABLE PRODUCT FIELDS */}
+          {productType === "variable" && (
+            <div className="border rounded-xl p-4 bg-gray-50">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-text">
+                  Product Variants ({variants.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={openVariantForm}
+                  className="btn-primary text-sm flex items-center gap-1"
+                >
+                  <PlusIcon className="w-4 h-4" /> Add Variant
+                </button>
+              </div>
+
+              {showVariantForm && (
+                <VariantForm
+                  variant={
+                    editingVariantIndex !== null
+                      ? variants[editingVariantIndex]
+                      : null
+                  }
+                  onSave={
+                    editingVariantIndex !== null
+                      ? handleUpdateVariant
+                      : handleAddVariant
+                  }
+                  onCancel={() => {
+                    setShowVariantForm(false);
+                    setEditingVariantIndex(null);
+                  }}
+                  isEditing={editingVariantIndex !== null}
+                />
               )}
-              getValue={(color) => color.name}
-              maxHeight="max-h-32"
-            />
-          </div>
 
-          {/* Lens Type - Using SearchableMultiSelect */}
-          <div>
-            <SearchableMultiSelect
-              label="Lens Type"
-              options={lensTypesData || []}
-              selectedValues={
-                form.lensType ? form.lensType.split(",").filter(Boolean) : []
-              }
-              onChange={(values) => handleChange("lensType", values.join(","))}
-              placeholder="Search lens types..."
-              renderOption={(lens) => lens.name}
-              getValue={(lens) => lens.name}
-              maxHeight="max-h-32"
-            />
-          </div>
-
-          {/* Frame Dimensions */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-3">
-              Frame Dimensions (mm)
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div>
-                <label className="block text-xs text-text-light mb-1">
-                  Frame Width
-                </label>
-                <input
-                  type="number"
-                  value={form.frameWidth}
-                  onChange={(e) => handleChange("frameWidth", e.target.value)}
-                  className={getInputClass("frameWidth")}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-text-light mb-1">
-                  Lens Width
-                </label>
-                <input
-                  type="number"
-                  value={form.lensWidth}
-                  onChange={(e) => handleChange("lensWidth", e.target.value)}
-                  className={getInputClass("lensWidth")}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-text-light mb-1">
-                  Frame Height
-                </label>
-                <input
-                  type="number"
-                  value={form.frameHeight}
-                  onChange={(e) => handleChange("frameHeight", e.target.value)}
-                  className={getInputClass("frameHeight")}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-text-light mb-1">
-                  Bridge
-                </label>
-                <input
-                  type="number"
-                  value={form.bridge}
-                  onChange={(e) => handleChange("bridge", e.target.value)}
-                  className={getInputClass("bridge")}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-text-light mb-1">
-                  Temple
-                </label>
-                <input
-                  type="number"
-                  value={form.temple}
-                  onChange={(e) => handleChange("temple", e.target.value)}
-                  className={getInputClass("temple")}
-                />
-              </div>
+              {variants.length > 0 && (
+                <div className="space-y-3 mt-4">
+                  {variants.map((variant, index) => (
+                    <div
+                      key={index}
+                      className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between hover:shadow-sm transition"
+                    >
+                      <div className="flex items-center gap-4">
+                        {variant.images && variant.images.length > 0 && (
+                          <img
+                            src={variant.images[0].url || variant.images[0]}
+                            alt={variant.name}
+                            className="w-16 h-16 rounded-lg object-cover border"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-text">
+                            {variant.name}
+                          </p>
+                          <p className="text-xs text-text-light">
+                            SKU: {variant.sku || "N/A"} • Stock: {variant.stock}{" "}
+                            • ₹{variant.price}
+                            {variant.comparePrice && (
+                              <span className="text-gray-400 line-through ml-2">
+                                ₹{variant.comparePrice}
+                              </span>
+                            )}
+                          </p>
+                          {variant.isDefault && (
+                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleEditVariant(index)}
+                          className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteVariant(index)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Images */}
-          <div className="md:col-span-2">
+          <div>
             <label className="block text-sm font-medium mb-2">Images</label>
             <div className="flex flex-wrap gap-3 mb-3">
               {existingImages.map((img, i) => (
@@ -809,20 +1016,20 @@ const EditProduct = () => {
             </div>
           </div>
 
-          {/* Product Flags */}
-          <div className="md:col-span-2">
+          {/* Flags */}
+          <div>
             <label className="block text-sm font-medium mb-2">
               Product Flags
             </label>
             <p className="text-xs text-text-light mb-3">
-              🏷️ Flags control homepage sections.
+              🏷️ Flags control homepage sections: Featured=Flash Sales,
+              Trending=Customer Loved. New Arrivals and Best Sellers are
+              automatically determined based on product age and sales.
             </p>
             <div className="flex flex-wrap gap-4">
               {[
                 { k: "isFeatured", l: "⭐ Featured" },
                 { k: "isTrending", l: "🔥 Trending" },
-                { k: "isNewArrival", l: "🆕 New Arrival" },
-                { k: "isBestSeller", l: "🏆 Best Seller" },
               ].map((f) => (
                 <label
                   key={f.k}
@@ -841,7 +1048,7 @@ const EditProduct = () => {
           </div>
 
           {/* Submit */}
-          <div className="md:col-span-2 flex gap-3 pt-4 border-t">
+          <div className="flex gap-3 pt-4 border-t">
             <button
               type="submit"
               disabled={uploading || updateMutation.isPending}

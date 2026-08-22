@@ -25,9 +25,22 @@ const productSchema = new mongoose.Schema(
     shortDescription: {
       type: String,
     },
+
+    // ✅ NEW: Product Type (Simple or Variable)
+    productType: {
+      type: String,
+      enum: ["simple", "variable"],
+      default: "simple",
+    },
+
+    // ✅ Product Category (eyeglasses, sunglasses, contactlens)
+    productCategory: {
+      type: String,
+      enum: ["eyeglasses", "sunglasses", "contactlens"],
+    },
+
     price: {
       type: Number,
-      required: [true, "Price is required"],
     },
     comparePrice: {
       type: Number,
@@ -44,22 +57,25 @@ const productSchema = new mongoose.Schema(
       type: String,
     },
     category: {
-      type: String, // Stores comma-separated IDs like "id1,id2,id3"
+      type: String,
     },
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Brand",
+      default: null,
     },
     gender: {
       type: String,
       enum: ["men", "women", "unisex", "kids"],
       default: "unisex",
     },
-    productType: {
+    // Keep for backward compatibility
+    productTypeOld: {
       type: String,
       enum: ["eyeglasses", "sunglasses", "contactlens"],
-      required: true,
     },
+
+    // Simple Product Fields
     frameShape: {
       type: String,
     },
@@ -90,6 +106,10 @@ const productSchema = new mongoose.Schema(
     size: {
       type: String,
     },
+    stock: {
+      type: Number,
+      default: 0,
+    },
     images: [
       {
         url: String,
@@ -107,8 +127,7 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    // ... existing code ...
-
+    // ✅ VARIANT PRODUCT FIELDS
     variants: [
       {
         name: {
@@ -117,14 +136,15 @@ const productSchema = new mongoose.Schema(
         },
         sku: {
           type: String,
-          unique: true,
           sparse: true,
         },
         price: {
           type: Number,
           required: true,
         },
-        comparePrice: Number,
+        comparePrice: {
+          type: Number,
+        },
         stock: {
           type: Number,
           default: 0,
@@ -132,11 +152,40 @@ const productSchema = new mongoose.Schema(
         color: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Color",
+          default: null,
+        },
+        frameShape: {
+          type: String,
+        },
+        frameMaterial: {
+          type: String,
+        },
+        lensType: {
+          type: String,
+        },
+        frameColor: {
+          type: String,
+        },
+        frameWidth: {
+          type: Number,
+        },
+        lensWidth: {
+          type: Number,
+        },
+        frameHeight: {
+          type: Number,
+        },
+        bridge: {
+          type: Number,
         },
         images: [
           {
             url: String,
             alt: String,
+            isMain: {
+              type: Boolean,
+              default: false,
+            },
           },
         ],
         attributes: {
@@ -148,13 +197,13 @@ const productSchema = new mongoose.Schema(
           type: Boolean,
           default: true,
         },
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
       },
     ],
 
-    stock: {
-      type: Number,
-      default: 0,
-    },
     isInStock: {
       type: Boolean,
       default: true,
@@ -167,14 +216,8 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    isNewArrival: {
-      type: Boolean,
-      default: false,
-    },
-    isBestSeller: {
-      type: Boolean,
-      default: false,
-    },
+    // ✅ REMOVED: isNewArrival and isBestSeller - now dynamic virtuals
+
     specifications: [
       {
         name: String,
@@ -208,8 +251,24 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   },
 );
+
+// ✅ DYNAMIC VIRTUALS - New Arrival (based on age)
+productSchema.virtual("isNewArrival").get(function () {
+  const daysSinceCreation =
+    (Date.now() - new Date(this.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceCreation <= 30;
+});
+
+// ✅ DYNAMIC VIRTUALS - Best Seller (based on sales - placeholder for now)
+productSchema.virtual("isBestSeller").get(function () {
+  // This will be calculated based on sales
+  // For now, return false
+  return false;
+});
 
 // Create slug from name
 productSchema.pre("save", function (next) {
@@ -219,6 +278,12 @@ productSchema.pre("save", function (next) {
       .replace(/[^a-zA-Z0-9]/g, "-")
       .replace(/-+/g, "-");
   }
+
+  // Set productCategory from productTypeOld for backward compatibility
+  if (this.isModified("productTypeOld") && this.productTypeOld) {
+    this.productCategory = this.productTypeOld;
+  }
+
   next();
 });
 

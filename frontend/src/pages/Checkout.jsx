@@ -1,3 +1,5 @@
+// frontend/src/pages/Checkout.jsx
+
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -29,6 +31,7 @@ const Checkout = () => {
     appliedCoupon,
     applyCoupon,
     removeCoupon,
+    refreshCartWithLatestData,
   } = useCart();
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
@@ -208,6 +211,43 @@ const Checkout = () => {
     }
   };
 
+  // ✅ FIXED: Build order items with variant details
+  const buildOrderItems = () => {
+    return cart.items
+      .map((item) => {
+        const product = item.product;
+        if (!product) return null;
+
+        const price = item.price || product.comparePrice || product.price || 0;
+        const variant = item.variant;
+
+        return {
+          product: product._id,
+          name: product.name,
+          image: product.images?.[0]?.url || "",
+          price: price,
+          quantity: item.quantity,
+          subtotal: price * item.quantity,
+          variant: variant
+            ? {
+                name: variant.name || "",
+                sku: variant.sku || "",
+                price: variant.price || price,
+                color: variant.color
+                  ? {
+                      _id: variant.color._id || null,
+                      name: variant.color.name || "",
+                      hexCode: variant.color.hexCode || "",
+                    }
+                  : null,
+                attributes: variant.attributes || {},
+              }
+            : null,
+        };
+      })
+      .filter(Boolean);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -256,10 +296,18 @@ const Checkout = () => {
       }
     }
 
+    // ✅ Build order items with variant details
+    const orderItems = buildOrderItems();
+
+    if (orderItems.length === 0) {
+      toast.error("Your cart is empty");
+      return;
+    }
+
     if (paymentMethod === "online") {
       setLoading(true);
       try {
-        // ✅ STEP 1: Create order in our database first
+        // ✅ STEP 1: Create order in our database with items
         const orderData = {
           shippingAddress: form,
           couponCode: couponCodeApplied || undefined,
@@ -267,6 +315,7 @@ const Checkout = () => {
           paymentStatus: "pending",
           isCOD: false,
           orderStatus: "pending",
+          items: orderItems, // ✅ Send items with variant details
         };
 
         const { data: orderResponse } = await axios.post(
@@ -302,7 +351,7 @@ const Checkout = () => {
             name: "Spexxo",
             description: `Order ${createdOrder.orderNumber}`,
             image: "/images/logo.png",
-            order_id: razorpayData.razorpayOrderId, // ✅ This is important!
+            order_id: razorpayData.razorpayOrderId,
             prefill: {
               name: form.fullName,
               email: user?.email || "customer@spexxo.com",
@@ -325,7 +374,7 @@ const Checkout = () => {
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
-                  orderId: createdOrder._id, // ✅ Send our order ID
+                  orderId: createdOrder._id,
                 };
 
                 await axios.post(`${API_URL}/payment/verify`, verifyData);
@@ -358,9 +407,8 @@ const Checkout = () => {
       setLoading(true);
       try {
         // For COD with advance payment
-        // COD Payment with advance
         if (advanceAmount > 0) {
-          // ✅ STEP 1: Create order first
+          // ✅ STEP 1: Create order with items
           const orderData = {
             shippingAddress: form,
             couponCode: couponCodeApplied || undefined,
@@ -370,6 +418,7 @@ const Checkout = () => {
             orderStatus: "pending",
             codAdvance: advanceAmount,
             remainingCOD: remainingCOD,
+            items: orderItems, // ✅ Send items with variant details
           };
 
           const { data: orderResponse } = await axios.post(
@@ -397,7 +446,7 @@ const Checkout = () => {
               name: "Spexxo",
               description: `10% Advance - Order ${createdOrder.orderNumber}`,
               image: "/images/logo.png",
-              order_id: razorpayData.razorpayOrderId, // ✅ This is important!
+              order_id: razorpayData.razorpayOrderId,
               prefill: {
                 name: form.fullName,
                 email: user?.email || "customer@spexxo.com",
@@ -443,14 +492,15 @@ const Checkout = () => {
           };
           document.body.appendChild(script);
         } else {
-          // COD without advance - status set to "pending"
+          // COD without advance
           const orderData = {
             shippingAddress: form,
             couponCode: couponCodeApplied || undefined,
             paymentMethod: "cod",
             paymentStatus: "pending",
             isCOD: true,
-            orderStatus: "pending", // Changed from undefined to "pending"
+            orderStatus: "pending",
+            items: orderItems, // ✅ Send items with variant details
           };
 
           const { data } = await axios.post(`${API_URL}/orders`, orderData);
@@ -474,6 +524,7 @@ const Checkout = () => {
       // Save to profile logic here
     }
   };
+
   if (!cart?.items?.length) {
     return (
       <div className="pt-24">
@@ -490,6 +541,11 @@ const Checkout = () => {
       </div>
     );
   }
+
+  // Refresh cart on mount to get latest data
+  useEffect(() => {
+    refreshCartWithLatestData();
+  }, []);
 
   return (
     <>
@@ -812,7 +868,7 @@ const Checkout = () => {
                     const name = item.product?.name || item.name || "Product";
                     const variantName = item.variant?.name || "";
                     const price =
-                      item.variant?.price ||
+                      item.price ||
                       item.product?.comparePrice ||
                       item.product?.price ||
                       0;
