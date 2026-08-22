@@ -165,7 +165,7 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
         : undefined,
       bridge: formData.bridge ? parseFloat(formData.bridge) : undefined,
       isActive: formData.isActive !== false,
-      // ✅ REMOVED: isDefault field
+      // ✅ REMOVED: isDefault field - no longer needed
     };
 
     onSave(variantData);

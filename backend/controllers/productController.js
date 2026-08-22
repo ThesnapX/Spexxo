@@ -47,21 +47,13 @@ export const getProducts = async (req, res) => {
     }
 
     // ✅ FIXED: PRICE FILTER - Handles both simple and variant products
-    // A product matches if:
-    // 1. It's a simple product with product.price in range, OR
-    // 2. It has at least one variant with price in range
     if (minPrice || maxPrice) {
       const priceFilter = {};
       if (minPrice) priceFilter.$gte = Number(minPrice);
       if (maxPrice) priceFilter.$lte = Number(maxPrice);
 
-      // Build price conditions
-      const priceConditions = [
-        // Simple product: check product.price
-        { price: priceFilter },
-      ];
+      const priceConditions = [{ price: priceFilter }];
 
-      // If variants exist, check if any variant price is in range
       if (priceFilter.$gte !== undefined || priceFilter.$lte !== undefined) {
         priceConditions.push({
           variants: {
@@ -72,9 +64,7 @@ export const getProducts = async (req, res) => {
         });
       }
 
-      // If we already have $or from stock filter
       if (query.$or) {
-        // Combine stock filter with price using $and
         const stockOr = query.$or;
         delete query.$or;
         query.$and = [{ $or: stockOr }, { $or: priceConditions }];
@@ -251,7 +241,6 @@ export const getProducts = async (req, res) => {
     }
 
     // Sort options
-
     let sortOption = { createdAt: -1 };
     switch (sort) {
       case "price-low":
@@ -278,30 +267,6 @@ export const getProducts = async (req, res) => {
       default:
         sortOption = { createdAt: -1 };
     }
-
-    // ✅ Filter categories and brands - only show those with products
-    // In the categories and brands queries, add filters:
-    // After fetching categories and brands, filter them:
-
-    // For categories - only show categories that have products
-    const categoriesWithProducts =
-      categoriesData?.filter((cat) => {
-        // Check if any product has this category
-        return allProducts.some(
-          (p) => p.category && p.category.includes(cat._id.toString()),
-        );
-      }) || [];
-
-    // For brands - only show brands that have products
-    const brandsWithProducts =
-      brandsData?.filter((brand) => {
-        return allProducts.some(
-          (p) =>
-            p.brand &&
-            (p.brand._id?.toString() === brand._id.toString() ||
-              p.brand === brand._id.toString()),
-        );
-      }) || [];
 
     const skip = (Number(page) - 1) * Number(limit);
 

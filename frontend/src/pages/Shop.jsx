@@ -45,6 +45,7 @@ const FilterSection = ({
   priceMaxInput,
   onPriceMinChange,
   onPriceMaxChange,
+  onPriceSubmit,
   brandFilter,
   frameShapeFilter,
   frameShapeOptions,
@@ -72,8 +73,8 @@ const FilterSection = ({
         </p>
       </div>
 
-      {/* Categories with search */}
-      {categoriesData?.length > 0 && (
+      {/* Categories with search - Only show categories that have products */}
+      {filteredCategories?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Categories</h3>
           <div className="relative mb-2">
@@ -131,11 +132,6 @@ const FilterSection = ({
                 </span>
               </label>
             ))}
-            {filteredCategories.length === 0 && categorySearch && (
-              <p className="text-sm text-text-light px-2 py-1">
-                No categories found
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -168,7 +164,7 @@ const FilterSection = ({
         </div>
       </div>
 
-      {/* Price Range */}
+      {/* Price Range - With Submit Button */}
       <div>
         <h3 className="font-semibold text-text text-sm mb-2">Price Range</h3>
         <div className="flex gap-2">
@@ -189,6 +185,12 @@ const FilterSection = ({
             className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
           />
         </div>
+        <button
+          onClick={onPriceSubmit}
+          className="w-full mt-2 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition"
+        >
+          Apply Price Filter
+        </button>
         {priceMinInput &&
           priceMaxInput &&
           Number(priceMinInput) > Number(priceMaxInput) && (
@@ -196,10 +198,13 @@ const FilterSection = ({
               Min price cannot be greater than Max price
             </p>
           )}
+        <p className="text-xs text-text-light mt-1">
+          Enter min and max price, then click "Apply Price Filter"
+        </p>
       </div>
 
-      {/* Brands with search */}
-      {brandsData?.length > 0 && (
+      {/* Brands with search - Only show brands that have products */}
+      {filteredBrands?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Brands</h3>
           <div className="relative mb-2">
@@ -241,74 +246,75 @@ const FilterSection = ({
                 </label>
               );
             })}
-            {filteredBrands.length === 0 && brandSearch && (
-              <p className="text-sm text-text-light px-2 py-1">
-                No brands found
-              </p>
-            )}
           </div>
         </div>
       )}
 
-      {/* Frame Shape */}
-      <div>
-        <h3 className="font-semibold text-text text-sm mb-2">Frame Shape</h3>
-        <div className="space-y-1 max-h-44 overflow-y-auto">
-          {frameShapeOptions.map((shape) => {
-            const isChecked = frameShapeFilter.includes(shape);
-            return (
-              <label
-                key={shape}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => toggleArrayFilter("frameShape", shape)}
-                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <span
-                  className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+      {/* Frame Shape - Only show shapes that have products */}
+      {frameShapeOptions?.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-text text-sm mb-2">Frame Shape</h3>
+          <div className="space-y-1 max-h-44 overflow-y-auto">
+            {frameShapeOptions.map((shape) => {
+              const isChecked = frameShapeFilter.includes(shape);
+              return (
+                <label
+                  key={shape}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
                 >
-                  {shape.charAt(0).toUpperCase() +
-                    shape.slice(1).replace("-", " ")}
-                </span>
-              </label>
-            );
-          })}
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleArrayFilter("frameShape", shape)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <span
+                    className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                  >
+                    {shape.charAt(0).toUpperCase() +
+                      shape.slice(1).replace("-", " ")}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Lens Type */}
-      <div>
-        <h3 className="font-semibold text-text text-sm mb-2">Lens Type</h3>
-        <div className="space-y-1 max-h-44 overflow-y-auto">
-          {lensTypeOptions.map((lens) => {
-            const isChecked = lensTypeFilter.includes(lens);
-            return (
-              <label
-                key={lens}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => toggleArrayFilter("lensType", lens)}
-                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <span
-                  className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+      {/* Lens Type - Only show lens types that have products */}
+      {lensTypeOptions?.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-text text-sm mb-2">Lens Type</h3>
+          <div className="space-y-1 max-h-44 overflow-y-auto">
+            {lensTypeOptions.map((lens) => {
+              const isChecked = lensTypeFilter.includes(lens);
+              return (
+                <label
+                  key={lens}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
                 >
-                  {lens
-                    .split("-")
-                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(" ")}
-                </span>
-              </label>
-            );
-          })}
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleArrayFilter("lensType", lens)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <span
+                    className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                  >
+                    {lens
+                      .split("-")
+                      .map(
+                        (word) => word.charAt(0).toUpperCase() + word.slice(1),
+                      )
+                      .join(" ")}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {hasActiveFilters && (
         <button
@@ -340,12 +346,26 @@ const ProductCard = ({
   const hasVariantsFlag = product.variants && product.variants.length > 0;
   const variantCount = hasVariantsFlag ? product.variants.length : 0;
 
+  // Get the first variant's image if variants exist
+  const getProductImage = () => {
+    if (hasVariantsFlag && product.variants.length > 0) {
+      const firstVariant = product.variants[0];
+      if (firstVariant.images && firstVariant.images.length > 0) {
+        return firstVariant.images[0].url;
+      }
+    }
+    if (product.images && product.images.length > 0) {
+      return product.images[0].url;
+    }
+    return "https://picsum.photos/400/400";
+  };
+
   return (
     <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
       <div className="relative overflow-hidden bg-gray-50 flex-shrink-0">
         <Link to={`/product/${product.slug}`} className="block">
           <img
-            src={product.images?.[0]?.url || "https://picsum.photos/400/400"}
+            src={getProductImage()}
             alt={product.name}
             className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-500"
             loading="lazy"
@@ -446,7 +466,7 @@ const Shop = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const [sortBy, setSortBy] = useState(searchParams.get("sort") || "newest");
+  const [sortBy, setSortBy] = useState(searchParams.get("sort") || "name-asc");
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const { user } = useAuth();
   const loadMoreRef = useRef(null);
@@ -476,8 +496,6 @@ const Shop = () => {
 
   // Debounce refs
   const searchTimeout = useRef(null);
-  const priceMinTimeout = useRef(null);
-  const priceMaxTimeout = useRef(null);
 
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
@@ -514,7 +532,7 @@ const Shop = () => {
         const params = new URLSearchParams();
         params.set("productType", mappedType);
         setSearchParams(params, { replace: true });
-        setSortBy("newest");
+        setSortBy("name-asc");
         setSearchInput("");
         setPriceMinInput("");
         setPriceMaxInput("");
@@ -625,53 +643,7 @@ const Shop = () => {
     return "All Products";
   }, [categoryFilter, brandFilter, productType, genderFilter]);
 
-  // Input handlers with proper typing tracking
-  const handleSearchChange = useCallback((e) => {
-    const value = e.target.value;
-    isTypingRef.current.search = true;
-    setSearchInput(value);
-
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-    searchTimeout.current = setTimeout(() => {
-      isTypingRef.current.search = false;
-      updateFilter("search", value);
-    }, 500);
-  }, []);
-
-  const handlePriceMinChange = useCallback((e) => {
-    const value = e.target.value;
-    isTypingRef.current.priceMin = true;
-    setPriceMinInput(value);
-
-    if (priceMinTimeout.current) clearTimeout(priceMinTimeout.current);
-    priceMinTimeout.current = setTimeout(() => {
-      isTypingRef.current.priceMin = false;
-      updateFilter("minPrice", value);
-    }, 600);
-  }, []);
-
-  const handlePriceMaxChange = useCallback((e) => {
-    const value = e.target.value;
-    isTypingRef.current.priceMax = true;
-    setPriceMaxInput(value);
-
-    if (priceMaxTimeout.current) clearTimeout(priceMaxTimeout.current);
-    priceMaxTimeout.current = setTimeout(() => {
-      isTypingRef.current.priceMax = false;
-      updateFilter("maxPrice", value);
-    }, 600);
-  }, []);
-
-  const handleCategorySearchChange = useCallback((e) => {
-    setCategorySearch(e.target.value);
-  }, []);
-
-  const handleBrandSearchChange = useCallback((e) => {
-    setBrandSearch(e.target.value);
-  }, []);
-
-  // Update filter
+  // ✅ UPDATE FILTER - Defined BEFORE any function that uses it
   const updateFilter = useCallback(
     (key, value) => {
       const params = new URLSearchParams(searchParams);
@@ -684,6 +656,57 @@ const Shop = () => {
     },
     [searchParams],
   );
+
+  // Input handlers with proper typing tracking
+  const handleSearchChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      isTypingRef.current.search = true;
+      setSearchInput(value);
+
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+      searchTimeout.current = setTimeout(() => {
+        isTypingRef.current.search = false;
+        updateFilter("search", value);
+      }, 500);
+    },
+    [updateFilter],
+  );
+
+  const handlePriceMinChange = useCallback((e) => {
+    const value = e.target.value;
+    setPriceMinInput(value);
+  }, []);
+
+  const handlePriceMaxChange = useCallback((e) => {
+    const value = e.target.value;
+    setPriceMaxInput(value);
+  }, []);
+
+  // ✅ PRICE SUBMIT HANDLER - Fixed with trim
+  const handlePriceSubmit = useCallback(() => {
+    const min = priceMinInput.trim();
+    const max = priceMaxInput.trim();
+
+    if (min && max && Number(min) > Number(max)) {
+      toast.error("Min price cannot be greater than Max price");
+      return;
+    }
+
+    updateFilter("minPrice", min);
+    updateFilter("maxPrice", max);
+
+    toast.success("Price filter applied");
+  }, [priceMinInput, priceMaxInput, updateFilter]);
+
+  const handleCategorySearchChange = useCallback((e) => {
+    setCategorySearch(e.target.value);
+  }, []);
+
+  const handleBrandSearchChange = useCallback((e) => {
+    setBrandSearch(e.target.value);
+  }, []);
 
   // Toggle array filter
   const toggleArrayFilter = useCallback(
@@ -730,7 +753,7 @@ const Shop = () => {
     const params = new URLSearchParams();
     if (productType) params.set("productType", productType);
     setSearchParams(params);
-    setSortBy("newest");
+    setSortBy("name-asc");
     setSearchInput("");
     setPriceMinInput("");
     setPriceMaxInput("");
@@ -765,7 +788,7 @@ const Shop = () => {
     [setSingleFilter, toggleArrayFilter, updateFilter],
   );
 
-  // Toggle filter visibility - ONE unified button
+  // Toggle filter visibility
   const toggleFilters = useCallback(() => {
     if (window.innerWidth < 1024) {
       setMobileFilterOpen(!mobileFilterOpen);
@@ -833,7 +856,7 @@ const Shop = () => {
     });
 
   // Fetch categories and brands
-  const { data: categoriesData } = useQuery({
+  const { data: allCategoriesData } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/categories`);
@@ -841,13 +864,118 @@ const Shop = () => {
     },
   });
 
-  const { data: brandsData } = useQuery({
+  const { data: allBrandsData } = useQuery({
     queryKey: ["brands"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/brands`);
       return data.brands || [];
     },
   });
+
+  // ✅ Fetch all products to determine which attributes have products
+  const { data: allProductsData } = useQuery({
+    queryKey: ["all-products-for-filters"],
+    queryFn: async () => {
+      const { data } = await axios.get(`${API_URL}/products?limit=1000`);
+      return data.products || [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // ✅ Filter categories - only show categories that have products
+  const categoriesData = useMemo(() => {
+    if (!allCategoriesData || !allProductsData) return [];
+
+    const productCategoryIds = new Set();
+    allProductsData.forEach((product) => {
+      if (product.category) {
+        if (typeof product.category === "string") {
+          product.category
+            .split(",")
+            .filter(Boolean)
+            .forEach((id) => productCategoryIds.add(id));
+        } else if (
+          typeof product.category === "object" &&
+          product.category._id
+        ) {
+          productCategoryIds.add(product.category._id);
+        }
+      }
+    });
+
+    return allCategoriesData.filter((cat) => productCategoryIds.has(cat._id));
+  }, [allCategoriesData, allProductsData]);
+
+  // ✅ Filter brands - only show brands that have products
+  const brandsData = useMemo(() => {
+    if (!allBrandsData || !allProductsData) return [];
+
+    const productBrandIds = new Set();
+    allProductsData.forEach((product) => {
+      if (product.brand) {
+        if (typeof product.brand === "object" && product.brand._id) {
+          productBrandIds.add(product.brand._id);
+        } else if (typeof product.brand === "string") {
+          productBrandIds.add(product.brand);
+        }
+      }
+    });
+
+    return allBrandsData.filter((brand) => productBrandIds.has(brand._id));
+  }, [allBrandsData, allProductsData]);
+
+  // ✅ Filter frame shapes - only show shapes that have products
+  const frameShapeOptions = useMemo(() => {
+    if (!allProductsData) return [];
+    const allShapes = [
+      "rectangle",
+      "round",
+      "cat-eye",
+      "square",
+      "oval",
+      "aviator",
+      "wayfarer",
+    ];
+    const productShapes = new Set();
+
+    allProductsData.forEach((product) => {
+      if (product.frameShape) {
+        const shapes =
+          typeof product.frameShape === "string"
+            ? product.frameShape.split(",").map((s) => s.trim().toLowerCase())
+            : [];
+        shapes.forEach((s) => productShapes.add(s));
+      }
+    });
+
+    return allShapes.filter((shape) => productShapes.has(shape));
+  }, [allProductsData]);
+
+  // ✅ Filter lens types - only show lens types that have products
+  const lensTypeOptions = useMemo(() => {
+    if (!allProductsData) return [];
+    const allLensTypes = [
+      "single-vision",
+      "bifocal",
+      "progressive",
+      "blue-cut",
+      "photochromic",
+      "polarized",
+    ];
+    const productLensTypes = new Set();
+
+    allProductsData.forEach((product) => {
+      if (product.lensType) {
+        const lensTypes =
+          typeof product.lensType === "string"
+            ? product.lensType.split(",").map((s) => s.trim().toLowerCase())
+            : [];
+        lensTypes.forEach((l) => productLensTypes.add(l));
+      }
+    });
+
+    return allLensTypes.filter((lens) => productLensTypes.has(lens));
+  }, [allProductsData]);
 
   // Filter categories by search
   const filteredCategories = useMemo(() => {
@@ -866,33 +994,6 @@ const Shop = () => {
       ) || []
     );
   }, [brandsData, brandSearch]);
-
-  // Frame shape options
-  const frameShapeOptions = useMemo(
-    () => [
-      "rectangle",
-      "round",
-      "cat-eye",
-      "square",
-      "oval",
-      "aviator",
-      "wayfarer",
-    ],
-    [],
-  );
-
-  // Lens type options
-  const lensTypeOptions = useMemo(
-    () => [
-      "single-vision",
-      "bifocal",
-      "progressive",
-      "blue-cut",
-      "photochromic",
-      "polarized",
-    ],
-    [],
-  );
 
   // Infinite scroll observer
   useEffect(() => {
@@ -922,8 +1023,6 @@ const Shop = () => {
   useEffect(() => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
-      if (priceMinTimeout.current) clearTimeout(priceMinTimeout.current);
-      if (priceMaxTimeout.current) clearTimeout(priceMaxTimeout.current);
     };
   }, []);
 
@@ -942,7 +1041,7 @@ const Shop = () => {
     minPrice ||
     maxPrice;
 
-  // Get active filter pills
+  // ✅ FIXED: Get active filter pills - proper price display
   const filterPills = useMemo(() => {
     const pills = [];
     if (searchQuery)
@@ -980,10 +1079,13 @@ const Shop = () => {
         value: l,
       }),
     );
+    // ✅ FIXED: Price pill with proper display - doesn't default to "0" when minPrice exists
     if (minPrice || maxPrice) {
+      const minLabel = minPrice !== "" ? `₹${minPrice}` : "₹0";
+      const maxLabel = maxPrice !== "" ? `₹${maxPrice}` : "∞";
       pills.push({
         key: "price",
-        label: `₹${minPrice || "0"} - ₹${maxPrice || "∞"}`,
+        label: `${minLabel} - ${maxLabel}`,
       });
     }
     return pills;
@@ -1054,6 +1156,8 @@ const Shop = () => {
                 }}
                 className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm"
               >
+                <option value="name-asc">Name: A to Z</option>
+                <option value="name-desc">Name: Z to A</option>
                 <option value="newest">Newest First</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
@@ -1117,6 +1221,7 @@ const Shop = () => {
                     priceMaxInput={priceMaxInput}
                     onPriceMinChange={handlePriceMinChange}
                     onPriceMaxChange={handlePriceMaxChange}
+                    onPriceSubmit={handlePriceSubmit}
                     brandFilter={brandFilter}
                     frameShapeFilter={frameShapeFilter}
                     frameShapeOptions={frameShapeOptions}
@@ -1129,7 +1234,7 @@ const Shop = () => {
               </aside>
             )}
 
-            {/* ✅ FIXED: Right Products - 2 columns on mobile, dynamic on larger screens */}
+            {/* Right Products */}
             <div
               className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
@@ -1152,7 +1257,6 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  {/* ✅ FIXED: Grid with 2 columns on mobile, auto-fill on larger screens */}
                   <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
                     {allProducts.map((product) => (
                       <ProductCard
@@ -1243,6 +1347,7 @@ const Shop = () => {
               priceMaxInput={priceMaxInput}
               onPriceMinChange={handlePriceMinChange}
               onPriceMaxChange={handlePriceMaxChange}
+              onPriceSubmit={handlePriceSubmit}
               brandFilter={brandFilter}
               frameShapeFilter={frameShapeFilter}
               frameShapeOptions={frameShapeOptions}

@@ -42,6 +42,24 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
   const isDeactivated = product.isActive === false;
   const hasVariants = product.variants && product.variants.length > 0;
 
+  // ✅ Get the first variant's image if variants exist
+  const getProductImage = () => {
+    if (hasVariants && product.variants.length > 0) {
+      // Check if first variant has images
+      const firstVariant = product.variants[0];
+      if (firstVariant.images && firstVariant.images.length > 0) {
+        return firstVariant.images[0].url;
+      }
+    }
+    // Fallback to product images
+    if (product.images && product.images.length > 0) {
+      return product.images[0].url;
+    }
+    return null;
+  };
+
+  const productImage = getProductImage();
+
   // Check stock for simple products
   const isOutOfStock =
     !hasVariants &&
@@ -76,7 +94,6 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
     }
   } else {
     // Simple product
-    // If comparePrice exists and is less than price, it's a sale
     if (product.comparePrice && product.comparePrice < product.price) {
       displayPrice = product.comparePrice;
       originalPrice = product.price;
@@ -139,9 +156,9 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
     <div className={cardClasses}>
       <div className="relative overflow-hidden bg-gray-50">
         <Link to={`/product/${product.slug}`}>
-          {product.images?.[0]?.url ? (
+          {productImage ? (
             <img
-              src={product.images[0].url}
+              src={productImage}
               alt={product.name}
               className="w-full h-56 md:h-64 object-cover group-hover:scale-110 transition-transform duration-500"
               loading="lazy"

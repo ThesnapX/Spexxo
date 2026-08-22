@@ -28,6 +28,10 @@ const cartSchema = new mongoose.Schema(
           min: 1,
           default: 1,
         },
+        variant: {
+          type: mongoose.Schema.Types.Mixed,
+          default: null,
+        },
       },
     ],
   },
