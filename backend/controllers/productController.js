@@ -251,6 +251,7 @@ export const getProducts = async (req, res) => {
     }
 
     // Sort options
+
     let sortOption = { createdAt: -1 };
     switch (sort) {
       case "price-low":
@@ -268,9 +269,39 @@ export const getProducts = async (req, res) => {
       case "newest":
         sortOption = { createdAt: -1 };
         break;
+      case "name-asc":
+        sortOption = { name: 1 };
+        break;
+      case "name-desc":
+        sortOption = { name: -1 };
+        break;
       default:
         sortOption = { createdAt: -1 };
     }
+
+    // ✅ Filter categories and brands - only show those with products
+    // In the categories and brands queries, add filters:
+    // After fetching categories and brands, filter them:
+
+    // For categories - only show categories that have products
+    const categoriesWithProducts =
+      categoriesData?.filter((cat) => {
+        // Check if any product has this category
+        return allProducts.some(
+          (p) => p.category && p.category.includes(cat._id.toString()),
+        );
+      }) || [];
+
+    // For brands - only show brands that have products
+    const brandsWithProducts =
+      brandsData?.filter((brand) => {
+        return allProducts.some(
+          (p) =>
+            p.brand &&
+            (p.brand._id?.toString() === brand._id.toString() ||
+              p.brand === brand._id.toString()),
+        );
+      }) || [];
 
     const skip = (Number(page) - 1) * Number(limit);
 

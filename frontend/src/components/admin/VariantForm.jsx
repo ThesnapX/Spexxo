@@ -32,7 +32,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
     frameHeight: "",
     bridge: "",
     images: [],
-    isDefault: false,
     isActive: true,
   });
 
@@ -91,7 +90,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
         frameHeight: variant.frameHeight || "",
         bridge: variant.bridge || "",
         images: variant.images || [],
-        isDefault: variant.isDefault || false,
         isActive: variant.isActive !== false,
       });
       if (variant.images) {
@@ -120,7 +118,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // FIXED: Upload images and save variant
   const handleSave = async () => {
     if (!formData.name || !formData.price) {
       toast.error("Variant name and price are required");
@@ -129,7 +126,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
 
     setUploading(true);
 
-    // Upload images if any
     let uploadedImages = [...formData.images];
     if (imageFiles.length > 0) {
       try {
@@ -168,8 +164,8 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
         ? parseFloat(formData.frameHeight)
         : undefined,
       bridge: formData.bridge ? parseFloat(formData.bridge) : undefined,
-      isDefault: formData.isDefault || false,
       isActive: formData.isActive !== false,
+      // ✅ REMOVED: isDefault field
     };
 
     onSave(variantData);
@@ -472,17 +468,10 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
           </p>
         </div>
 
+        {/* ✅ REMOVED: "Set as Default Variant" checkbox - no longer needed */}
+
         {/* Flags */}
         <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.isDefault}
-              onChange={(e) => handleChange("isDefault", e.target.checked)}
-              className="w-4 h-4 text-primary rounded"
-            />
-            <span className="text-sm">Set as Default Variant</span>
-          </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"

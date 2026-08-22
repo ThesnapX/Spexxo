@@ -26,14 +26,12 @@ const productSchema = new mongoose.Schema(
       type: String,
     },
 
-    // ✅ NEW: Product Type (Simple or Variable)
     productType: {
       type: String,
       enum: ["simple", "variable"],
       default: "simple",
     },
 
-    // ✅ Product Category (eyeglasses, sunglasses, contactlens)
     productCategory: {
       type: String,
       enum: ["eyeglasses", "sunglasses", "contactlens"],
@@ -69,7 +67,6 @@ const productSchema = new mongoose.Schema(
       enum: ["men", "women", "unisex", "kids"],
       default: "unisex",
     },
-    // Keep for backward compatibility
     productTypeOld: {
       type: String,
       enum: ["eyeglasses", "sunglasses", "contactlens"],
@@ -127,7 +124,7 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    // ✅ VARIANT PRODUCT FIELDS
+    // VARIANT PRODUCT FIELDS
     variants: [
       {
         name: {
@@ -197,10 +194,7 @@ const productSchema = new mongoose.Schema(
           type: Boolean,
           default: true,
         },
-        isDefault: {
-          type: Boolean,
-          default: false,
-        },
+        // ✅ REMOVED: isDefault field - no longer needed
       },
     ],
 
@@ -216,7 +210,6 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // ✅ REMOVED: isNewArrival and isBestSeller - now dynamic virtuals
 
     specifications: [
       {
@@ -265,13 +258,12 @@ productSchema.virtual("isNewArrival").get(function () {
 
 // ✅ DYNAMIC VIRTUALS - Best Seller (based on sales - placeholder for now)
 productSchema.virtual("isBestSeller").get(function () {
-  // This will be calculated based on sales
-  // For now, return false
   return false;
 });
 
-// Create slug from name
+// ✅ Pre-save hook to set main product images from first variant if no images
 productSchema.pre("save", function (next) {
+  // Create slug from name
   if (this.isModified("name")) {
     this.slug = this.name
       .toLowerCase()
@@ -282,6 +274,27 @@ productSchema.pre("save", function (next) {
   // Set productCategory from productTypeOld for backward compatibility
   if (this.isModified("productTypeOld") && this.productTypeOld) {
     this.productCategory = this.productTypeOld;
+  }
+
+  // ✅ If product has variants and no main images, use first variant's images
+  if (this.variants && this.variants.length > 0) {
+    // Remove isDefault from all variants
+    this.variants.forEach((variant) => {
+      delete variant.isDefault;
+    });
+
+    // If no main images, use first variant's images
+    if (
+      (!this.images || this.images.length === 0) &&
+      this.variants[0].images &&
+      this.variants[0].images.length > 0
+    ) {
+      this.images = this.variants[0].images.map((img) => ({
+        url: img.url,
+        alt: img.alt || this.name,
+        isMain: false,
+      }));
+    }
   }
 
   next();

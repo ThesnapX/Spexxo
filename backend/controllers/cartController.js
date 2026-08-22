@@ -3,6 +3,121 @@
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 
+// @desc    Get user cart
+// @route   GET /api/cart
+// @access  Private
+export const getCart = async (req, res) => {
+  try {
+    let cart = await Cart.findOne({ user: req.user._id }).populate({
+      path: "items.product",
+      select:
+        "name slug price comparePrice images stock isInStock brand isActive productType sku variants",
+      populate: {
+        path: "brand",
+        select: "name slug",
+      },
+    });
+
+    if (!cart) {
+      cart = await Cart.create({ user: req.user._id, items: [] });
+    }
+
+    // Filter out items with null products
+    const activeItems = cart.items.filter((item) => item.product !== null);
+
+    if (activeItems.length !== cart.items.length) {
+      cart.items = activeItems;
+      await cart.save();
+    }
+
+    // Build response with proper variant data
+    const itemsWithPrices = activeItems
+      .map((item) => {
+        const product = item.product;
+        if (!product) return null;
+
+        let currentPrice = product.comparePrice || product.price || 0;
+        let variantStock = product.stock;
+        let variantName = null;
+        let variantSku = null;
+        let variantColor = null;
+        let variantImages = [];
+        let variantPrice = null;
+
+        if (item.variant) {
+          const foundVariant = product.variants?.find(
+            (v) =>
+              v._id?.toString() === item.variant._id?.toString() ||
+              v.name === item.variant.name ||
+              v.sku === item.variant.sku,
+          );
+          if (foundVariant) {
+            currentPrice = foundVariant.price || currentPrice;
+            variantStock = foundVariant.stock || 0;
+            variantName = foundVariant.name;
+            variantSku = foundVariant.sku;
+            variantColor = foundVariant.color;
+            variantImages = foundVariant.images || [];
+            variantPrice = foundVariant.price;
+          }
+        }
+
+        // ✅ Use variant images if available, otherwise product images
+        const displayImage =
+          variantImages.length > 0
+            ? variantImages[0]?.url
+            : product.images?.[0]?.url || "";
+
+        return {
+          _id: item._id,
+          product: {
+            _id: product._id,
+            name: product.name || "Product",
+            slug: product.slug || "",
+            price: product.price || 0,
+            comparePrice: product.comparePrice || null,
+            images: product.images || [],
+            stock: variantStock !== null ? variantStock : product.stock || 0,
+            isInStock: product.isInStock !== false,
+            isActive: product.isActive !== false,
+            brand: product.brand || null,
+            productType: product.productType || "",
+            sku: product.sku || "",
+            variants: product.variants || [],
+          },
+          quantity: item.quantity || 1,
+          variant: item.variant || null,
+          price: currentPrice,
+          subtotal: currentPrice * (item.quantity || 1),
+          variantName: variantName,
+          variantSku: variantSku,
+          variantColor: variantColor,
+          variantImages: variantImages,
+          // ✅ Store the correct image for display
+          image: displayImage,
+        };
+      })
+      .filter((item) => item !== null);
+
+    res.status(200).json({
+      success: true,
+      cart: {
+        _id: cart._id,
+        user: cart.user,
+        items: itemsWithPrices,
+        createdAt: cart.createdAt,
+        updatedAt: cart.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("Get cart error:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // @desc    Add item to cart
 // @route   POST /api/cart
 // @access  Private
@@ -22,7 +137,6 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    // Check if product is active
     if (!product.isActive) {
       return res.status(400).json({
         success: false,
@@ -31,9 +145,9 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Check stock - if variant is selected, check variant stock
     let stockToCheck = product.stock;
     let variantData = null;
+    let variantImages = [];
 
     if (variant) {
       const variantId = variant._id || variant.id;
@@ -45,12 +159,14 @@ export const addToCart = async (req, res) => {
       );
       if (foundVariant) {
         stockToCheck = foundVariant.stock || 0;
+        variantImages = foundVariant.images || [];
         variantData = {
           name: foundVariant.name,
           sku: foundVariant.sku,
           price: foundVariant.price,
           color: foundVariant.color,
           attributes: foundVariant.attributes || {},
+          images: variantImages,
         };
       } else {
         return res.status(400).json({
@@ -88,7 +204,6 @@ export const addToCart = async (req, res) => {
 
     if (itemIndex > -1) {
       const newQuantity = cart.items[itemIndex].quantity + quantity;
-      // Check stock again for new quantity
       if (newQuantity > stockToCheck) {
         return res.status(400).json({
           success: false,
@@ -96,7 +211,6 @@ export const addToCart = async (req, res) => {
         });
       }
       cart.items[itemIndex].quantity = newQuantity;
-      // Update variant if provided
       if (variantData) {
         cart.items[itemIndex].variant = variantData;
       }
@@ -121,23 +235,42 @@ export const addToCart = async (req, res) => {
       },
     });
 
-    // Calculate prices dynamically with variant prices
     const itemsWithPrices = populatedCart.items
       .filter((item) => item.product !== null)
       .map((item) => {
         const product = item.product;
         if (!product) return null;
 
-        // Use variant price if available
         let currentPrice = product.comparePrice || product.price || 0;
-        if (item.variant && item.variant.price) {
-          currentPrice = item.variant.price;
+        let variantImages = [];
+        let variantPrice = null;
+
+        if (item.variant) {
+          const foundVariant = product.variants?.find(
+            (v) =>
+              v._id?.toString() === item.variant._id?.toString() ||
+              v.name === item.variant.name ||
+              v.sku === item.variant.sku,
+          );
+          if (foundVariant) {
+            currentPrice = foundVariant.price || currentPrice;
+            variantImages = foundVariant.images || [];
+            variantPrice = foundVariant.price;
+          }
         }
+
+        const displayImage =
+          variantImages.length > 0
+            ? variantImages[0]?.url
+            : product.images?.[0]?.url || "";
 
         return {
           ...(item.toObject ? item.toObject() : item),
           price: currentPrice,
           subtotal: currentPrice * item.quantity,
+          image: displayImage,
+          variantPrice: variantPrice,
+          variantImages: variantImages,
         };
       })
       .filter((item) => item !== null);
@@ -151,111 +284,6 @@ export const addToCart = async (req, res) => {
     });
   } catch (error) {
     console.error("Add to cart error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// @desc    Get user cart
-// @route   GET /api/cart
-// @access  Private
-export const getCart = async (req, res) => {
-  try {
-    let cart = await Cart.findOne({ user: req.user._id }).populate({
-      path: "items.product",
-      select:
-        "name slug price comparePrice images stock isInStock brand isActive productType sku variants",
-      populate: {
-        path: "brand",
-        select: "name slug",
-      },
-    });
-
-    if (!cart) {
-      cart = await Cart.create({ user: req.user._id, items: [] });
-    }
-
-    // Filter out items with null products and calculate prices dynamically
-    const activeItems = cart.items.filter((item) => item.product !== null);
-
-    // If there are items with null products (deleted), remove them
-    if (activeItems.length !== cart.items.length) {
-      cart.items = activeItems;
-      await cart.save();
-    }
-
-    // Build response with proper data including variant details
-    const itemsWithPrices = activeItems
-      .map((item) => {
-        const product = item.product;
-        if (!product) return null;
-
-        // Use variant price if available
-        let currentPrice = product.comparePrice || product.price || 0;
-        let variantStock = product.stock;
-        let variantName = null;
-        let variantSku = null;
-        let variantColor = null;
-
-        if (item.variant) {
-          // Find the variant in the product's variants array
-          const foundVariant = product.variants?.find(
-            (v) =>
-              v._id?.toString() === item.variant._id?.toString() ||
-              v.name === item.variant.name ||
-              v.sku === item.variant.sku,
-          );
-          if (foundVariant) {
-            currentPrice = foundVariant.price || currentPrice;
-            variantStock = foundVariant.stock || 0;
-            variantName = foundVariant.name;
-            variantSku = foundVariant.sku;
-            variantColor = foundVariant.color;
-          }
-        }
-
-        return {
-          _id: item._id,
-          product: {
-            _id: product._id,
-            name: product.name || "Product",
-            slug: product.slug || "",
-            price: product.price || 0,
-            comparePrice: product.comparePrice || null,
-            images: product.images || [],
-            stock: variantStock !== null ? variantStock : product.stock || 0,
-            isInStock: product.isInStock !== false,
-            isActive: product.isActive !== false,
-            brand: product.brand || null,
-            productType: product.productType || "",
-            sku: product.sku || "",
-            variants: product.variants || [],
-          },
-          quantity: item.quantity || 1,
-          variant: item.variant || null,
-          price: currentPrice,
-          subtotal: currentPrice * (item.quantity || 1),
-          variantName: variantName,
-          variantSku: variantSku,
-          variantColor: variantColor,
-        };
-      })
-      .filter((item) => item !== null);
-
-    res.status(200).json({
-      success: true,
-      cart: {
-        _id: cart._id,
-        user: cart.user,
-        items: itemsWithPrices,
-        createdAt: cart.createdAt,
-        updatedAt: cart.updatedAt,
-      },
-    });
-  } catch (error) {
-    console.error("Get cart error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -328,13 +356,31 @@ export const updateCartItem = async (req, res) => {
         const product = item.product;
         if (!product) return null;
         let currentPrice = product.comparePrice || product.price || 0;
-        if (item.variant && item.variant.price) {
-          currentPrice = item.variant.price;
+        let variantImages = [];
+
+        if (item.variant) {
+          const foundVariant = product.variants?.find(
+            (v) =>
+              v._id?.toString() === item.variant._id?.toString() ||
+              v.name === item.variant.name ||
+              v.sku === item.variant.sku,
+          );
+          if (foundVariant) {
+            currentPrice = foundVariant.price || currentPrice;
+            variantImages = foundVariant.images || [];
+          }
         }
+
+        const displayImage =
+          variantImages.length > 0
+            ? variantImages[0]?.url
+            : product.images?.[0]?.url || "";
+
         return {
           ...(item.toObject ? item.toObject() : item),
           price: currentPrice,
           subtotal: currentPrice * item.quantity,
+          image: displayImage,
         };
       })
       .filter((item) => item !== null);
@@ -389,13 +435,31 @@ export const removeFromCart = async (req, res) => {
         const product = item.product;
         if (!product) return null;
         let currentPrice = product.comparePrice || product.price || 0;
-        if (item.variant && item.variant.price) {
-          currentPrice = item.variant.price;
+        let variantImages = [];
+
+        if (item.variant) {
+          const foundVariant = product.variants?.find(
+            (v) =>
+              v._id?.toString() === item.variant._id?.toString() ||
+              v.name === item.variant.name ||
+              v.sku === item.variant.sku,
+          );
+          if (foundVariant) {
+            currentPrice = foundVariant.price || currentPrice;
+            variantImages = foundVariant.images || [];
+          }
         }
+
+        const displayImage =
+          variantImages.length > 0
+            ? variantImages[0]?.url
+            : product.images?.[0]?.url || "";
+
         return {
           ...(item.toObject ? item.toObject() : item),
           price: currentPrice,
           subtotal: currentPrice * item.quantity,
+          image: displayImage,
         };
       })
       .filter((item) => item !== null);

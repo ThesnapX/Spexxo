@@ -452,7 +452,7 @@ const Shop = () => {
   const loadMoreRef = useRef(null);
   const productsContainerRef = useRef(null);
 
-  // ✅ Track if user is currently typing to prevent URL overwrites
+  // Track if user is currently typing to prevent URL overwrites
   const isTypingRef = useRef({
     search: false,
     priceMin: false,
@@ -528,8 +528,7 @@ const Shop = () => {
     if (urlSort && urlSort !== sortBy) setSortBy(urlSort);
   }, [searchParams]);
 
-  // ✅ FIXED: Sync URL → local input ONLY when NOT typing
-  // This prevents overwriting user input during typing
+  // Sync URL → local input ONLY when NOT typing
   useEffect(() => {
     if (!isTypingRef.current.search && searchQuery !== searchInput) {
       setSearchInput(searchQuery);
@@ -626,7 +625,7 @@ const Shop = () => {
     return "All Products";
   }, [categoryFilter, brandFilter, productType, genderFilter]);
 
-  // ✅ FIXED: Input handlers with proper typing tracking
+  // Input handlers with proper typing tracking
   const handleSearchChange = useCallback((e) => {
     const value = e.target.value;
     isTypingRef.current.search = true;
@@ -676,7 +675,6 @@ const Shop = () => {
   const updateFilter = useCallback(
     (key, value) => {
       const params = new URLSearchParams(searchParams);
-      // If value is empty string or null/undefined, remove the parameter
       if (value === "" || value === null || value === undefined) {
         params.delete(key);
       } else {
@@ -1131,9 +1129,9 @@ const Shop = () => {
               </aside>
             )}
 
-            {/* Right Products - Scrollable with dynamic grid */}
+            {/* ✅ FIXED: Right Products - 2 columns on mobile, dynamic on larger screens */}
             <div
-              className={`flex-1 min-w-0 h-full overflow-y-auto`}
+              className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
             >
               {isLoading ? (
@@ -1154,14 +1152,8 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  {/* ✅ Dynamic grid - auto-fill with consistent card width */}
-                  <div
-                    className="grid gap-4"
-                    style={{
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(220px, 1fr))",
-                    }}
-                  >
+                  {/* ✅ FIXED: Grid with 2 columns on mobile, auto-fill on larger screens */}
+                  <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
                     {allProducts.map((product) => (
                       <ProductCard
                         key={product._id}
