@@ -570,7 +570,6 @@ Please confirm availability.`;
               <h1 className="text-2xl md:text-3xl font-bold text-text mb-3 leading-tight">
                 {product.name}
               </h1>
-
               {/* Price & Rating */}
               <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div className="flex items-baseline gap-2">
@@ -613,7 +612,6 @@ Please confirm availability.`;
                   </span>
                 </div>
               </div>
-
               {/* Variant Selector */}
               {product?.variants && product.variants.length > 0 && (
                 <div className="mb-6">
@@ -743,7 +741,6 @@ Please confirm availability.`;
                   )}
                 </div>
               )}
-
               {/* Deactivated Banner */}
               {isDeactivated && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
@@ -758,7 +755,6 @@ Please confirm availability.`;
                   </p>
                 </div>
               )}
-
               {/* Quantity */}
               <div className="flex items-center gap-4 mb-6">
                 <span className="text-sm font-medium text-text">Quantity:</span>
@@ -810,18 +806,13 @@ Please confirm availability.`;
                     <PlusIcon className="w-4 h-4" />
                   </button>
                 </div>
-                {displayStock > 0 && !isDeactivated && !isVariantOutOfStock && (
-                  <span className="text-xs text-green-600">
-                    {displayStock} in stock
-                  </span>
-                )}
+                {/* ✅ REMOVED: "in stock" text - only show when unavailable */}
                 {(isDeactivated || isVariantOutOfStock) && (
                   <span className="text-xs text-red-500">
                     {isDeactivated ? "Unavailable" : "Out of Stock"}
                   </span>
                 )}
               </div>
-
               {/* Action Buttons */}
               <div className="flex gap-3 mb-6">
                 <button
@@ -860,7 +851,6 @@ Please confirm availability.`;
                   )}
                 </button>
               </div>
-
               <button
                 onClick={handleBuyNow}
                 disabled={
@@ -879,7 +869,6 @@ Please confirm availability.`;
                     ? "Out of Stock"
                     : "Buy Now"}
               </button>
-
               {/* WhatsApp Order */}
               {!isDeactivated &&
                 !isVariantOutOfStock &&

@@ -37,6 +37,7 @@ const EditProduct = () => {
   const [productType, setProductType] = useState("simple");
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariantIndex, setEditingVariantIndex] = useState(null);
+  const [defaultVariantId, setDefaultVariantId] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -158,9 +159,20 @@ const EditProduct = () => {
         }
       }
 
-      // Set variants from product data (keep as is)
+      // Set variants from product data
       if (productData.variants && Array.isArray(productData.variants)) {
         setVariants(productData.variants);
+        // Find default variant
+        const defaultVariant = productData.variants.find(
+          (v) => v.isDefault === true,
+        );
+        if (defaultVariant) {
+          setDefaultVariantId(defaultVariant._id || defaultVariant.id);
+        } else if (productData.variants.length > 0) {
+          setDefaultVariantId(
+            productData.variants[0]._id || productData.variants[0].id,
+          );
+        }
       }
 
       setProductType(productData.productType || "simple");
@@ -216,7 +228,12 @@ const EditProduct = () => {
 
   // Add variant functions
   const handleAddVariant = (variantData) => {
-    setVariants([...variants, variantData]);
+    const newVariants = [...variants, variantData];
+    setVariants(newVariants);
+    // If this is the first variant, set it as default
+    if (newVariants.length === 1) {
+      setDefaultVariantId(variantData._id || variantData.id || 0);
+    }
     setShowVariantForm(false);
     toast.success("Variant added!");
   };
@@ -237,7 +254,18 @@ const EditProduct = () => {
 
   const handleDeleteVariant = (index) => {
     if (window.confirm("Delete this variant?")) {
-      setVariants(variants.filter((_, i) => i !== index));
+      const updatedVariants = variants.filter((_, i) => i !== index);
+      setVariants(updatedVariants);
+      // If we deleted the default variant, set the first one as default
+      if (updatedVariants.length > 0) {
+        const firstVariantId =
+          updatedVariants[0]._id || updatedVariants[0].id || 0;
+        setDefaultVariantId(firstVariantId);
+        // Mark the first variant as default
+        updatedVariants[0].isDefault = true;
+      } else {
+        setDefaultVariantId(null);
+      }
       toast.success("Variant deleted");
     }
   };
@@ -249,6 +277,17 @@ const EditProduct = () => {
     }
     setEditingVariantIndex(null);
     setShowVariantForm(true);
+  };
+
+  // ✅ Set default variant handler
+  const handleSetDefaultVariant = (variantId) => {
+    const updatedVariants = variants.map((v) => ({
+      ...v,
+      isDefault: (v._id || v.id) === variantId,
+    }));
+    setVariants(updatedVariants);
+    setDefaultVariantId(variantId);
+    toast.success("Default variant updated!");
   };
 
   const updateMutation = useMutation({
@@ -356,9 +395,9 @@ const EditProduct = () => {
     }
     setUploading(true);
 
-    // Upload new images
+    // Upload new images - ONLY for simple products
     let allImages = [...existingImages];
-    if (imageFiles.length > 0) {
+    if (productType === "simple" && imageFiles.length > 0) {
       const fd = new FormData();
       imageFiles.forEach((f) => fd.append("images", f));
       try {
@@ -419,7 +458,7 @@ const EditProduct = () => {
             url: img.url || img,
             alt: variant.name,
           })) || [],
-        isDefault: variant.isDefault || false,
+        isDefault: variant.isDefault === true,
         isActive: variant.isActive !== false,
       }));
     }
@@ -432,7 +471,7 @@ const EditProduct = () => {
           ? Number(form.discountedPrice)
           : undefined,
       stock: productType === "simple" ? Number(form.stock) : undefined,
-      images: allImages,
+      images: productType === "simple" ? allImages : [], // ✅ Empty images array for variant products
       variants: cleanedVariants,
       brand: form.brand || null,
       category: form.category || null,
@@ -867,6 +906,62 @@ const EditProduct = () => {
                   />
                 </div>
               </div>
+
+              {/* ✅ Images - Only for Simple Products */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Images</label>
+                <div className="flex flex-wrap gap-3 mb-3">
+                  {existingImages.map((img, i) => (
+                    <div
+                      key={`e-${i}`}
+                      className="relative w-24 h-24 rounded-lg overflow-hidden border"
+                    >
+                      <img
+                        src={img.url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeExistingImage(i)}
+                        className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {imagePreviews.map((p, i) => (
+                    <div
+                      key={`n-${i}`}
+                      className="relative w-24 h-24 rounded-lg overflow-hidden border"
+                    >
+                      <img
+                        src={p}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeNewImage(i)}
+                        className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#3D96EB] hover:bg-[#EBF4FC] transition">
+                    <PhotoIcon className="w-6 h-6 text-gray-400" />
+                    <span className="text-xs text-gray-400 mt-1">Add</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
             </>
           )}
 
@@ -885,6 +980,41 @@ const EditProduct = () => {
                   <PlusIcon className="w-4 h-4" /> Add Variant
                 </button>
               </div>
+
+              {/* ✅ Default Variant Dropdown */}
+              {variants.length > 0 && (
+                <div className="bg-white p-3 rounded-lg border border-gray-200 mb-4">
+                  <label className="text-sm font-medium text-text block mb-2">
+                    Default Variant (for product card display)
+                  </label>
+                  <select
+                    value={
+                      defaultVariantId ||
+                      variants[0]?._id ||
+                      variants[0]?.id ||
+                      ""
+                    }
+                    onChange={(e) => {
+                      const variantId = e.target.value;
+                      handleSetDefaultVariant(variantId);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary bg-white"
+                  >
+                    {variants.map((variant) => {
+                      const variantId = variant._id || variant.id;
+                      return (
+                        <option key={variantId} value={variantId}>
+                          {variant.name} {variant.isDefault ? "(Default)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-text-light mt-1">
+                    The default variant's images and price will appear on
+                    product cards
+                  </p>
+                </div>
+              )}
 
               {showVariantForm && (
                 <VariantForm
@@ -908,113 +1038,69 @@ const EditProduct = () => {
 
               {variants.length > 0 && (
                 <div className="space-y-3 mt-4">
-                  {variants.map((variant, index) => (
-                    <div
-                      key={index}
-                      className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between hover:shadow-sm transition"
-                    >
-                      <div className="flex items-center gap-4">
-                        {variant.images && variant.images.length > 0 && (
-                          <img
-                            src={variant.images[0].url || variant.images[0]}
-                            alt={variant.name}
-                            className="w-16 h-16 rounded-lg object-cover border"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium text-text">
-                            {variant.name}
-                          </p>
-                          <p className="text-xs text-text-light">
-                            SKU: {variant.sku || "N/A"} • Stock: {variant.stock}{" "}
-                            • ₹{variant.price}
-                            {variant.comparePrice && (
-                              <span className="text-gray-400 line-through ml-2">
-                                ₹{variant.comparePrice}
-                              </span>
-                            )}
-                          </p>
-                          {variant.isDefault && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              Default
+                  {variants.map((variant, index) => {
+                    const variantId = variant._id || variant.id;
+                    const isDefault = variant.isDefault === true;
+                    return (
+                      <div
+                        key={index}
+                        className={`bg-white p-4 rounded-lg border ${
+                          isDefault
+                            ? "border-primary border-2"
+                            : "border-gray-200"
+                        } flex items-center justify-between hover:shadow-sm transition`}
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          {isDefault && (
+                            <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">
+                              DEFAULT
                             </span>
                           )}
+                          {variant.images && variant.images.length > 0 && (
+                            <img
+                              src={variant.images[0].url || variant.images[0]}
+                              alt={variant.name}
+                              className="w-16 h-16 rounded-lg object-cover border"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-text">
+                              {variant.name}
+                            </p>
+                            <p className="text-xs text-text-light">
+                              SKU: {variant.sku || "N/A"} • Stock:{" "}
+                              {variant.stock} • ₹{variant.price}
+                              {variant.comparePrice && (
+                                <span className="text-gray-400 line-through ml-2">
+                                  ₹{variant.comparePrice}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleEditVariant(index)}
+                            className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteVariant(index)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditVariant(index)}
-                          className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
-                        >
-                          <PencilIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteVariant(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
-
-          {/* Images */}
-          <div>
-            <label className="block text-sm font-medium mb-2">Images</label>
-            <div className="flex flex-wrap gap-3 mb-3">
-              {existingImages.map((img, i) => (
-                <div
-                  key={`e-${i}`}
-                  className="relative w-24 h-24 rounded-lg overflow-hidden border"
-                >
-                  <img
-                    src={img.url}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeExistingImage(i)}
-                    className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {imagePreviews.map((p, i) => (
-                <div
-                  key={`n-${i}`}
-                  className="relative w-24 h-24 rounded-lg overflow-hidden border"
-                >
-                  <img src={p} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeNewImage(i)}
-                    className="absolute top-0 right-0 bg-red-500 text-white w-5 h-5 flex items-center justify-center text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-[#3D96EB] hover:bg-[#EBF4FC] transition">
-                <PhotoIcon className="w-6 h-6 text-gray-400" />
-                <span className="text-xs text-gray-400 mt-1">Add</span>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          </div>
 
           {/* Flags */}
           <div>

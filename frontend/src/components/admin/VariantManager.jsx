@@ -9,6 +9,7 @@ import {
   PencilIcon,
   XMarkIcon,
   PhotoIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import SearchableSingleSelect from "./SearchableSingleSelect";
 import toast from "react-hot-toast";
@@ -40,13 +41,29 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
 
   const colors = colorsData || [];
 
+  // Find which variant is currently default (first one by convention, or one with isDefault flag)
+  const getDefaultVariantIndex = () => {
+    const defaultIndex = variants.findIndex((v) => v.isDefault === true);
+    return defaultIndex !== -1 ? defaultIndex : 0;
+  };
+
+  const defaultVariantIndex = getDefaultVariantIndex();
+
+  const handleSetDefaultVariant = (index) => {
+    const updatedVariants = variants.map((v, i) => ({
+      ...v,
+      isDefault: i === index,
+    }));
+    onVariantsChange(updatedVariants);
+    toast.success(`"${variants[index].name}" set as default variant`);
+  };
+
   const handleAddVariant = () => {
     if (!variantForm.name || !variantForm.price) {
       toast.error("Variant name and price are required");
       return;
     }
 
-    // ✅ FIX: Only store the color ID, and ensure images are stored as objects
     const newVariant = {
       name: variantForm.name,
       sku: variantForm.sku || undefined,
@@ -61,6 +78,7 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
         alt: variantForm.name,
       })),
       isActive: variantForm.isActive !== false,
+      isDefault: variants.length === 0, // First variant becomes default
     };
 
     if (editingVariantIndex !== null) {
@@ -110,6 +128,10 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
   const handleDeleteVariant = (index) => {
     if (window.confirm("Are you sure you want to remove this variant?")) {
       const updatedVariants = variants.filter((_, i) => i !== index);
+      // If we deleted the default variant, set the first one as default
+      if (index === defaultVariantIndex && updatedVariants.length > 0) {
+        updatedVariants[0].isDefault = true;
+      }
       onVariantsChange(updatedVariants);
       toast.success("Variant removed");
     }
@@ -327,20 +349,55 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
         </div>
       )}
 
-      {/* Existing Variants List */}
+      {/* Existing Variants List with Default Selector */}
       {variants.length > 0 && (
         <div className="space-y-2">
+          {/* ✅ Default Variant Dropdown */}
+          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <label className="text-sm font-medium text-text block mb-2">
+              Default Variant (for product card display)
+            </label>
+            <select
+              value={defaultVariantIndex}
+              onChange={(e) =>
+                handleSetDefaultVariant(parseInt(e.target.value))
+              }
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary bg-white"
+            >
+              {variants.map((variant, index) => (
+                <option key={index} value={index}>
+                  {variant.name} {variant.isDefault ? "(Default)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-text-light mt-1">
+              The default variant's images and price will appear on product
+              cards
+            </p>
+          </div>
+
           {variants.map((variant, index) => {
             const color =
               variant.color && typeof variant.color === "object"
                 ? variant.color
                 : getColorById(variant.color);
+            const isDefault =
+              variant.isDefault === true || index === defaultVariantIndex;
+
             return (
               <div
                 key={index}
-                className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 hover:shadow-sm transition"
+                className={`flex items-center justify-between bg-white p-3 rounded-lg border ${
+                  isDefault ? "border-primary border-2" : "border-gray-100"
+                } hover:shadow-sm transition`}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-1">
+                  {/* Default Badge */}
+                  {isDefault && (
+                    <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">
+                      DEFAULT
+                    </span>
+                  )}
                   {/* Color swatch */}
                   {color && color.hexCode && (
                     <span
@@ -348,8 +405,10 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
                       style={{ backgroundColor: color.hexCode || "#000" }}
                     />
                   )}
-                  <div>
-                    <p className="font-medium text-sm">{variant.name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-text">
+                      {variant.name}
+                    </p>
                     <p className="text-xs text-text-light">
                       SKU: {variant.sku || "N/A"} • Stock: {variant.stock || 0}{" "}
                       • ₹{variant.price}
@@ -359,37 +418,9 @@ const VariantManager = ({ variants = [], onVariantsChange, productType }) => {
                         </span>
                       )}
                     </p>
-                    {color && color.name && (
-                      <p className="text-xs text-text-light">
-                        Color: {color.name}
-                        {color.hexCode && (
-                          <span
-                            className="inline-block w-2.5 h-2.5 rounded-full ml-1 align-middle border"
-                            style={{ backgroundColor: color.hexCode }}
-                          />
-                        )}
-                      </p>
-                    )}
-                    {variant.images && variant.images.length > 0 && (
-                      <div className="flex gap-1 mt-1">
-                        {variant.images.slice(0, 3).map((img, i) => (
-                          <img
-                            key={i}
-                            src={img.url || img}
-                            alt=""
-                            className="w-5 h-5 rounded object-cover border"
-                          />
-                        ))}
-                        {variant.images.length > 3 && (
-                          <span className="text-xs text-text-light">
-                            +{variant.images.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => handleEditVariant(index)}

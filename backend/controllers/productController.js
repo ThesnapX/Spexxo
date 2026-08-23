@@ -386,12 +386,38 @@ export const createProduct = async (req, res) => {
 // @desc    Update product (Admin)
 // @route   PUT /api/products/:id
 // @access  Private/Admin
+
 export const updateProduct = async (req, res) => {
   try {
+    // If product has variants, ensure only one is default
+    if (req.body.variants && req.body.variants.length > 0) {
+      // Count how many are marked as default
+      const defaultCount = req.body.variants.filter(
+        (v) => v.isDefault === true,
+      ).length;
+
+      // If no variant is marked as default, mark the first one
+      if (defaultCount === 0) {
+        req.body.variants[0].isDefault = true;
+      }
+      // If more than one is marked as default, keep only the first one
+      else if (defaultCount > 1) {
+        let foundFirst = false;
+        req.body.variants = req.body.variants.map((v) => {
+          if (v.isDefault === true && !foundFirst) {
+            foundFirst = true;
+            return { ...v, isDefault: true };
+          }
+          return { ...v, isDefault: false };
+        });
+      }
+    }
+
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
+
     if (!product) {
       return res
         .status(404)

@@ -124,7 +124,6 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    // VARIANT PRODUCT FIELDS
     variants: [
       {
         name: {
@@ -151,30 +150,7 @@ const productSchema = new mongoose.Schema(
           ref: "Color",
           default: null,
         },
-        frameShape: {
-          type: String,
-        },
-        frameMaterial: {
-          type: String,
-        },
-        lensType: {
-          type: String,
-        },
-        frameColor: {
-          type: String,
-        },
-        frameWidth: {
-          type: Number,
-        },
-        lensWidth: {
-          type: Number,
-        },
-        frameHeight: {
-          type: Number,
-        },
-        bridge: {
-          type: Number,
-        },
+        // ... other fields
         images: [
           {
             url: String,
@@ -185,16 +161,14 @@ const productSchema = new mongoose.Schema(
             },
           },
         ],
-        attributes: {
-          color: String,
-          size: String,
-          material: String,
+        isDefault: {
+          type: Boolean,
+          default: false,
         },
         isActive: {
           type: Boolean,
           default: true,
         },
-        // ✅ REMOVED: isDefault field - no longer needed
       },
     ],
 

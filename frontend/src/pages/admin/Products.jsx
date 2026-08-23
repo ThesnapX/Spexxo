@@ -46,7 +46,6 @@ const Products = () => {
     queryKey: ["admin-products", statusFilter],
     queryFn: async () => {
       let url = `${API_URL}/products?limit=200&includeInactive=true`;
-      // If status filter is applied, add it to the query
       if (statusFilter === "active") {
         url += "&isActive=true";
       } else if (statusFilter === "inactive") {
@@ -101,6 +100,28 @@ const Products = () => {
         window.open(link, "_blank");
         toast.success("Product opened in new tab");
       });
+  };
+
+  // ✅ Helper function to get the product image (with variant support)
+  const getProductImage = (product) => {
+    // For variable products, try to get the default variant's image
+    if (product.variants && product.variants.length > 0) {
+      // Find the default variant
+      let defaultVariant = product.variants.find((v) => v.isDefault === true);
+      // If no default variant is marked, use the first one
+      if (!defaultVariant) {
+        defaultVariant = product.variants[0];
+      }
+      // Check if the default variant has images
+      if (defaultVariant.images && defaultVariant.images.length > 0) {
+        return defaultVariant.images[0].url;
+      }
+    }
+    // Fallback to product images
+    if (product.images && product.images.length > 0) {
+      return product.images[0].url;
+    }
+    return null;
   };
 
   // Helper function to get total stock (main + variants)
@@ -423,6 +444,9 @@ const Products = () => {
               discountPercent,
             } = getDisplayPrice(product);
 
+            // ✅ Get the product image (with variant support)
+            const productImage = getProductImage(product);
+
             return (
               <div
                 key={product._id}
@@ -438,9 +462,9 @@ const Products = () => {
                     navigate(`/admin/products/view/${product._id}`)
                   }
                 >
-                  {product.images?.[0]?.url ? (
+                  {productImage ? (
                     <img
-                      src={product.images[0].url}
+                      src={productImage}
                       alt={product.name}
                       className={`w-full h-48 object-cover transition-transform duration-300 ${
                         isDeactivated ? "opacity-50" : "group-hover:scale-105"
@@ -502,7 +526,6 @@ const Products = () => {
                     {product.name}
                   </h3>
 
-                  {/* ✅ FIXED: Price with discount display */}
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span
                       className={`font-bold ${
@@ -572,7 +595,6 @@ const Products = () => {
                         Best Seller
                       </span>
                     )}
-                    {/* Has Variants Tag - In the tags section */}
                     {hasVariants && !isDeactivated && (
                       <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-[10px] rounded-full flex items-center gap-0.5">
                         <Squares2X2Icon className="w-2.5 h-2.5" />

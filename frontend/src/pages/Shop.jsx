@@ -346,12 +346,17 @@ const ProductCard = ({
   const hasVariantsFlag = product.variants && product.variants.length > 0;
   const variantCount = hasVariantsFlag ? product.variants.length : 0;
 
-  // Get the first variant's image if variants exist
+  // ✅ Get the default variant's image
   const getProductImage = () => {
     if (hasVariantsFlag && product.variants.length > 0) {
-      const firstVariant = product.variants[0];
-      if (firstVariant.images && firstVariant.images.length > 0) {
-        return firstVariant.images[0].url;
+      // Find the default variant
+      let defaultVariant = product.variants.find((v) => v.isDefault === true);
+      // If no default variant is marked, use the first one
+      if (!defaultVariant) {
+        defaultVariant = product.variants[0];
+      }
+      if (defaultVariant.images && defaultVariant.images.length > 0) {
+        return defaultVariant.images[0].url;
       }
     }
     if (product.images && product.images.length > 0) {
@@ -1233,15 +1238,14 @@ const Shop = () => {
                 </div>
               </aside>
             )}
-
             {/* Right Products */}
             <div
               className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
             >
               {isLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {[...Array(6)].map((_, i) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {[...Array(10)].map((_, i) => (
                     <div
                       key={i}
                       className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse"
@@ -1257,7 +1261,14 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+                  {/* ✅ FIXED: More columns when filters are hidden */}
+                  <div
+                    className={`grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 ${
+                      filtersOpen
+                        ? "lg:grid-cols-2 xl:grid-cols-3"
+                        : "lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+                    }`}
+                  >
                     {allProducts.map((product) => (
                       <ProductCard
                         key={product._id}

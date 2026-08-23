@@ -33,6 +33,7 @@ const AddProduct = () => {
   const [productType, setProductType] = useState("simple");
   const [showVariantForm, setShowVariantForm] = useState(false);
   const [editingVariantIndex, setEditingVariantIndex] = useState(null);
+  const [defaultVariantId, setDefaultVariantId] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -411,7 +412,6 @@ const AddProduct = () => {
               <p className="text-red-500 text-xs mt-2">{errors.variants}</p>
             )}
           </div>
-
           {/* Common Fields - Always shown */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -440,7 +440,6 @@ const AddProduct = () => {
               />
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium mb-1">
               Description <span className="text-red-500">*</span>
@@ -456,7 +455,6 @@ const AddProduct = () => {
               <p className="text-red-500 text-xs mt-1">{errors.description}</p>
             )}
           </div>
-
           {/* Categories & Brand */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -486,7 +484,6 @@ const AddProduct = () => {
               />
             </div>
           </div>
-
           {/* Gender & Product Category */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -543,7 +540,6 @@ const AddProduct = () => {
               </select>
             </div>
           </div>
-
           {/* SIMPLE PRODUCT FIELDS */}
           {productType === "simple" && (
             <>
@@ -839,6 +835,47 @@ const AddProduct = () => {
                 </button>
               </div>
 
+              {/* ✅ Default Variant Dropdown */}
+              {variants.length > 0 && (
+                <div className="bg-white p-3 rounded-lg border border-gray-200 mb-4">
+                  <label className="text-sm font-medium text-text block mb-2">
+                    Default Variant (for product card display)
+                  </label>
+                  <select
+                    value={
+                      defaultVariantId ||
+                      variants[0]?._id ||
+                      variants[0]?.id ||
+                      ""
+                    }
+                    onChange={(e) => {
+                      const variantId = e.target.value;
+                      const updatedVariants = variants.map((v) => ({
+                        ...v,
+                        isDefault: (v._id || v.id) === variantId,
+                      }));
+                      setVariants(updatedVariants);
+                      setDefaultVariantId(variantId);
+                      toast.success("Default variant updated!");
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary bg-white"
+                  >
+                    {variants.map((variant) => {
+                      const variantId = variant._id || variant.id;
+                      return (
+                        <option key={variantId} value={variantId}>
+                          {variant.name} {variant.isDefault ? "(Default)" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-text-light mt-1">
+                    The default variant's images and price will appear on
+                    product cards
+                  </p>
+                </div>
+              )}
+
               {showVariantForm && (
                 <VariantForm
                   variant={
@@ -861,62 +898,69 @@ const AddProduct = () => {
 
               {variants.length > 0 && (
                 <div className="space-y-3 mt-4">
-                  {variants.map((variant, index) => (
-                    <div
-                      key={index}
-                      className="bg-white p-4 rounded-lg border border-gray-200 flex items-center justify-between hover:shadow-sm transition"
-                    >
-                      <div className="flex items-center gap-4">
-                        {variant.images && variant.images.length > 0 && (
-                          <img
-                            src={variant.images[0].url || variant.images[0]}
-                            alt={variant.name}
-                            className="w-16 h-16 rounded-lg object-cover border"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium text-text">
-                            {variant.name}
-                          </p>
-                          <p className="text-xs text-text-light">
-                            SKU: {variant.sku || "N/A"} • Stock: {variant.stock}{" "}
-                            • ₹{variant.price}
-                            {variant.comparePrice && (
-                              <span className="text-gray-400 line-through ml-2">
-                                ₹{variant.comparePrice}
-                              </span>
-                            )}
-                          </p>
-                          {variant.isDefault && (
-                            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              Default
+                  {variants.map((variant, index) => {
+                    const variantId = variant._id || variant.id;
+                    const isDefault = variant.isDefault === true;
+                    return (
+                      <div
+                        key={index}
+                        className={`bg-white p-4 rounded-lg border ${
+                          isDefault
+                            ? "border-primary border-2"
+                            : "border-gray-200"
+                        } flex items-center justify-between hover:shadow-sm transition`}
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          {isDefault && (
+                            <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0">
+                              DEFAULT
                             </span>
                           )}
+                          {variant.images && variant.images.length > 0 && (
+                            <img
+                              src={variant.images[0].url || variant.images[0]}
+                              alt={variant.name}
+                              className="w-16 h-16 rounded-lg object-cover border"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-text">
+                              {variant.name}
+                            </p>
+                            <p className="text-xs text-text-light">
+                              SKU: {variant.sku || "N/A"} • Stock:{" "}
+                              {variant.stock} • ₹{variant.price}
+                              {variant.comparePrice && (
+                                <span className="text-gray-400 line-through ml-2">
+                                  ₹{variant.comparePrice}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleEditVariant(index)}
+                            className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteVariant(index)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditVariant(index)}
-                          className="p-2 text-[#3D96EB] hover:bg-[#EBF4FC] rounded-lg transition"
-                        >
-                          <PencilIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteVariant(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
-
           {/* Flags */}
           <div>
             <label className="block text-sm font-medium mb-2">
@@ -947,7 +991,6 @@ const AddProduct = () => {
               ))}
             </div>
           </div>
-
           {/* Submit */}
           <div className="flex gap-3 pt-4 border-t">
             <button

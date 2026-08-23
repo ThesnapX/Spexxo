@@ -42,13 +42,17 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
   const isDeactivated = product.isActive === false;
   const hasVariants = product.variants && product.variants.length > 0;
 
-  // ✅ Get the first variant's image if variants exist
+  // Get the default variant's image if variants exist
   const getProductImage = () => {
     if (hasVariants && product.variants.length > 0) {
-      // Check if first variant has images
-      const firstVariant = product.variants[0];
-      if (firstVariant.images && firstVariant.images.length > 0) {
-        return firstVariant.images[0].url;
+      // Find the default variant
+      let defaultVariant = product.variants.find((v) => v.isDefault === true);
+      // If no default variant is marked, use the first one
+      if (!defaultVariant) {
+        defaultVariant = product.variants[0];
+      }
+      if (defaultVariant.images && defaultVariant.images.length > 0) {
+        return defaultVariant.images[0].url;
       }
     }
     // Fallback to product images
