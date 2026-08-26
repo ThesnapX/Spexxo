@@ -207,6 +207,8 @@ export const createRazorpayOrder = async (req, res) => {
 
     console.log("[PAYMENT] Order found:", order.orderNumber);
     console.log("[PAYMENT] Order total:", order.total);
+    console.log("[PAYMENT] Order isCOD:", order.isCOD);
+    console.log("[PAYMENT] Order codAdvance:", order.codAdvance);
 
     if (order.paymentStatus === "paid") {
       return res.status(400).json({
@@ -215,10 +217,29 @@ export const createRazorpayOrder = async (req, res) => {
       });
     }
 
-    if (order.total <= 0) {
+    // ✅ FIXED: Determine the amount to charge
+    // For COD orders with advance, charge ONLY the advance amount
+    // For online orders, charge the full amount
+    let amountToCharge = order.total;
+
+    if (order.isCOD && order.codAdvance > 0) {
+      // COD with advance - charge only the advance amount
+      amountToCharge = order.codAdvance;
+      console.log(
+        `[PAYMENT] COD advance payment: Charging ₹${amountToCharge} (10% of ${order.total})`,
+      );
+    } else if (order.isCOD && !order.codAdvance) {
+      // COD without advance - no Razorpay payment needed
       return res.status(400).json({
         success: false,
-        message: "Order total is zero. No payment required.",
+        message: "COD without advance does not require payment",
+      });
+    }
+
+    if (amountToCharge <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment amount is zero. No payment required.",
       });
     }
 
@@ -231,13 +252,16 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     const productNames = order.items.map((item) => item.name).join(", ");
-    const amount = Math.round(order.total * 100);
+    const amountInPaise = Math.round(amountToCharge * 100);
     const receipt = order.orderNumber || `ORD-${Date.now()}`;
 
-    console.log("[PAYMENT] Creating Razorpay order with amount:", amount);
+    console.log(
+      "[PAYMENT] Creating Razorpay order with amount:",
+      amountInPaise,
+    );
 
     const razorpayOrder = await razorpay.orders.create({
-      amount,
+      amount: amountInPaise,
       currency: "INR",
       receipt: receipt,
       notes: {
@@ -249,6 +273,9 @@ export const createRazorpayOrder = async (req, res) => {
         customerEmail: order.user?.email || "",
         customerPhone: order.user?.phone || "",
         products: productNames || "Spexxo Eyewear",
+        paymentType: order.isCOD ? "COD Advance" : "Full Payment",
+        advanceAmount: order.codAdvance || 0,
+        totalAmount: order.total || 0,
       },
     });
 
@@ -279,6 +306,7 @@ export const createRazorpayOrder = async (req, res) => {
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
         products: productNames || "Spexxo Eyewear",
+        paymentType: order.isCOD ? "COD Advance" : "Full Payment",
       },
     });
   } catch (error) {
