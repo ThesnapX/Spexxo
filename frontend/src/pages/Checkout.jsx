@@ -1,7 +1,7 @@
 // frontend/src/pages/Checkout.jsx
 
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
@@ -24,6 +24,7 @@ const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 import AddressForm from "../components/common/AddressForm";
 
 const Checkout = () => {
+  const location = useLocation();
   const {
     cart,
     cartTotal,
@@ -42,6 +43,12 @@ const Checkout = () => {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [showAddressList, setShowAddressList] = useState(false);
   const [saveAddressToProfile, setSaveAddressToProfile] = useState(true);
+
+  // ✅ Buy Now state
+  const [isBuyNow, setIsBuyNow] = useState(false);
+  const [buyNowItem, setBuyNowItem] = useState(null);
+  const [buyNowCartTotal, setBuyNowCartTotal] = useState(0);
+  const [buyNowItems, setBuyNowItems] = useState([]);
 
   // Coupon states
   const [couponCode, setCouponCode] = useState("");
@@ -74,6 +81,24 @@ const Checkout = () => {
   const isLocalhost =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
+
+  // ✅ Check for Buy Now on mount
+  useEffect(() => {
+    const buyNowData = sessionStorage.getItem("buyNowItem");
+    if (buyNowData) {
+      try {
+        const item = JSON.parse(buyNowData);
+        setBuyNowItem(item);
+        setIsBuyNow(true);
+        setBuyNowItems([item]);
+        setBuyNowCartTotal(item.price * item.quantity);
+        console.log("[CHECKOUT] Buy Now mode activated for:", item.name);
+        sessionStorage.removeItem("buyNowItem");
+      } catch (e) {
+        console.error("[CHECKOUT] Failed to parse buyNowItem:", e);
+      }
+    }
+  }, []);
 
   // Load default address on mount
   useEffect(() => {
@@ -128,15 +153,16 @@ const Checkout = () => {
     }
   }, [user]);
 
-  // Refresh cart on mount
+  // Refresh cart on mount (skip for Buy Now)
   useEffect(() => {
-    refreshCartWithLatestData();
-  }, []);
+    if (!isBuyNow) {
+      refreshCartWithLatestData();
+    }
+  }, [isBuyNow]);
 
-  // ✅ Load Razorpay script on component mount - with retry mechanism
+  // ✅ Load Razorpay script on component mount
   useEffect(() => {
     const loadRazorpay = async () => {
-      // If already loaded, skip
       if (window.Razorpay) {
         console.log("[PAYMENT] Razorpay already loaded");
         setRazorpayLoaded(true);
@@ -144,7 +170,6 @@ const Checkout = () => {
         return;
       }
 
-      // If already loading, skip
       if (razorpayLoading) return;
 
       setRazorpayLoading(true);
@@ -157,7 +182,6 @@ const Checkout = () => {
         script.async = true;
         script.id = "razorpay-script";
 
-        // Check if script already exists
         const existingScript = document.getElementById("razorpay-script");
         if (existingScript) {
           console.log(
@@ -181,7 +205,6 @@ const Checkout = () => {
         await new Promise((resolve, reject) => {
           script.onload = () => {
             console.log("[PAYMENT] Razorpay script loaded successfully");
-            // Wait a moment for Razorpay to initialize
             setTimeout(() => {
               resolve(true);
             }, 500);
@@ -193,7 +216,6 @@ const Checkout = () => {
           document.body.appendChild(script);
         });
 
-        // Wait for Razorpay to be available
         let attempts = 0;
         while (!window.Razorpay && attempts < 20) {
           await new Promise((resolve) => setTimeout(resolve, 200));
@@ -223,11 +245,15 @@ const Checkout = () => {
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
-  const shippingCost = cartTotal >= 999 ? 0 : 99;
+  // ✅ Get the correct cart total
+  const effectiveCartTotal = isBuyNow ? buyNowCartTotal : cartTotal;
+  const effectiveItems = isBuyNow ? buyNowItems : cart.items;
+
+  const shippingCost = effectiveCartTotal >= 999 ? 0 : 99;
 
   const calculateCouponDiscount = () => {
     if (!appliedCoupon) return 0;
-    let discountBase = cartTotal;
+    let discountBase = effectiveCartTotal;
     if (appliedCoupon.discountOn === "delivery") discountBase = shippingCost;
     let discount = 0;
     if (appliedCoupon.discountType === "percentage") {
@@ -242,7 +268,10 @@ const Checkout = () => {
 
   const couponDiscount = calculateCouponDiscount();
   const couponCodeApplied = appliedCoupon?.code || "";
-  const grandTotal = Math.max(0, cartTotal - couponDiscount + shippingCost);
+  const grandTotal = Math.max(
+    0,
+    effectiveCartTotal - couponDiscount + shippingCost,
+  );
 
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
@@ -258,7 +287,7 @@ const Checkout = () => {
     try {
       const { data } = await axios.post(`${API_URL}/coupons/validate`, {
         code: couponCode.trim(),
-        cartTotal: cartTotal,
+        cartTotal: effectiveCartTotal,
       });
       if (data.success) {
         applyCoupon({
@@ -314,6 +343,20 @@ const Checkout = () => {
   };
 
   const buildOrderItems = () => {
+    if (isBuyNow && buyNowItem) {
+      return [
+        {
+          product: buyNowItem.productId,
+          name: buyNowItem.name,
+          image: buyNowItem.image || "",
+          price: buyNowItem.price,
+          quantity: buyNowItem.quantity,
+          subtotal: buyNowItem.price * buyNowItem.quantity,
+          variant: buyNowItem.variant || null,
+        },
+      ];
+    }
+
     return cart.items
       .map((item) => {
         const product = item.product;
@@ -363,7 +406,16 @@ const Checkout = () => {
       };
 
       const { data } = await axios.post(`${API_URL}/orders`, orderData);
-      await clearCart();
+
+      if (isBuyNow) {
+        setIsBuyNow(false);
+        setBuyNowItem(null);
+        setBuyNowItems([]);
+        setBuyNowCartTotal(0);
+      } else {
+        await clearCart();
+      }
+
       toast.success("Order placed successfully! 🎉");
       navigate(`/account/orders/${data.order._id}`);
       return true;
@@ -374,15 +426,9 @@ const Checkout = () => {
     }
   };
 
-  // ✅ Helper function to open Razorpay - extracted to avoid duplication
+  // ✅ Helper function to open Razorpay
   const openRazorpay = (options) => {
     console.log("[PAYMENT] Opening Razorpay...");
-    console.log("[PAYMENT] Options:", {
-      key: options.key ? "Present" : "Missing",
-      amount: options.amount,
-      order_id: options.order_id ? "Present" : "Missing",
-    });
-
     try {
       const rzp = new window.Razorpay(options);
       rzp.open();
@@ -401,10 +447,11 @@ const Checkout = () => {
     console.log("[PAYMENT] Checkout submitted");
     console.log("[PAYMENT] Payment method:", paymentMethod);
     console.log("[PAYMENT] Grand total:", grandTotal);
+    console.log("[PAYMENT] Is Buy Now:", isBuyNow);
     console.log("[PAYMENT] Razorpay loaded:", razorpayLoaded);
     console.log("[PAYMENT] window.Razorpay exists:", !!window.Razorpay);
 
-    if (hasDeactivatedProducts) {
+    if (hasDeactivatedProducts && !isBuyNow) {
       toast.error(
         "Your cart contains deactivated products. Please remove them to proceed.",
       );
@@ -455,7 +502,7 @@ const Checkout = () => {
       return;
     }
 
-    // Handle zero amount orders (100% coupon or free products)
+    // Handle zero amount orders
     if (grandTotal === 0) {
       setLoading(true);
       await handleZeroAmountOrder(orderItems);
@@ -474,7 +521,6 @@ const Checkout = () => {
       try {
         console.log("[PAYMENT] Online payment flow started");
 
-        // STEP 1: Create pending order
         const orderData = {
           shippingAddress: form,
           couponCode: couponCodeApplied || undefined,
@@ -486,17 +532,10 @@ const Checkout = () => {
         };
 
         console.log("[PAYMENT] Creating pending order...");
-        console.log(
-          "[PAYMENT] Order data:",
-          JSON.stringify(orderData, null, 2),
-        );
-
         const { data: orderResponse } = await axios.post(
           `${API_URL}/orders`,
           orderData,
         );
-
-        console.log("[PAYMENT] Order response:", orderResponse);
 
         const createdOrder = orderResponse.order;
         console.log(
@@ -504,7 +543,6 @@ const Checkout = () => {
           createdOrder.orderNumber,
         );
 
-        // STEP 2: Create Razorpay order
         console.log("[PAYMENT] Creating Razorpay order...");
         const { data: razorpayData } = await axios.post(
           `${API_URL}/payment/create-order`,
@@ -516,7 +554,6 @@ const Checkout = () => {
           razorpayData.razorpayOrderId,
         );
         console.log("[PAYMENT] Razorpay amount:", razorpayData.amount);
-        console.log("[PAYMENT] Razorpay key available:", !!razorpayData.key);
 
         setProcessingPayment(true);
 
@@ -528,7 +565,6 @@ const Checkout = () => {
           currency: "INR",
           name: "Spexxo",
           description: `Order ${createdOrder.orderNumber}`,
-          image: window.location.origin + "/favicon.png",
           order_id: razorpayData.razorpayOrderId,
           prefill: {
             name:
@@ -547,8 +583,6 @@ const Checkout = () => {
               setProcessingPayment(false);
               setLoading(false);
               toast.error("Payment cancelled");
-
-              // ✅ Delete the pending order
               axios
                 .delete(`${API_URL}/orders/${createdOrder._id}/cancel-pending`)
                 .then(() => {
@@ -567,7 +601,6 @@ const Checkout = () => {
             try {
               setProcessingPayment(false);
 
-              // ✅ Step 1: Verify payment
               const verifyData = {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -576,34 +609,27 @@ const Checkout = () => {
               };
 
               console.log("[PAYMENT] Verifying payment...");
-
-              // ✅ Step 2: Verify payment - this will also confirm the order
               const { data } = await axios.post(
                 `${API_URL}/payment/verify`,
                 verifyData,
               );
 
-              // ✅ Step 3: Order is now confirmed (stock reduced, cart cleared)
-              toast.success("Payment successful! Order placed! 🎉");
-              console.log(
-                "[PAYMENT] Order verified and confirmed:",
-                data.order?.orderNumber,
-              );
-
-              // ✅ Step 4: Navigate to order details
-              if (data.order) {
-                navigate(`/account/orders/${data.order._id}`);
+              // ✅ Clear Buy Now state if applicable
+              if (isBuyNow) {
+                setIsBuyNow(false);
+                setBuyNowItem(null);
+                setBuyNowItems([]);
+                setBuyNowCartTotal(0);
               } else {
-                // Fallback: fetch the order directly
-                const { data: orderData } = await axios.get(
-                  `${API_URL}/orders/${createdOrder._id}`,
-                );
-                navigate(`/account/orders/${orderData.order._id}`);
+                await clearCart();
               }
+
+              toast.success("Payment successful! Order placed! 🎉");
+              console.log("[PAYMENT] Order verified and confirmed");
+              navigate(`/account/orders/${data.order._id}`);
             } catch (error) {
               console.error("[PAYMENT] Order verification error:", error);
 
-              // ✅ If payment verification fails, delete the pending order
               try {
                 await axios.delete(
                   `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
@@ -633,24 +659,10 @@ const Checkout = () => {
         console.log("[PAYMENT] Razorpay opened successfully");
       } catch (error) {
         console.error("[PAYMENT] Payment initiation error:", error);
-        console.error("[PAYMENT] Error details:", error.response?.data);
-
-        if (error.response?.status === 404) {
-          toast.error(
-            "Payment endpoint not found. Please check server configuration.",
-          );
-        } else if (
-          error.response?.data?.details?.error?.code === "BAD_REQUEST_ERROR"
-        ) {
-          toast.error(
-            "⚠️ Razorpay configuration error. Please check your API keys.",
-          );
-        } else {
-          toast.error(
-            error.response?.data?.message ||
-              "Payment initiation failed. Please try again.",
-          );
-        }
+        toast.error(
+          error.response?.data?.message ||
+            "Payment initiation failed. Please try again.",
+        );
         setProcessingPayment(false);
       } finally {
         setLoading(false);
@@ -661,9 +673,7 @@ const Checkout = () => {
       try {
         console.log("[PAYMENT] COD payment flow started");
 
-        // For COD with advance payment
         if (advanceAmount > 0) {
-          // STEP 1: Create pending COD order
           const orderData = {
             shippingAddress: form,
             couponCode: couponCodeApplied || undefined,
@@ -677,11 +687,6 @@ const Checkout = () => {
           };
 
           console.log("[PAYMENT] Creating pending COD order with advance...");
-          console.log(
-            "[PAYMENT] Order data:",
-            JSON.stringify(orderData, null, 2),
-          );
-
           const { data: orderResponse } = await axios.post(
             `${API_URL}/orders`,
             orderData,
@@ -692,7 +697,6 @@ const Checkout = () => {
             createdOrder.orderNumber,
           );
 
-          // STEP 2: Create Razorpay order for advance
           console.log("[PAYMENT] Creating Razorpay order for advance...");
           const { data: razorpayData } = await axios.post(
             `${API_URL}/payment/create-order`,
@@ -712,9 +716,7 @@ const Checkout = () => {
             amount: razorpayData.amount,
             currency: "INR",
             name: "Spexxo",
-            description: `Order ${createdOrder.orderNumber}`,
-            // ✅ Remove the image or use a public URL
-            // image: window.location.origin + "/favicon.png",
+            description: `10% Advance - Order ${createdOrder.orderNumber}`,
             order_id: razorpayData.razorpayOrderId,
             prefill: {
               name:
@@ -733,8 +735,6 @@ const Checkout = () => {
                 setProcessingPayment(false);
                 setLoading(false);
                 toast.error("Advance payment cancelled");
-
-                // ✅ Delete the pending order
                 axios
                   .delete(
                     `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
@@ -763,7 +763,16 @@ const Checkout = () => {
                   isCODAdvance: true,
                 });
 
-                // ✅ Order is now confirmed (stock reduced)
+                // ✅ Clear Buy Now state if applicable
+                if (isBuyNow) {
+                  setIsBuyNow(false);
+                  setBuyNowItem(null);
+                  setBuyNowItems([]);
+                  setBuyNowCartTotal(0);
+                } else {
+                  await clearCart();
+                }
+
                 toast.success(
                   "Order placed with 10% advance! Remaining ₹" +
                     remainingCOD.toLocaleString() +
@@ -771,15 +780,12 @@ const Checkout = () => {
                 );
                 console.log("[PAYMENT] COD advance verified and completed");
 
-                // ✅ Navigate to order details
                 const { data: orderData } = await axios.get(
                   `${API_URL}/orders/${createdOrder._id}`,
                 );
                 navigate(`/account/orders/${orderData.order._id}`);
               } catch (error) {
                 console.error("[PAYMENT] COD order creation error:", error);
-
-                // ✅ Delete pending order on failure
                 try {
                   await axios.delete(
                     `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
@@ -790,7 +796,6 @@ const Checkout = () => {
                     deleteError,
                   );
                 }
-
                 toast.error("Order creation failed after advance payment.");
                 navigate("/");
               }
@@ -802,7 +807,6 @@ const Checkout = () => {
           rzp.open();
           console.log("[PAYMENT] Razorpay opened for COD advance");
         } else {
-          // COD without advance - create order directly
           console.log("[PAYMENT] Creating COD order without advance...");
           const orderData = {
             shippingAddress: form,
@@ -814,30 +818,24 @@ const Checkout = () => {
             items: orderItems,
           };
 
-          console.log(
-            "[PAYMENT] Order data:",
-            JSON.stringify(orderData, null, 2),
-          );
-
           const { data } = await axios.post(`${API_URL}/orders`, orderData);
-          await clearCart();
+
+          if (isBuyNow) {
+            setIsBuyNow(false);
+            setBuyNowItem(null);
+            setBuyNowItems([]);
+            setBuyNowCartTotal(0);
+          } else {
+            await clearCart();
+          }
+
           toast.success("Order placed successfully!");
           console.log("[PAYMENT] COD order completed");
           navigate(`/account/orders/${data.order._id}`);
         }
       } catch (error) {
         console.error("[PAYMENT] COD order error:", error);
-        console.error("[PAYMENT] Error details:", error.response?.data);
-
-        if (error.response?.status === 404) {
-          toast.error(
-            "Payment endpoint not found. Please check server configuration.",
-          );
-        } else {
-          toast.error(
-            error.response?.data?.message || "Failed to create order",
-          );
-        }
+        toast.error(error.response?.data?.message || "Failed to create order");
         setProcessingPayment(false);
       } finally {
         setLoading(false);
@@ -852,14 +850,16 @@ const Checkout = () => {
     }
   };
 
-  if (!cart?.items?.length) {
+  if (!effectiveItems?.length && !isBuyNow) {
     return (
       <div className="pt-24">
         <div className="container-custom text-center py-20">
           <p className="text-6xl mb-4">🛒</p>
           <h2 className="text-2xl font-bold text-text mb-2">Cart is Empty</h2>
           <p className="text-text-light mb-6">
-            Add some products before checking out
+            {isBuyNow
+              ? "No product selected"
+              : "Add some products before checking out"}
           </p>
           <Link to="/shop" className="btn-primary">
             Shop Now
@@ -875,11 +875,47 @@ const Checkout = () => {
       <div className="pt-24 pb-16">
         <div className="container-custom max-w-5xl">
           <h1 className="text-2xl md:text-3xl font-bold text-text mb-8">
-            Checkout
+            {isBuyNow ? "Buy Now" : "Checkout"}
           </h1>
 
+          {/* Buy Now Banner */}
+          {isBuyNow && buyNowItem && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+                  <img
+                    src={buyNowItem.image || "https://picsum.photos/100/100"}
+                    alt={buyNowItem.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p className="font-medium text-text">Buying Now:</p>
+                  <p className="text-sm text-text">
+                    {buyNowItem.name} × {buyNowItem.quantity}
+                  </p>
+                  <p className="text-sm font-semibold text-primary">
+                    ₹{buyNowItem.price?.toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsBuyNow(false);
+                    setBuyNowItem(null);
+                    setBuyNowItems([]);
+                    setBuyNowCartTotal(0);
+                    navigate("/shop");
+                  }}
+                  className="ml-auto text-sm text-red-500 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Deactivated Products Warning */}
-          {hasDeactivatedProducts && (
+          {hasDeactivatedProducts && !isBuyNow && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
               <div className="flex items-start gap-3">
                 <ExclamationCircleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -991,7 +1027,6 @@ const Checkout = () => {
                 </div>
               )}
 
-              {/* ✅ Fixed: Removed outer <form> tag to prevent nesting */}
               <div className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
                 <AddressForm
                   initialData={form}
@@ -1081,7 +1116,6 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Show message for zero amount orders */}
               {grandTotal === 0 && (
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
                   <div className="flex items-start gap-3">
@@ -1099,7 +1133,6 @@ const Checkout = () => {
                 </div>
               )}
 
-              {/* ✅ Show Razorpay loading status */}
               {razorpayLoading && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
                   <div className="flex items-start gap-3">
@@ -1157,7 +1190,9 @@ const Checkout = () => {
 
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
-                <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+                <h2 className="text-lg font-semibold mb-4">
+                  {isBuyNow ? "Order Summary" : "Order Summary"}
+                </h2>
 
                 {/* Coupon Section */}
                 <div className="mb-4 pb-4 border-b">
@@ -1225,19 +1260,29 @@ const Checkout = () => {
                 </div>
 
                 <div className="max-h-60 overflow-y-auto">
-                  {cart.items.map((item) => {
-                    const name = item.product?.name || item.name || "Product";
-                    const variantName = item.variant?.name || "";
-                    const price =
-                      item.price ||
-                      item.product?.comparePrice ||
-                      item.product?.price ||
-                      0;
-                    const isDeactivated = item.product?.isActive === false;
+                  {effectiveItems.map((item, index) => {
+                    const name = isBuyNow
+                      ? item.name
+                      : item.product?.name || item.name || "Product";
+                    const variantName = isBuyNow
+                      ? item.variant?.name || ""
+                      : item.variant?.name || "";
+                    const price = isBuyNow
+                      ? item.price
+                      : item.price ||
+                        item.product?.comparePrice ||
+                        item.product?.price ||
+                        0;
+                    const quantity = isBuyNow
+                      ? item.quantity
+                      : item.quantity || 1;
+                    const isDeactivated = isBuyNow
+                      ? false
+                      : item.product?.isActive === false;
 
                     return (
                       <div
-                        key={item._id}
+                        key={isBuyNow ? `buynow-${index}` : item._id}
                         className={`flex justify-between text-sm py-2 border-b border-gray-50 ${isDeactivated ? "opacity-50" : ""}`}
                       >
                         <span className="truncate mr-2">
@@ -1248,33 +1293,20 @@ const Checkout = () => {
                               ({variantName})
                             </span>
                           )}
-                          × {item.quantity}
+                          × {quantity}
                         </span>
                         <span className="flex-shrink-0">
-                          ₹{(price * item.quantity).toLocaleString()}
+                          ₹{(price * quantity).toLocaleString()}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-                {hasDeactivatedProducts && (
-                  <div className="bg-red-50 p-3 rounded-lg mt-3 border border-red-200">
-                    <p className="text-xs text-red-600 font-medium">
-                      ⚠️ Deactivated products found. Please remove them from
-                      your cart.
-                    </p>
-                    <Link
-                      to="/cart"
-                      className="text-xs text-red-700 hover:underline mt-1 inline-block"
-                    >
-                      Go to Cart
-                    </Link>
-                  </div>
-                )}
+
                 <div className="border-t mt-4 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>₹{cartTotal.toLocaleString()}</span>
+                    <span>₹{effectiveCartTotal.toLocaleString()}</span>
                   </div>
                   {couponDiscount > 0 && (
                     <div className="flex justify-between text-green-600">
@@ -1337,10 +1369,10 @@ const Checkout = () => {
                     )}
                 </div>
                 <Link
-                  to="/cart"
+                  to={isBuyNow ? "/shop" : "/cart"}
                   className="block text-center text-primary text-sm mt-4 hover:underline"
                 >
-                  ← Back to Cart
+                  {isBuyNow ? "← Back to Shop" : "← Back to Cart"}
                 </Link>
               </div>
             </div>

@@ -299,6 +299,8 @@ const ProductDetail = () => {
     addToCart(product._id, quantity, selectedVariant);
   };
 
+  // frontend/src/pages/ProductDetail.jsx - Updated handleBuyNow
+
   const handleBuyNow = () => {
     if (isDeactivated) {
       toast.error("This product is currently deactivated");
@@ -312,8 +314,23 @@ const ProductDetail = () => {
       toast.error("This product is out of stock");
       return;
     }
-    addToCart(product._id, quantity, selectedVariant);
-    navigate("/checkout");
+
+    // ✅ FIX: Store the product for Buy Now in sessionStorage
+    const buyNowItem = {
+      productId: product._id,
+      quantity: quantity,
+      variant: selectedVariant,
+      product: product,
+      price: displayPrice,
+      name: product.name,
+      image: product.images?.[0]?.url || "",
+    };
+
+    // ✅ Store in sessionStorage (cleared after checkout)
+    sessionStorage.setItem("buyNowItem", JSON.stringify(buyNowItem));
+
+    // ✅ Navigate to checkout with buyNow flag
+    navigate("/checkout", { state: { buyNow: true } });
   };
 
   const handleWishlistClick = () => {
