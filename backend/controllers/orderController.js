@@ -39,6 +39,8 @@ export const createOrder = async (req, res) => {
           .json({ success: false, message: "Cart is empty" });
       }
 
+      // backend/controllers/orderController.js - createOrder (items creation)
+
       orderItems = [];
       for (const item of cart.items) {
         const product = item.product;
@@ -47,14 +49,32 @@ export const createOrder = async (req, res) => {
         const itemTotal = price * quantity;
         subtotal += itemTotal;
 
+        // ✅ Get variant image if available
+        let variantImage = "";
+        let variantData = item.variant || null;
+
+        if (
+          variantData &&
+          variantData.images &&
+          variantData.images.length > 0
+        ) {
+          variantImage = variantData.images[0]?.url || "";
+        }
+        if (!variantImage && variantData && variantData.image) {
+          variantImage = variantData.image;
+        }
+        if (!variantImage) {
+          variantImage = product.images?.[0]?.url || "";
+        }
+
         orderItems.push({
           product: product._id,
           name: product.name,
-          image: product.images?.[0]?.url || "",
+          image: variantImage,
           price: price,
           quantity: quantity,
           subtotal: itemTotal,
-          variant: item.variant || null,
+          variant: variantData,
         });
       }
     } else {

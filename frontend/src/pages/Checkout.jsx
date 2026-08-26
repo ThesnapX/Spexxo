@@ -343,12 +343,13 @@ const Checkout = () => {
   };
 
   const buildOrderItems = () => {
+    // If in Buy Now mode, use the buyNowItem
     if (isBuyNow && buyNowItem) {
       return [
         {
           product: buyNowItem.productId,
           name: buyNowItem.name,
-          image: buyNowItem.image || "",
+          image: buyNowItem.image || buyNowItem.product?.images?.[0]?.url || "",
           price: buyNowItem.price,
           quantity: buyNowItem.quantity,
           subtotal: buyNowItem.price * buyNowItem.quantity,
@@ -365,10 +366,24 @@ const Checkout = () => {
         const price = item.price || product.comparePrice || product.price || 0;
         const variant = item.variant;
 
+        // ✅ Get variant image if available, otherwise use product image
+        let variantImage = "";
+        if (variant && variant.images && variant.images.length > 0) {
+          variantImage = variant.images[0]?.url || "";
+        }
+        // If variant has no images, check if the variant object has a direct image field
+        if (!variantImage && variant && variant.image) {
+          variantImage = variant.image;
+        }
+        // Fallback to product image
+        if (!variantImage) {
+          variantImage = product.images?.[0]?.url || "";
+        }
+
         return {
           product: product._id,
           name: product.name,
-          image: product.images?.[0]?.url || "",
+          image: variantImage,
           price: price,
           quantity: item.quantity,
           subtotal: price * item.quantity,
@@ -385,6 +400,8 @@ const Checkout = () => {
                     }
                   : null,
                 attributes: variant.attributes || {},
+                // ✅ Store variant images for display
+                images: variant.images || [],
               }
             : null,
         };

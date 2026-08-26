@@ -192,15 +192,22 @@ const OrderDetail = () => {
                     key={index}
                     className="flex gap-4 p-4 bg-white rounded-xl border border-gray-100"
                   >
-                    <div className="w-16 h-16 bg-gray-50 rounded-lg overflow-hidden flex-shrink-0">
-                      <img
-                        src={item.image || "/images/products/placeholder.jpg"}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0 border">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <PhotoIcon className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-text">{item.name}</p>
+                      {/* ✅ Show variant details */}
                       {item.variant?.name && (
                         <p className="text-sm text-primary font-medium">
                           Variant: {item.variant.name}
@@ -217,6 +224,11 @@ const OrderDetail = () => {
                       {item.variant?.sku && (
                         <p className="text-xs text-text-light">
                           SKU: {item.variant.sku}
+                        </p>
+                      )}
+                      {item.variant?.color?.name && (
+                        <p className="text-xs text-text-light">
+                          Color: {item.variant.color.name}
                         </p>
                       )}
                       <p className="text-sm text-text-light">

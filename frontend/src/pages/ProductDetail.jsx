@@ -299,8 +299,6 @@ const ProductDetail = () => {
     addToCart(product._id, quantity, selectedVariant);
   };
 
-  // frontend/src/pages/ProductDetail.jsx - Updated handleBuyNow
-
   const handleBuyNow = () => {
     if (isDeactivated) {
       toast.error("This product is currently deactivated");
@@ -315,21 +313,34 @@ const ProductDetail = () => {
       return;
     }
 
-    // ✅ FIX: Store the product for Buy Now in sessionStorage
+    // ✅ Get variant image if available
+    let variantImage = "";
+    let variantData = selectedVariant;
+
+    if (selectedVariant) {
+      // Check if variant has images
+      if (selectedVariant.images && selectedVariant.images.length > 0) {
+        variantImage = selectedVariant.images[0]?.url || "";
+      }
+      // If variant has no images, use product image
+      if (!variantImage) {
+        variantImage = product.images?.[0]?.url || "";
+      }
+    } else {
+      variantImage = product.images?.[0]?.url || "";
+    }
+
     const buyNowItem = {
       productId: product._id,
       quantity: quantity,
-      variant: selectedVariant,
+      variant: variantData,
       product: product,
       price: displayPrice,
       name: product.name,
-      image: product.images?.[0]?.url || "",
+      image: variantImage,
     };
 
-    // ✅ Store in sessionStorage (cleared after checkout)
     sessionStorage.setItem("buyNowItem", JSON.stringify(buyNowItem));
-
-    // ✅ Navigate to checkout with buyNow flag
     navigate("/checkout", { state: { buyNow: true } });
   };
 

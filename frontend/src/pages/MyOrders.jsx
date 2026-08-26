@@ -99,7 +99,6 @@ const MyOrders = () => {
                       >
                         {order.orderStatus}
                       </span>
-                      {/* ✅ ADDED: Payment Status Badge */}
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${paymentStatusColors[order.paymentStatus] || "bg-gray-100 text-gray-700"}`}
                       >
@@ -111,26 +110,83 @@ const MyOrders = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="p-4 flex items-center justify-between flex-wrap gap-3">
-                    <div>
-                      <p className="font-medium text-text">
-                        {order.items?.length || 0} item(s)
-                      </p>
-                      <p className="text-sm text-text-light">
-                        Payment:{" "}
-                        {order.isCOD ? "Cash on Delivery" : "Online (Razorpay)"}
-                      </p>
+                  <div className="p-4">
+                    {/* ✅ Show items with variant details */}
+                    <div className="space-y-2">
+                      {order.items?.map((item, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2">
+                            {item.image && (
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-10 h-10 rounded object-cover border"
+                              />
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-text">
+                                {item.name}
+                              </p>
+                              {item.variant?.name && (
+                                <p className="text-xs text-primary font-medium">
+                                  Variant: {item.variant.name}
+                                  {item.variant?.color?.hexCode && (
+                                    <span
+                                      className="inline-block w-3 h-3 rounded-full ml-2 align-middle border"
+                                      style={{
+                                        backgroundColor:
+                                          item.variant.color.hexCode,
+                                      }}
+                                    />
+                                  )}
+                                </p>
+                              )}
+                              {item.variant?.sku && (
+                                <p className="text-xs text-text-light">
+                                  SKU: {item.variant.sku}
+                                </p>
+                              )}
+                              <p className="text-xs text-text-light">
+                                Qty: {item.quantity}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm font-medium text-text">
+                            ₹{item.price?.toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-lg font-bold text-primary">
-                        ₹{order.total?.toLocaleString()}
-                      </p>
-                      <Link
-                        to={`/account/orders/${order._id}`}
-                        className="btn-outline text-xs py-2 px-4"
-                      >
-                        View Details
-                      </Link>
+
+                    <div className="mt-3 pt-3 border-t flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <p className="text-sm text-text-light">
+                          Payment:{" "}
+                          {order.isCOD
+                            ? "Cash on Delivery"
+                            : "Online (Razorpay)"}
+                        </p>
+                        {order.isCOD && order.codAdvance > 0 && (
+                          <p className="text-xs text-orange-600">
+                            10% advance paid: ₹
+                            {order.codAdvance?.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="text-lg font-bold text-primary">
+                          ₹{order.total?.toLocaleString()}
+                        </p>
+                        <Link
+                          to={`/account/orders/${order._id}`}
+                          className="btn-outline text-xs py-2 px-4"
+                        >
+                          View Details
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>

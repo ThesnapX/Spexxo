@@ -52,16 +52,22 @@ const orderSchema = new mongoose.Schema(
           name: String,
           sku: String,
           price: Number,
+          // ✅ Fix: Allow color to be either a string (ID) or an object
           color: {
-            _id: mongoose.Schema.Types.ObjectId,
-            name: String,
-            hexCode: String,
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
           },
           attributes: {
             color: String,
             size: String,
             material: String,
           },
+          images: [
+            {
+              url: String,
+              alt: String,
+            },
+          ],
         },
       },
     ],

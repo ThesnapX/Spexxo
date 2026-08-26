@@ -384,7 +384,6 @@ const OrderDetailView = () => {
               </div>
             )}
           </div>
-
           {/* 2. Order Items */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -418,6 +417,7 @@ const OrderDetailView = () => {
                       <p className="font-medium text-sm text-text hover:text-primary truncate">
                         {item.name}
                       </p>
+                      {/* ✅ Show variant details */}
                       {item.variant?.name && (
                         <p className="text-xs text-primary font-medium">
                           Variant: {item.variant.name}
@@ -431,8 +431,17 @@ const OrderDetailView = () => {
                           )}
                         </p>
                       )}
+                      {item.variant?.sku && (
+                        <p className="text-xs text-text-light">
+                          SKU: {item.variant.sku}
+                        </p>
+                      )}
+                      {item.variant?.color?.name && (
+                        <p className="text-xs text-text-light">
+                          Color: {item.variant.color.name}
+                        </p>
+                      )}
                       <p className="text-xs text-text-light">
-                        SKU: {item.variant?.sku || item.product?.sku || "N/A"} •
                         Qty: {item.quantity}
                       </p>
                     </div>
@@ -449,7 +458,6 @@ const OrderDetailView = () => {
               ))}
             </div>
           </div>
-
           {/* 3. Payment Details */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -565,7 +573,6 @@ const OrderDetailView = () => {
               </div>
             )}
           </div>
-
           {/* 4. Order Meta */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">

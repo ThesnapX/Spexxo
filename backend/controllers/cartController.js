@@ -62,7 +62,7 @@ export const getCart = async (req, res) => {
           }
         }
 
-        // ✅ FIXED: Use variant images if available, otherwise product images
+        // ✅ Use variant images if available, otherwise product images
         const displayImage =
           variantImages.length > 0
             ? variantImages[0]?.url || product.images?.[0]?.url || ""
@@ -93,6 +93,7 @@ export const getCart = async (req, res) => {
           variantSku: variantSku,
           variantColor: variantColor,
           variantImages: variantImages,
+          // ✅ Store the correct image for display
           image: displayImage,
         };
       })
