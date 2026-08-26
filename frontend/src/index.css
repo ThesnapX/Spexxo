@@ -420,47 +420,132 @@ textarea {
 }
 
 /* ============================================ */
-/* CUSTOM TOAST WITH CLOSE BUTTON */
+/* CUSTOM TOAST WITH REAL CLOSE BUTTON */
 /* ============================================ */
 
-.custom-toast {
-  position: relative !important;
+/* Toast Container */
+.custom-toast-container {
+  pointer-events: none !important;
 }
 
-/* ✅ Add close button to toast */
-.custom-toast .go2072408551 {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
+.custom-toast-container > div {
+  pointer-events: all !important;
 }
 
-.custom-toast .go2072408551::after {
-  content: "✕";
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: color 0.2s;
+/* Custom Toast Wrapper */
+.custom-toast-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #0b1c39;
+  color: #ffffff;
+  padding: 14px 16px 14px 20px;
+  border-radius: 12px;
+  min-width: 280px;
+  max-width: 420px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  position: relative;
+  pointer-events: all;
+  font-family: var(--font-poppins);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Success border */
+.custom-toast-wrapper.success {
+  border-left: 4px solid #10b981;
+}
+
+/* Error border */
+.custom-toast-wrapper.error {
+  border-left: 4px solid #ef4444;
+}
+
+/* Loading border */
+.custom-toast-wrapper.loading {
+  border-left: 4px solid #3d96eb;
+}
+
+/* Content Wrapper */
+.toast-content-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Icon */
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 18px;
   line-height: 1;
 }
 
-.custom-toast .go2072408551:hover::after {
-  color: #fff;
+/* Message */
+.toast-message {
+  flex: 1;
+  word-break: break-word;
+  font-size: 14px;
+  font-weight: 400;
+  padding-right: 4px;
 }
 
-/* Ensure toast content doesn't overlap with close button */
-.custom-toast .go2072408551 {
-  padding-right: 36px !important;
+/* Close Button */
+.toast-close-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin: 0;
+  pointer-events: all;
+  position: relative;
+  z-index: 10;
+}
+
+.toast-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.toast-close-btn:active {
+  transform: scale(0.9);
+}
+
+.toast-close-btn:focus-visible {
+  outline: 2px solid #3d96eb;
+  outline-offset: 2px;
+}
+
+.close-icon {
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 /* Toast animation */
-.go2072408551 {
-  animation: toastIn 0.3s ease-out !important;
+.custom-toast-wrapper {
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes toastIn {
+@keyframes toastSlideIn {
   from {
     opacity: 0;
     transform: translateY(-20px) scale(0.95);
@@ -469,4 +554,55 @@ textarea {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Exit animation when dismissed */
+.custom-toast-wrapper.dismissing {
+  animation: toastSlideOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .custom-toast-wrapper {
+    min-width: auto;
+    max-width: 340px;
+    padding: 12px 14px 12px 16px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+
+  .toast-icon {
+    font-size: 16px;
+  }
+
+  .toast-message {
+    font-size: 13px;
+  }
+
+  .toast-close-btn {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  .close-icon {
+    font-size: 18px;
+  }
+}
+
+/* Multiple toasts - ensure they don't overlap */
+.custom-toast-container > div + div {
+  margin-top: 8px;
 }
