@@ -640,6 +640,7 @@ Please confirm availability.`;
                   </span>
                 </div>
               </div>
+
               {/* Variant Selector */}
               {product?.variants && product.variants.length > 0 && (
                 <div className="mb-6">
@@ -705,15 +706,11 @@ Please confirm availability.`;
                               )}
                           </div>
 
-                          {/* ✅ Stock Status - Show Out of Stock for individual variants */}
+                          {/* ✅ REMOVED: "in stock" text - only show when out of stock */}
                           <div className="text-xs mt-1">
-                            {isVariantOutOfStock ? (
+                            {isVariantOutOfStock && (
                               <span className="text-red-500 font-medium">
                                 Out of Stock
-                              </span>
-                            ) : (
-                              <span className="text-green-600">
-                                {variant.stock} in stock
                               </span>
                             )}
                             {!isVariantActive && (
@@ -753,19 +750,9 @@ Please confirm availability.`;
                         </span>
                         {selectedVariant.sku &&
                           ` • SKU: ${selectedVariant.sku}`}
-                        {selectedVariant.stock !== undefined &&
-                          selectedVariant.stock > 0 && (
-                            <span className="ml-2 text-green-600">
-                              {selectedVariant.stock} in stock
-                            </span>
-                          )}
-                        {selectedVariant.stock !== undefined &&
-                          selectedVariant.stock <= 0 && (
-                            <span className="ml-2 text-red-500 font-medium">
-                              Out of Stock
-                            </span>
-                          )}
+                        {/* ✅ REMOVED: "in stock" text from selected variant */}
                       </p>
+                      {/* Show variant attributes if any */}
                       {selectedVariant.frameShape && (
                         <p className="text-xs text-text-light mt-1">
                           Frame Shape: {selectedVariant.frameShape}

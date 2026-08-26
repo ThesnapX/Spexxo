@@ -36,7 +36,7 @@ const Navigation = () => {
   const location = useLocation();
 
   const { isAuthenticated } = useAuth();
-  const { cart, activeCartCount, removeFromCart } = useCart();
+  const { cart, activeCartCount, removeFromCart, refreshCart } = useCart();
   const { wishlist } = useWishlist();
 
   // Check for deactivated products in cart
@@ -88,9 +88,6 @@ const Navigation = () => {
   const currentGender = params.get("gender") || "";
 
   const getActiveMegaType = () => {
-    if (location.pathname === "/shop/eyeglasses") return "eyeglasses";
-    if (location.pathname === "/shop/sunglasses") return "sunglasses";
-    if (location.pathname === "/shop/contact-lens") return "contactlens";
     if (currentProductCategory === "eyeglasses") return "eyeglasses";
     if (currentProductCategory === "sunglasses") return "sunglasses";
     if (currentProductCategory === "contactlens") return "contactlens";
@@ -168,7 +165,7 @@ const Navigation = () => {
                   onMouseLeave={handleMegaMenuLeave}
                 >
                   <NavLink
-                    to="/shop/eyeglasses"
+                    to="/shop?productCategory=eyeglasses"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       activeMegaType === "eyeglasses"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
@@ -186,7 +183,7 @@ const Navigation = () => {
                   onMouseLeave={handleMegaMenuLeave}
                 >
                   <NavLink
-                    to="/shop/sunglasses"
+                    to="/shop?productCategory=sunglasses"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       activeMegaType === "sunglasses"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
@@ -204,7 +201,7 @@ const Navigation = () => {
                   onMouseLeave={handleMegaMenuLeave}
                 >
                   <NavLink
-                    to="/shop/contact-lens"
+                    to="/shop?productCategory=contactlens"
                     className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                       activeMegaType === "contactlens"
                         ? "text-[#3D96EB] bg-[#EBF4FC]"
@@ -225,7 +222,6 @@ const Navigation = () => {
               >
                 <MagnifyingGlassIcon className="w-5 h-5 md:w-6 md:h-6" />
               </button>
-              {/* Wishlist - Only count active products */}
               <Link
                 to="/account/wishlist"
                 className="relative text-text hover:text-[#3D96EB] transition"
@@ -239,10 +235,7 @@ const Navigation = () => {
               </Link>
               <Link
                 to="/cart"
-                onClick={() => {
-                  // Silently refresh cart when user clicks cart icon
-                  refreshCart();
-                }}
+                onClick={() => refreshCart()}
                 className="relative text-text hover:text-[#3D96EB] transition"
               >
                 <ShoppingBagIcon className="w-5 h-5 md:w-6 md:h-6" />
@@ -343,19 +336,19 @@ const Navigation = () => {
                 <ShoppingCartIcon className="w-5 h-5" /> Shop
               </MobileMenuLink>
               <MobileMenuLink
-                to="/shop/eyeglasses"
+                to="/shop?productCategory=eyeglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <EyeIcon className="w-5 h-5" /> Eyeglasses
               </MobileMenuLink>
               <MobileMenuLink
-                to="/shop/sunglasses"
+                to="/shop?productCategory=sunglasses"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <EyeIcon className="w-5 h-5" /> Sunglasses
               </MobileMenuLink>
               <MobileMenuLink
-                to="/shop/contact-lens"
+                to="/shop?productCategory=contactlens"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <EyeIcon className="w-5 h-5" /> Contact Lens
@@ -411,28 +404,27 @@ const MobileMenuLink = ({ to, onClick, children }) => (
   </NavLink>
 );
 
-// Mega Menu Content (keep the same)
+// Mega Menu Content
 const MegaMenuContent = ({ type, onClose }) => {
-  // ... (same as before)
   const location = useLocation();
   const urlParams = new URLSearchParams(location.search);
-  const currentProductType = urlParams.get("productType") || "";
+  const currentProductCategory = urlParams.get("productCategory") || "";
   const currentFrameShape = urlParams.get("frameShape") || "";
   const currentCategory = urlParams.get("category") || "";
   const currentBrand = urlParams.get("brand") || "";
   const currentGender = urlParams.get("gender") || "";
 
-  const { data: categories } = useQuery({
-    queryKey: ["categories", type],
+  // Fetch categories
+  const { data: categoriesData } = useQuery({
+    queryKey: ["categories"],
     queryFn: async () => {
-      const { data } = await axios.get(
-        `${API_URL}/categories?productType=${type}`,
-      );
+      const { data } = await axios.get(`${API_URL}/categories`);
       return data.categories || [];
     },
   });
 
-  const { data: brands } = useQuery({
+  // Fetch brands
+  const { data: brandsData } = useQuery({
     queryKey: ["brands"],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/brands`);
@@ -440,6 +432,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     },
   });
 
+  // ✅ Fetch products for the specific category using productCategory
   const { data: productsData } = useQuery({
     queryKey: ["mega-menu-products", type],
     queryFn: async () => {
@@ -448,61 +441,54 @@ const MegaMenuContent = ({ type, onClose }) => {
         sunglasses: "sunglasses",
         contactlens: "contactlens",
       };
-      const productTypeValue = typeMap[type] || type;
+      const productCategoryValue = typeMap[type] || type;
       const { data } = await axios.get(
-        `${API_URL}/products?productType=${productTypeValue}&limit=200`,
+        `${API_URL}/products?productCategory=${productCategoryValue}&limit=500&includeInactive=false&hideOutOfStock=false`,
       );
       return data.products || [];
     },
   });
 
   const products = productsData || [];
+  const categories = categoriesData || [];
+  const brands = brandsData || [];
 
-  const availableCategoryIds = new Set();
+  // ✅ Build category counts from products
+  const categoryCounts = {};
   products.forEach((product) => {
     if (product.category) {
       if (typeof product.category === "string") {
         product.category
           .split(",")
           .filter(Boolean)
-          .forEach((id) => availableCategoryIds.add(id));
+          .forEach((id) => {
+            categoryCounts[id] = (categoryCounts[id] || 0) + 1;
+          });
       } else if (typeof product.category === "object" && product.category._id) {
-        availableCategoryIds.add(product.category._id);
+        const id = product.category._id.toString();
+        categoryCounts[id] = (categoryCounts[id] || 0) + 1;
       }
     }
   });
 
-  const availableShapes = new Set();
-  products.forEach((product) => {
-    if (product.frameShape) {
-      if (typeof product.frameShape === "string") {
-        product.frameShape
-          .split(",")
-          .filter(Boolean)
-          .forEach((s) => availableShapes.add(s.trim()));
-      }
-    }
-  });
-
-  const availableBrandIds = new Set();
+  // ✅ Build brand counts from products
+  const brandCounts = {};
   products.forEach((product) => {
     if (product.brand) {
+      let brandId;
       if (typeof product.brand === "object" && product.brand._id) {
-        availableBrandIds.add(product.brand._id);
+        brandId = product.brand._id.toString();
       } else if (typeof product.brand === "string") {
-        availableBrandIds.add(product.brand);
+        brandId = product.brand;
+      }
+      if (brandId) {
+        brandCounts[brandId] = (brandCounts[brandId] || 0) + 1;
       }
     }
   });
 
-  const categoriesWithProducts = (categories || []).filter((cat) =>
-    availableCategoryIds.has(cat._id),
-  );
-
-  const brandsWithProducts = (brands || []).filter((brand) =>
-    availableBrandIds.has(brand._id),
-  );
-
+  // ✅ Build frame shape counts from products
+  const shapeCounts = {};
   const allShapes = [
     "Rectangle",
     "Round",
@@ -514,38 +500,64 @@ const MegaMenuContent = ({ type, onClose }) => {
     "Oversized",
   ];
 
-  const shapesWithProducts = allShapes.filter((shape) =>
-    availableShapes.has(shape),
-  );
+  products.forEach((product) => {
+    if (product.frameShape) {
+      if (typeof product.frameShape === "string") {
+        product.frameShape
+          .split(",")
+          .filter(Boolean)
+          .forEach((shape) => {
+            const trimmed = shape.trim();
+            const normalized =
+              allShapes.find(
+                (s) => s.toLowerCase() === trimmed.toLowerCase(),
+              ) || trimmed;
+            shapeCounts[normalized] = (shapeCounts[normalized] || 0) + 1;
+          });
+      }
+    }
+  });
+
+  // ✅ Filter categories - only those with products
+  const categoriesWithProducts = categories
+    .filter((cat) => categoryCounts[cat._id.toString()] > 0)
+    .map((cat) => ({
+      ...cat,
+      count: categoryCounts[cat._id.toString()] || 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // ✅ Filter brands - only those with products
+  const brandsWithProducts = brands
+    .filter((brand) => brandCounts[brand._id.toString()] > 0)
+    .map((brand) => ({
+      ...brand,
+      count: brandCounts[brand._id.toString()] || 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // ✅ Filter shapes - only those with products
+  const shapesWithProducts = allShapes
+    .filter((shape) => shapeCounts[shape] > 0)
+    .map((shape) => ({
+      name: shape,
+      slug: shape.toLowerCase().replace(" ", "-"),
+      count: shapeCounts[shape] || 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   const typeLabels = {
     eyeglasses: "Eyeglasses",
     sunglasses: "Sunglasses",
     contactlens: "Contact Lenses",
   };
-  const typeMap = {
-    eyeglasses: "eyeglasses",
-    sunglasses: "sunglasses",
-    contactlens: "contactlens",
-  };
-  const myProductType = typeMap[type] || type;
 
   const isMyMenuActive = () => {
-    if (currentProductType && currentProductType === myProductType) return true;
-    if (!currentProductType) {
-      if (type === "eyeglasses" && location.pathname === "/shop/eyeglasses")
-        return true;
-      if (type === "sunglasses" && location.pathname === "/shop/sunglasses")
-        return true;
-      if (type === "contactlens" && location.pathname === "/shop/contact-lens")
-        return true;
-    }
-    return false;
+    return currentProductCategory === type;
   };
 
-  const isActiveShape = (shape) =>
-    isMyMenuActive() &&
-    currentFrameShape === shape.toLowerCase().replace(" ", "-");
+  const isActiveShape = (shapeSlug) =>
+    isMyMenuActive() && currentFrameShape === shapeSlug;
   const isActiveCategory = (slug) =>
     isMyMenuActive() && currentCategory === slug;
   const isActiveBrand = (slug) => isMyMenuActive() && currentBrand === slug;
@@ -563,7 +575,7 @@ const MegaMenuContent = ({ type, onClose }) => {
           {["men", "women", "kids"].map((gender) => (
             <Link
               key={gender}
-              to={`/shop?productType=${type}&gender=${gender}`}
+              to={`/shop?productCategory=${type}&gender=${gender}`}
               className="group text-center"
               onClick={onClose}
             >
@@ -598,14 +610,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         </div>
       </div>
 
-      {/* Categories */}
+      {/* Categories - Sorted by product count */}
       <div className="col-span-3 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Categories
         </h3>
-        <div className="space-y-1">
+        <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2">
           {categoriesWithProducts.length > 0 ? (
-            categoriesWithProducts.slice(0, 6).map((cat) => (
+            categoriesWithProducts.map((cat) => (
               <Link
                 key={cat._id}
                 to={`/shop?category=${cat.slug}`}
@@ -625,7 +637,7 @@ const MegaMenuContent = ({ type, onClose }) => {
             </p>
           )}
           <Link
-            to={`/shop/${type}`}
+            to={`/shop?productCategory=${type}`}
             onClick={onClose}
             className="block px-3 py-2 text-[#3D96EB] font-medium text-sm hover:underline mt-2"
           >
@@ -634,31 +646,28 @@ const MegaMenuContent = ({ type, onClose }) => {
         </div>
       </div>
 
-      {/* Frame Shape */}
+      {/* Frame Shape - Sorted by product count */}
       <div className="col-span-3 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Frame Shape
         </h3>
-        <div className="space-y-1">
+        <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2">
           {type !== "contactlens" ? (
             shapesWithProducts.length > 0 ? (
-              shapesWithProducts.map((shape) => {
-                const shapeSlug = shape.toLowerCase().replace(" ", "-");
-                return (
-                  <Link
-                    key={shape}
-                    to={`/shop?productType=${type}&frameShape=${shapeSlug}`}
-                    onClick={onClose}
-                    className={`block px-3 py-2 rounded-lg transition text-sm ${
-                      isActiveShape(shape)
-                        ? "bg-[#EBF4FC] text-[#3D96EB] font-medium"
-                        : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"
-                    }`}
-                  >
-                    {shape}
-                  </Link>
-                );
-              })
+              shapesWithProducts.map((shape) => (
+                <Link
+                  key={shape.slug}
+                  to={`/shop?productCategory=${type}&frameShape=${shape.slug}`}
+                  onClick={onClose}
+                  className={`block px-3 py-2 rounded-lg transition text-sm ${
+                    isActiveShape(shape.slug)
+                      ? "bg-[#EBF4FC] text-[#3D96EB] font-medium"
+                      : "text-text hover:bg-[#EBF4FC] hover:text-[#3D96EB]"
+                  }`}
+                >
+                  {shape.name}
+                </Link>
+              ))
             ) : (
               <p className="text-sm text-gray-400 px-3 py-2">
                 No shapes available
@@ -667,21 +676,21 @@ const MegaMenuContent = ({ type, onClose }) => {
           ) : (
             <>
               <Link
-                to="/shop?productType=contactlens"
+                to={`/shop?productCategory=contactlens&lensType=daily-disposable`}
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >
                 Daily Disposable
               </Link>
               <Link
-                to="/shop?productType=contactlens"
+                to={`/shop?productCategory=contactlens&lensType=monthly`}
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >
                 Monthly Lenses
               </Link>
               <Link
-                to="/shop?productType=contactlens"
+                to={`/shop?productCategory=contactlens&lensType=colored`}
                 onClick={onClose}
                 className="block px-3 py-2 rounded-lg hover:bg-[#EBF4FC] hover:text-[#3D96EB] transition text-sm text-text"
               >
@@ -692,14 +701,14 @@ const MegaMenuContent = ({ type, onClose }) => {
         </div>
       </div>
 
-      {/* Brands */}
+      {/* Brands - Sorted by product count */}
       <div className="col-span-2 border-l border-gray-100 pl-8">
         <h3 className="text-sm font-semibold uppercase text-gray-500 mb-4 tracking-wider">
           Top Brands
         </h3>
-        <div className="space-y-1">
+        <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2">
           {brandsWithProducts.length > 0 ? (
-            brandsWithProducts.slice(0, 5).map((brand) => (
+            brandsWithProducts.map((brand) => (
               <Link
                 key={brand._id}
                 to={`/shop?brand=${brand.slug}`}

@@ -1,3 +1,5 @@
+// frontend/src/main.jsx
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -32,12 +34,34 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                 <Toaster
                   position="top-center"
                   toastOptions={{
-                    duration: 3000,
+                    duration: 4000,
                     style: {
                       background: "#0B1C39",
                       color: "#fff",
-                      borderRadius: "8px",
+                      borderRadius: "12px",
+                      padding: "16px 20px",
+                      fontSize: "14px",
+                      maxWidth: "420px",
+                      boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
                     },
+                    success: {
+                      style: {
+                        background: "#0B1C39",
+                        color: "#fff",
+                        borderLeft: "4px solid #10b981",
+                      },
+                      icon: "✅",
+                    },
+                    error: {
+                      style: {
+                        background: "#0B1C39",
+                        color: "#fff",
+                        borderLeft: "4px solid #ef4444",
+                      },
+                      icon: "❌",
+                    },
+                    // ✅ Custom close button
+                    className: "custom-toast",
                   }}
                 />
               </WishlistProvider>

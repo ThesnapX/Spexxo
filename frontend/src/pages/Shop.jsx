@@ -331,8 +331,6 @@ const FilterSection = ({
 // ============================================
 // STABLE PRODUCT CARD COMPONENT
 // ============================================
-// frontend/src/pages/Shop.jsx - ProductCard component
-
 const ProductCard = ({
   product,
   user,
@@ -356,17 +354,21 @@ const ProductCard = ({
   const hasAnyVariantInStock =
     hasVariantsFlag && product.variants.some((v) => v.stock > 0);
 
-  // Get the default variant's image
+  // ✅ FIXED: Get the default variant's image
   const getProductImage = () => {
     if (hasVariantsFlag && product.variants.length > 0) {
+      // Find the default variant
       let defaultVariant = product.variants.find((v) => v.isDefault === true);
+      // If no default variant is marked, use the first one
       if (!defaultVariant) {
         defaultVariant = product.variants[0];
       }
+      // Check if the default variant has images
       if (defaultVariant.images && defaultVariant.images.length > 0) {
         return defaultVariant.images[0].url;
       }
     }
+    // Fallback to product images
     if (product.images && product.images.length > 0) {
       return product.images[0].url;
     }
@@ -545,7 +547,7 @@ const Shop = () => {
   const genderFilter = searchParams.get("gender")
     ? searchParams.get("gender").split(",").filter(Boolean)
     : [];
-  const productType = searchParams.get("productType") || "";
+  const productCategory = searchParams.get("productCategory") || "";
   const brandFilter = searchParams.get("brand")
     ? searchParams.get("brand").split(",").filter(Boolean)
     : [];
@@ -558,7 +560,7 @@ const Shop = () => {
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
 
-  // Set productType from URL path
+  // ✅ FIXED: Set productCategory from URL path
   useEffect(() => {
     if (categorySlug) {
       const typeMap = {
@@ -569,15 +571,18 @@ const Shop = () => {
       const mappedType = typeMap[categorySlug];
       if (mappedType) {
         const params = new URLSearchParams();
-        params.set("productType", mappedType);
+        params.set("productCategory", mappedType);
+        // Preserve other params like sort
+        const currentSort = searchParams.get("sort");
+        if (currentSort) params.set("sort", currentSort);
         setSearchParams(params, { replace: true });
-        setSortBy("name-asc");
+        setSortBy(currentSort || "name-asc");
         setSearchInput("");
         setPriceMinInput("");
         setPriceMaxInput("");
       }
     }
-  }, [categorySlug]);
+  }, [categorySlug, searchParams]);
 
   // Sync sortBy with URL
   useEffect(() => {
@@ -661,13 +666,13 @@ const Shop = () => {
       if (brand) parts.push(brand.name);
     }
 
-    if (productType) {
+    if (productCategory) {
       const typeLabels = {
         eyeglasses: "Eyeglasses",
         sunglasses: "Sunglasses",
         contactlens: "Contact Lenses",
       };
-      parts.push(typeLabels[productType] || productType);
+      parts.push(typeLabels[productCategory] || productCategory);
     }
 
     if (genderFilter.length === 1) {
@@ -680,7 +685,7 @@ const Shop = () => {
 
     if (parts.length > 0) return parts.join(" ");
     return "All Products";
-  }, [categoryFilter, brandFilter, productType, genderFilter]);
+  }, [categoryFilter, brandFilter, productCategory, genderFilter]);
 
   // ✅ UPDATE FILTER - Defined BEFORE any function that uses it
   const updateFilter = useCallback(
@@ -733,7 +738,6 @@ const Shop = () => {
       return;
     }
 
-    // ✅ Create ONE URLSearchParams and update BOTH values atomically
     const params = new URLSearchParams(searchParams);
 
     if (min) {
@@ -803,7 +807,7 @@ const Shop = () => {
   // Clear all filters
   const clearAllFilters = useCallback(() => {
     const params = new URLSearchParams();
-    if (productType) params.set("productType", productType);
+    if (productCategory) params.set("productCategory", productCategory);
     setSearchParams(params);
     setSortBy("name-asc");
     setSearchInput("");
@@ -812,7 +816,7 @@ const Shop = () => {
     setCategorySearch("");
     setBrandSearch("");
     isTypingRef.current = { search: false, priceMin: false, priceMax: false };
-  }, [productType]);
+  }, [productCategory]);
 
   // Remove a single filter pill
   const removeFilterPill = useCallback(
@@ -851,17 +855,19 @@ const Shop = () => {
     }
   }, [mobileFilterOpen, filtersOpen]);
 
-  // Build query string
+  // ✅ FIXED: Build query string - properly handle productCategory
   const buildQueryString = useCallback(
     (pageParam = 1) => {
       const params = new URLSearchParams();
       params.set("page", String(pageParam));
       params.set("limit", "12");
-      if (sortBy) params.set("sort", sortBy);
+      if (sortBy && sortBy !== "default") {
+        params.set("sort", sortBy);
+      }
       if (searchQuery) params.set("search", searchQuery);
       if (categoryFilter) params.set("category", categoryFilter);
       if (genderFilter.length > 0) params.set("gender", genderFilter.join(","));
-      if (productType) params.set("productType", productType);
+      if (productCategory) params.set("productCategory", productCategory);
       if (brandFilter.length > 0) params.set("brand", brandFilter.join(","));
       if (frameShapeFilter.length > 0)
         params.set("frameShape", frameShapeFilter.join(","));
@@ -876,7 +882,7 @@ const Shop = () => {
       searchQuery,
       categoryFilter,
       genderFilter,
-      productType,
+      productCategory,
       brandFilter,
       frameShapeFilter,
       lensTypeFilter,
@@ -1133,7 +1139,6 @@ const Shop = () => {
         value: l,
       }),
     );
-    // ✅ FIXED: Price pill with proper display - doesn't default to "0" when minPrice exists
     if (minPrice || maxPrice) {
       const minLabel = minPrice !== "" ? `₹${minPrice}` : "₹0";
       const maxLabel = maxPrice !== "" ? `₹${maxPrice}` : "∞";

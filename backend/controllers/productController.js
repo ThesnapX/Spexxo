@@ -17,7 +17,7 @@ export const getProducts = async (req, res) => {
       category,
       brand,
       gender,
-      productType,
+      productCategory,
       frameShape,
       lensType,
       minPrice,
@@ -46,7 +46,7 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // ✅ FIXED: PRICE FILTER - Handles both simple and variant products
+    // ✅ PRICE FILTER - Handles both simple and variant products
     if (minPrice || maxPrice) {
       const priceFilter = {};
       if (minPrice) priceFilter.$gte = Number(minPrice);
@@ -97,7 +97,7 @@ export const getProducts = async (req, res) => {
         { lensType: searchRegex },
         { frameColor: searchRegex },
         { gender: searchRegex },
-        { productType: searchRegex },
+        { productCategory: searchRegex },
         ...categoryIds.map((id) => ({
           category: { $regex: id, $options: "i" },
         })),
@@ -156,12 +156,12 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Product type
-    if (productType) {
+    // Product Category filter (eyeglasses, sunglasses, contactlens)
+    if (productCategory) {
       if (query.$and) {
-        query.$and.push({ productType: productType });
+        query.$and.push({ productCategory: productCategory });
       } else {
-        query.productType = productType;
+        query.productCategory = productCategory;
       }
     }
 
@@ -240,10 +240,14 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Sort options
+    // ✅ FIXED: Sort options with proper price sorting for variable products
     let sortOption = { createdAt: -1 };
+
     switch (sort) {
       case "price-low":
+        // For price low to high, we need to sort by the minimum price
+        // For simple products: use price field
+        // For variable products: use the minimum price from variants
         sortOption = { price: 1 };
         break;
       case "price-high":
@@ -270,15 +274,75 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    const [products, total] = await Promise.all([
-      Product.find(query)
+    // ✅ FIXED: For price sorting, we need to handle variable products differently
+    // We need to get all products and sort them in memory for variable products
+    let products = [];
+    let total = 0;
+
+    // For price sorting, we need to handle variable products specially
+    if (sort === "price-low" || sort === "price-high") {
+      // Get all products matching the query (without pagination first)
+      const allProducts = await Product.find(query)
+        .populate("brand", "name slug logo")
+        .lean();
+
+      // Calculate effective price for each product
+      const productsWithPrice = allProducts.map((product) => {
+        let effectivePrice = product.price || 0;
+
+        // If product has variants, find the minimum price among variants
+        if (product.variants && product.variants.length > 0) {
+          const variantPrices = product.variants.map((v) => v.price || 0);
+          const minVariantPrice = Math.min(...variantPrices);
+          // Use comparePrice if available and less than price
+          const comparePrice = product.comparePrice || 0;
+          effectivePrice =
+            comparePrice > 0 && comparePrice < minVariantPrice
+              ? comparePrice
+              : minVariantPrice;
+        } else {
+          // Simple product - use comparePrice if available
+          const comparePrice = product.comparePrice || 0;
+          effectivePrice =
+            comparePrice > 0 && comparePrice < product.price
+              ? comparePrice
+              : product.price || 0;
+        }
+
+        return { ...product, effectivePrice };
+      });
+
+      // Sort by effective price
+      productsWithPrice.sort((a, b) => {
+        if (sort === "price-low") {
+          return a.effectivePrice - b.effectivePrice;
+        } else {
+          return b.effectivePrice - a.effectivePrice;
+        }
+      });
+
+      total = productsWithPrice.length;
+
+      // Apply pagination
+      products = productsWithPrice.slice(skip, skip + Number(limit));
+
+      // Convert back to plain objects
+      products = products.map((p) => {
+        const { effectivePrice, ...rest } = p;
+        return rest;
+      });
+    } else {
+      // For non-price sorting, use regular query with pagination
+      const result = await Product.find(query)
         .populate("brand", "name slug logo")
         .sort(sortOption)
         .skip(skip)
         .limit(Number(limit))
-        .lean(),
-      Product.countDocuments(query),
-    ]);
+        .lean();
+
+      products = result;
+      total = await Product.countDocuments(query);
+    }
 
     // Get all categories for name lookup
     const allCategories = await Category.find({});
@@ -354,7 +418,7 @@ export const getProduct = async (req, res) => {
       _id: { $ne: product._id },
       isActive: true,
       $or: [
-        { productType: product.productType },
+        { productCategory: product.productCategory },
         ...(productObj.category
           ? [{ category: { $regex: productObj.category._id.toString() } }]
           : []),
@@ -386,38 +450,12 @@ export const createProduct = async (req, res) => {
 // @desc    Update product (Admin)
 // @route   PUT /api/products/:id
 // @access  Private/Admin
-
 export const updateProduct = async (req, res) => {
   try {
-    // If product has variants, ensure only one is default
-    if (req.body.variants && req.body.variants.length > 0) {
-      // Count how many are marked as default
-      const defaultCount = req.body.variants.filter(
-        (v) => v.isDefault === true,
-      ).length;
-
-      // If no variant is marked as default, mark the first one
-      if (defaultCount === 0) {
-        req.body.variants[0].isDefault = true;
-      }
-      // If more than one is marked as default, keep only the first one
-      else if (defaultCount > 1) {
-        let foundFirst = false;
-        req.body.variants = req.body.variants.map((v) => {
-          if (v.isDefault === true && !foundFirst) {
-            foundFirst = true;
-            return { ...v, isDefault: true };
-          }
-          return { ...v, isDefault: false };
-        });
-      }
-    }
-
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
-
     if (!product) {
       return res
         .status(404)
