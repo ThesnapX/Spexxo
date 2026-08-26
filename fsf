@@ -1,0 +1,65 @@
+* [33m72cbda3[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Toastify Close Notification button added
+* [33m7469053[m Navigation and Shop Page Sorting
+* [33m0581711[m Variant Images / Product Purchased Image populating
+* [33m5bce09c[m Buy now Button fix
+* [33m34248d4[m COD Advance Bug fix
+* [33mbc7677f[m Order Creation Fixed Bug was in order.js and orderController.js
+* [33m352b87e[m Product Variation Fixes 2
+* [33m24a12af[m  Filter, Product Card, Cart - Partial Fixed
+* [33mcc3d384[m Deepseek length limit
+* [33m1f37674[m Variant and Shop Page layout Fix
+* [33m8e836cc[m Product Controller Fix
+* [33m2255fa1[m Remove OTP otpion from login page
+* [33m8bebd2a[m Responsive issue solved
+* [33m192e4a5[m Razorpay orderID
+* [33maedb167[m Cart Bugged Fixed
+* [33m58f3988[m Going live
+* [33me945930[m Fix in Upload product images
+* [33m8199eff[m Cancel Order Refund Fix
+* [33m0486616[m Variant Feature + searchable attributes in product add/edit
+* [33md17f06e[m Final commit before making minor changes and making website live
+* [33m406fb1a[m Critical FIX 2
+* [33m15192b9[m Remove console.log from almost every file
+* [33m95c6921[m Database updated to production
+* [33mf21de3c[m Auto-Fetch pincode details feature
+* [33mefa18a1[m UNIQUE ID System
+* [33m1b6313b[m Order Detailed View Layout improve and Bug fixed
+* [33m5175d35[m Checkout and User Order creation BUG fix
+* [33m9bb12f4[m  Fix Cart Price not updating after editing from admin pannel
+* [33mb30cfdd[m Prodcut attributes added
+* [33mf0656a9[m  Admin Navigation Buttons added
+* [33m0e9b71b[m  Checkout Saved Address Fixed
+* [33m1cd9a2d[m User Edit feature
+* [33m163d231[m Making admin pannel more compact view
+* [33m3de49dc[m Review Tab, Order detail view, user detailed View, Product details view, review reply, order status + email confirmation
+* [33m72afc80[m  deepseek limit hit started new chat so saving the GIT history so nothing conflicts
+* [33mc019619[m Deactivate User in admin pannel and Delete User Button added in user profile
+* [33m46711c9[m Items availabel menu only Brand,Shapes,Categary
+* [33mc445509[m Remember me feature
+* [33m63a3e1f[m Shop Page breadcrumb and heading
+* [33mbca43c5[m Reset Password with Email Marketing Feature Added Successfully no changed here
+* [33mfa5d181[m Registration Page Small Bugs
+* [33m4d6d439[m Critical Fixes 1
+* [33m0155132[m Final commit before Adding OTP feature
+* [33m9e3fa2a[m Final commit Before Online Payment Setup
+* [33mcee186e[m Fixed Navigation and Sub-menu
+* [33m4c83380[m LiveSearch Updated to search by Everything
+* [33m8a1340c[m Shop Filter Updated
+* [33m3b64e4c[m Admin Product cateogary, Design, Layout and minor Bugs Fixed
+* [33mc400005[m Single Page wishlist fixed
+* [33m56e756e[m Multiple User Adderes feature
+* [33m5e70548[m Copuon Featuer
+* [33m4d13ac8[m Whishlist and shop minor changes
+* [33mf8198b1[m Proper cart funcnality
+* [33md5eeadb[m Whislish Feature lock for NON Login users
+* [33m883326b[m Maintainece Mode added page customized
+* [33m2a28133[m Maintainece Mode added
+* [33m828b924[m Changes in Add Product Form, Categary Form
+* [33m7e8ca39[m Deployment stage 2
+* [33m4e5cb3a[m deployment Stage 1
+* [33m33c0b60[m Final Commit Before Deployment
+* [33m1fa0c4b[m Images added
+* [33mf6b9356[m Minor Bugs Fixes
+* [33m03b1a56[m Live Search
+* [33meaa306e[m Shop Page and Product Single Page
+* [33m7b6dd36[m Initial commit - Spexxo Ecommerce

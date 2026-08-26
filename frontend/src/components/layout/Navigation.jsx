@@ -1,3 +1,5 @@
+// frontend/src/components/layout/Navigation.jsx
+
 import { useState, useRef, useEffect } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -96,6 +98,19 @@ const Navigation = () => {
 
   const activeMegaType = getActiveMegaType();
   const isShopActive = location.pathname === "/shop" && !activeMegaType;
+
+  // ✅ Helper function to build gender URL with unisex included
+  const buildGenderUrl = (basePath, productType, gender) => {
+    // For men, include both 'men' and 'unisex'
+    // For women, include both 'women' and 'unisex'
+    // For kids, only 'kids'
+    let genders = [gender];
+    if (gender === "men" || gender === "women") {
+      genders.push("unisex");
+    }
+    const genderParam = genders.join(",");
+    return `${basePath}?productCategory=${productType}&gender=${genderParam}`;
+  };
 
   return (
     <>
@@ -315,6 +330,7 @@ const Navigation = () => {
               <MegaMenuContent
                 type={activeMegaMenu}
                 onClose={() => setActiveMegaMenu(null)}
+                buildGenderUrl={buildGenderUrl}
               />
             </div>
           </div>
@@ -405,7 +421,7 @@ const MobileMenuLink = ({ to, onClick, children }) => (
 );
 
 // Mega Menu Content
-const MegaMenuContent = ({ type, onClose }) => {
+const MegaMenuContent = ({ type, onClose, buildGenderUrl }) => {
   const location = useLocation();
   const urlParams = new URLSearchParams(location.search);
   const currentProductCategory = urlParams.get("productCategory") || "";
@@ -432,7 +448,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     },
   });
 
-  // ✅ Fetch products for the specific category using productCategory
+  // Fetch products for the specific category using productCategory
   const { data: productsData } = useQuery({
     queryKey: ["mega-menu-products", type],
     queryFn: async () => {
@@ -453,7 +469,7 @@ const MegaMenuContent = ({ type, onClose }) => {
   const categories = categoriesData || [];
   const brands = brandsData || [];
 
-  // ✅ Build category counts from products
+  // Build category counts from products
   const categoryCounts = {};
   products.forEach((product) => {
     if (product.category) {
@@ -471,7 +487,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     }
   });
 
-  // ✅ Build brand counts from products
+  // Build brand counts from products
   const brandCounts = {};
   products.forEach((product) => {
     if (product.brand) {
@@ -487,7 +503,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     }
   });
 
-  // ✅ Build frame shape counts from products
+  // Build frame shape counts from products
   const shapeCounts = {};
   const allShapes = [
     "Rectangle",
@@ -518,7 +534,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     }
   });
 
-  // ✅ Filter categories - only those with products
+  // Filter categories - only those with products
   const categoriesWithProducts = categories
     .filter((cat) => categoryCounts[cat._id.toString()] > 0)
     .map((cat) => ({
@@ -527,7 +543,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     }))
     .sort((a, b) => b.count - a.count);
 
-  // ✅ Filter brands - only those with products
+  // Filter brands - only those with products
   const brandsWithProducts = brands
     .filter((brand) => brandCounts[brand._id.toString()] > 0)
     .map((brand) => ({
@@ -536,7 +552,7 @@ const MegaMenuContent = ({ type, onClose }) => {
     }))
     .sort((a, b) => b.count - a.count);
 
-  // ✅ Filter shapes - only those with products
+  // Filter shapes - only those with products
   const shapesWithProducts = allShapes
     .filter((shape) => shapeCounts[shape] > 0)
     .map((shape) => ({
@@ -561,8 +577,13 @@ const MegaMenuContent = ({ type, onClose }) => {
   const isActiveCategory = (slug) =>
     isMyMenuActive() && currentCategory === slug;
   const isActiveBrand = (slug) => isMyMenuActive() && currentBrand === slug;
-  const isActiveGender = (gender) =>
-    isMyMenuActive() && currentGender === gender;
+
+  // ✅ Updated: Check if gender is active (including unisex)
+  const isActiveGender = (gender) => {
+    if (!isMyMenuActive()) return false;
+    const activeGenders = currentGender ? currentGender.split(",") : [];
+    return activeGenders.includes(gender);
+  };
 
   return (
     <div className="grid grid-cols-12 gap-8">
@@ -575,7 +596,8 @@ const MegaMenuContent = ({ type, onClose }) => {
           {["men", "women", "kids"].map((gender) => (
             <Link
               key={gender}
-              to={`/shop?productCategory=${type}&gender=${gender}`}
+              // ✅ FIX: Use buildGenderUrl to include unisex with men/women
+              to={buildGenderUrl("/shop", type, gender)}
               className="group text-center"
               onClick={onClose}
             >
@@ -604,6 +626,12 @@ const MegaMenuContent = ({ type, onClose }) => {
                 }`}
               >
                 {gender}
+                {/* ✅ Show "includes unisex" hint */}
+                {gender !== "kids" && (
+                  <span className="block text-[10px] text-text-light font-normal mt-0.5">
+                    + Unisex
+                  </span>
+                )}
               </p>
             </Link>
           ))}
