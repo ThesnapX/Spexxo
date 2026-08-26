@@ -331,6 +331,8 @@ const FilterSection = ({
 // ============================================
 // STABLE PRODUCT CARD COMPONENT
 // ============================================
+// frontend/src/pages/Shop.jsx - ProductCard component
+
 const ProductCard = ({
   product,
   user,
@@ -346,12 +348,18 @@ const ProductCard = ({
   const hasVariantsFlag = product.variants && product.variants.length > 0;
   const variantCount = hasVariantsFlag ? product.variants.length : 0;
 
-  // ✅ Get the default variant's image
+  // ✅ Check if ALL variants are out of stock
+  const allVariantsOutOfStock =
+    hasVariantsFlag && product.variants.every((v) => v.stock <= 0);
+
+  // ✅ Check if ANY variant has stock
+  const hasAnyVariantInStock =
+    hasVariantsFlag && product.variants.some((v) => v.stock > 0);
+
+  // Get the default variant's image
   const getProductImage = () => {
     if (hasVariantsFlag && product.variants.length > 0) {
-      // Find the default variant
       let defaultVariant = product.variants.find((v) => v.isDefault === true);
-      // If no default variant is marked, use the first one
       if (!defaultVariant) {
         defaultVariant = product.variants[0];
       }
@@ -364,6 +372,13 @@ const ProductCard = ({
     }
     return "https://picsum.photos/400/400";
   };
+
+  // ✅ Check if product is out of stock (for simple products or all variants out of stock)
+  const isOutOfStock = !hasVariantsFlag
+    ? product.stock === 0 ||
+      product.stock === null ||
+      product.stock === undefined
+    : allVariantsOutOfStock;
 
   return (
     <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
@@ -381,11 +396,19 @@ const ProductCard = ({
             {discountPercent}% OFF
           </span>
         )}
-        {hasVariantsFlag && (
+        {hasVariantsFlag && hasAnyVariantInStock && (
           <span className="absolute top-3 right-3 bg-purple-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
             <span className="text-[10px]">📦</span>
             {variantCount} Variants
           </span>
+        )}
+        {/* ✅ Show Out of Stock badge if all variants are out of stock */}
+        {isOutOfStock && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+            <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
+              OUT OF STOCK
+            </span>
+          </div>
         )}
         <button
           onClick={(e) => {
@@ -434,9 +457,14 @@ const ProductCard = ({
               {discountPercent}% off
             </span>
           )}
-          {hasVariantsFlag && (
+          {hasVariantsFlag && hasAnyVariantInStock && (
             <span className="text-xs text-purple-500 font-medium">
               ({variantCount} variants)
+            </span>
+          )}
+          {hasVariantsFlag && allVariantsOutOfStock && (
+            <span className="text-xs text-red-500 font-medium">
+              (All variants out of stock)
             </span>
           )}
         </div>
@@ -453,9 +481,15 @@ const ProductCard = ({
             onClick={() => {
               addToCart(product._id, 1);
             }}
-            className="w-full mt-3 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary hover:text-white transition flex items-center justify-center gap-2"
+            disabled={isOutOfStock}
+            className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
+              isOutOfStock
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+            }`}
           >
-            <ShoppingBagIcon className="w-4 h-4" /> Add to Cart
+            <ShoppingBagIcon className="w-4 h-4" />
+            {isOutOfStock ? "Out of Stock" : "Add to Cart"}
           </button>
         )}
       </div>
@@ -689,7 +723,7 @@ const Shop = () => {
     setPriceMaxInput(value);
   }, []);
 
-  // ✅ PRICE SUBMIT HANDLER - Fixed with trim
+  // ✅ FIXED: PRICE SUBMIT HANDLER - Atomic update using ONE URLSearchParams
   const handlePriceSubmit = useCallback(() => {
     const min = priceMinInput.trim();
     const max = priceMaxInput.trim();
@@ -699,11 +733,24 @@ const Shop = () => {
       return;
     }
 
-    updateFilter("minPrice", min);
-    updateFilter("maxPrice", max);
+    // ✅ Create ONE URLSearchParams and update BOTH values atomically
+    const params = new URLSearchParams(searchParams);
 
+    if (min) {
+      params.set("minPrice", min);
+    } else {
+      params.delete("minPrice");
+    }
+
+    if (max) {
+      params.set("maxPrice", max);
+    } else {
+      params.delete("maxPrice");
+    }
+
+    setSearchParams(params);
     toast.success("Price filter applied");
-  }, [priceMinInput, priceMaxInput, updateFilter]);
+  }, [priceMinInput, priceMaxInput, searchParams]);
 
   const handleCategorySearchChange = useCallback((e) => {
     setCategorySearch(e.target.value);
@@ -784,13 +831,15 @@ const Shop = () => {
         updateFilter("search", "");
         setSearchInput("");
       } else if (key === "price") {
-        updateFilter("minPrice", "");
-        updateFilter("maxPrice", "");
+        const params = new URLSearchParams(searchParams);
+        params.delete("minPrice");
+        params.delete("maxPrice");
+        setSearchParams(params);
         setPriceMinInput("");
         setPriceMaxInput("");
       }
     },
-    [setSingleFilter, toggleArrayFilter, updateFilter],
+    [setSingleFilter, toggleArrayFilter, updateFilter, searchParams],
   );
 
   // Toggle filter visibility
@@ -1238,14 +1287,15 @@ const Shop = () => {
                 </div>
               </aside>
             )}
+
             {/* Right Products */}
             <div
               className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
             >
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {[...Array(10)].map((_, i) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, i) => (
                     <div
                       key={i}
                       className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse"
@@ -1261,14 +1311,7 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  {/* ✅ FIXED: More columns when filters are hidden */}
-                  <div
-                    className={`grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 ${
-                      filtersOpen
-                        ? "lg:grid-cols-2 xl:grid-cols-3"
-                        : "lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-                    }`}
-                  >
+                  <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
                     {allProducts.map((product) => (
                       <ProductCard
                         key={product._id}

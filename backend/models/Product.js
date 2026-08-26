@@ -39,12 +39,15 @@ const productSchema = new mongoose.Schema(
 
     price: {
       type: Number,
+      default: 0,
     },
     comparePrice: {
       type: Number,
+      default: 0,
     },
     costPrice: {
       type: Number,
+      default: 0,
     },
     sku: {
       type: String,
@@ -106,6 +109,7 @@ const productSchema = new mongoose.Schema(
     stock: {
       type: Number,
       default: 0,
+      min: 0,
     },
     images: [
       {
@@ -124,6 +128,7 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
+    // VARIANT PRODUCT FIELDS
     variants: [
       {
         name: {
@@ -137,20 +142,46 @@ const productSchema = new mongoose.Schema(
         price: {
           type: Number,
           required: true,
+          default: 0,
         },
         comparePrice: {
           type: Number,
+          default: 0,
         },
         stock: {
           type: Number,
           default: 0,
+          min: 0,
         },
         color: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Color",
           default: null,
         },
-        // ... other fields
+        frameShape: {
+          type: String,
+        },
+        frameMaterial: {
+          type: String,
+        },
+        lensType: {
+          type: String,
+        },
+        frameColor: {
+          type: String,
+        },
+        frameWidth: {
+          type: Number,
+        },
+        lensWidth: {
+          type: Number,
+        },
+        frameHeight: {
+          type: Number,
+        },
+        bridge: {
+          type: Number,
+        },
         images: [
           {
             url: String,
@@ -161,13 +192,18 @@ const productSchema = new mongoose.Schema(
             },
           },
         ],
-        isDefault: {
-          type: Boolean,
-          default: false,
+        attributes: {
+          color: String,
+          size: String,
+          material: String,
         },
         isActive: {
           type: Boolean,
           default: true,
+        },
+        isDefault: {
+          type: Boolean,
+          default: false,
         },
       },
     ],
@@ -230,12 +266,12 @@ productSchema.virtual("isNewArrival").get(function () {
   return daysSinceCreation <= 30;
 });
 
-// ✅ DYNAMIC VIRTUALS - Best Seller (based on sales - placeholder for now)
+// ✅ DYNAMIC VIRTUALS - Best Seller (placeholder)
 productSchema.virtual("isBestSeller").get(function () {
   return false;
 });
 
-// ✅ Pre-save hook to set main product images from first variant if no images
+// ✅ FIXED: Pre-save hook with proper stock handling
 productSchema.pre("save", function (next) {
   // Create slug from name
   if (this.isModified("name")) {
@@ -250,14 +286,22 @@ productSchema.pre("save", function (next) {
     this.productCategory = this.productTypeOld;
   }
 
-  // ✅ If product has variants and no main images, use first variant's images
+  // ✅ FIXED: Handle variants and ensure stock is always a valid number
   if (this.variants && this.variants.length > 0) {
-    // Remove isDefault from all variants
+    // ✅ Ensure each variant has a valid stock number
     this.variants.forEach((variant) => {
-      delete variant.isDefault;
+      if (
+        variant.stock === undefined ||
+        variant.stock === null ||
+        isNaN(variant.stock)
+      ) {
+        variant.stock = 0;
+      }
+      // Ensure stock is a number
+      variant.stock = Number(variant.stock);
     });
 
-    // If no main images, use first variant's images
+    // ✅ If no main images, use first variant's images
     if (
       (!this.images || this.images.length === 0) &&
       this.variants[0].images &&
@@ -269,6 +313,25 @@ productSchema.pre("save", function (next) {
         isMain: false,
       }));
     }
+
+    // ✅ RECALCULATE total stock from variants (ensure it's a valid number)
+    let totalStock = 0;
+    this.variants.forEach((v) => {
+      const variantStock = Number(v.stock) || 0;
+      totalStock += variantStock;
+    });
+    this.stock = totalStock;
+  } else {
+    // ✅ For simple products, ensure stock is a valid number
+    if (this.stock === undefined || this.stock === null || isNaN(this.stock)) {
+      this.stock = 0;
+    }
+    this.stock = Number(this.stock);
+  }
+
+  // ✅ Ensure stock is never negative (but allow 0)
+  if (this.stock < 0) {
+    this.stock = 0;
   }
 
   next();

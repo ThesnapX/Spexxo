@@ -9,6 +9,7 @@ import {
   cancelOrder,
   getAllOrders,
   updateOrder,
+  cancelPendingOrder,
 } from "../controllers/orderController.js";
 import { protect, admin } from "../middleware/auth.js";
 import Order from "../models/Order.js";
@@ -17,6 +18,7 @@ const router = express.Router();
 
 // ============ USER ROUTES ============
 router.post("/", protect, createOrder);
+router.delete("/:id/cancel-pending", protect, cancelPendingOrder);
 router.get("/my-orders", protect, getOrders);
 router.get("/:id", protect, getOrder);
 router.put("/:id/cancel", protect, cancelOrder);
@@ -29,7 +31,6 @@ router.put("/:id", protect, admin, updateOrder);
 // ============ ADMIN REFUND ROUTE ============
 router.put("/:id/refund", protect, admin, async (req, res) => {
   try {
-    const Order = await import("../models/Order.js").then((m) => m.default);
     const order = await Order.findById(req.params.id);
     if (!order) {
       return res

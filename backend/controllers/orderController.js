@@ -6,41 +6,39 @@ import Cart from "../models/Cart.js";
 import Coupon from "../models/Coupon.js";
 import sendEmail from "../utils/sendEmail.js";
 
-// @desc    Create order
+// @desc    Create order (Initial - Payment Pending)
 // @route   POST /api/orders
 // @access  Private
-
 export const createOrder = async (req, res) => {
   try {
     const {
       shippingAddress,
       couponCode,
       paymentMethod,
-      paymentStatus,
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature,
       codAdvance,
       isCOD,
-      orderStatus,
       remainingCOD,
-      items, // ✅ Accept items from frontend
+      items,
     } = req.body;
 
-    const cart = await Cart.findOne({ user: req.user._id }).populate(
-      "items.product",
-    );
+    console.log("[ORDER] Creating order for user:", req.user._id);
+    console.log("[ORDER] Payment method:", paymentMethod);
+    console.log("[ORDER] Items count:", items?.length || 0);
 
-    if (!cart || !cart.items || cart.items.length === 0) {
-      return res.status(400).json({ success: false, message: "Cart is empty" });
-    }
-
-    // Use items from request body or build from cart
     let orderItems = items;
     let subtotal = 0;
 
     if (!orderItems || orderItems.length === 0) {
-      // Build from cart if not provided
+      const cart = await Cart.findOne({ user: req.user._id }).populate(
+        "items.product",
+      );
+
+      if (!cart || !cart.items || cart.items.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Cart is empty" });
+      }
+
       orderItems = [];
       for (const item of cart.items) {
         const product = item.product;
@@ -60,18 +58,153 @@ export const createOrder = async (req, res) => {
         });
       }
     } else {
-      // Calculate subtotal from provided items
-      orderItems.forEach((item) => {
-        subtotal += item.price * item.quantity;
-      });
+      // ✅ Validate each item has required fields
+      for (const item of orderItems) {
+        if (!item.product) {
+          return res.status(400).json({
+            success: false,
+            message: "Each item must have a product ID",
+          });
+        }
+        if (!item.quantity || item.quantity <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid quantity for product ${item.name || item.product}`,
+          });
+        }
+        if (!item.price || item.price < 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid price for product ${item.name || item.product}`,
+          });
+        }
+        subtotal += (item.price || 0) * (item.quantity || 1);
+      }
     }
 
-    // ... rest of the order creation code ...
+    let discount = 0;
+    let couponData = null;
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
+        startDate: { $lte: new Date() },
+        endDate: { $gte: new Date() },
+      });
+
+      if (coupon) {
+        if (coupon.discountType === "percentage") {
+          discount = (subtotal * coupon.discountValue) / 100;
+          if (coupon.maxDiscount) {
+            discount = Math.min(discount, coupon.maxDiscount);
+          }
+        } else {
+          discount = Math.min(coupon.discountValue, subtotal);
+        }
+        couponData = {
+          code: coupon.code,
+          discount: discount,
+        };
+      }
+    }
+
+    const shippingCost = subtotal >= 999 ? 0 : 99;
+    const total = Math.max(0, subtotal - discount + shippingCost);
+
+    // ✅ Create order with PENDING status - STOCK NOT REDUCED YET
+    const order = await Order.create({
+      user: req.user._id,
+      items: orderItems.map((item) => ({
+        ...item,
+        variant: item.variant || null,
+      })),
+      shippingAddress: shippingAddress,
+      paymentMethod: paymentMethod || "online",
+      paymentStatus: "pending",
+      orderStatus: "pending",
+      subtotal: subtotal,
+      shippingCost: shippingCost,
+      discount: discount,
+      coupon: couponData,
+      total: total,
+      isCOD: isCOD || false,
+      codAdvance: codAdvance || 0,
+      remainingCOD: remainingCOD || 0,
+      statusHistory: [
+        {
+          status: "pending",
+          note: "Order created, awaiting payment",
+          date: new Date(),
+        },
+      ],
+    });
+
+    console.log(
+      "[ORDER] Order created with pending status:",
+      order.orderNumber,
+    );
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate("items.product", "name slug images sku variants")
+      .populate("user", "firstName lastName email phone customerId");
+
+    res.status(201).json({
+      success: true,
+      order: populatedOrder,
+      message: "Order created, awaiting payment",
+    });
   } catch (error) {
-    console.error("Create order error:", error);
+    console.error("[ORDER] Create order error:", error);
     res.status(400).json({
       success: false,
       message: error.message || "Failed to create order",
+    });
+  }
+};
+
+// @desc    Cancel pending order (if payment fails or user cancels)
+// @route   DELETE /api/orders/:id/cancel-pending
+// @access  Private
+export const cancelPendingOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Only allow cancellation of pending orders
+    if (order.orderStatus !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
+    }
+
+    // Check if user owns this order
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to cancel this order",
+      });
+    }
+
+    // Delete the order - no stock to restore since stock wasn't reduced
+    await Order.findByIdAndDelete(req.params.id);
+
+    console.log("[ORDER] Pending order deleted:", order.orderNumber);
+
+    res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+    });
+  } catch (error) {
+    console.error("[ORDER] Cancel pending order error:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message || "Failed to cancel order",
     });
   }
 };
@@ -83,7 +216,7 @@ export const getOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id })
       .sort("-createdAt")
-      .populate("items.product", "name slug images")
+      .populate("items.product", "name slug images sku variants")
       .populate("user", "firstName lastName email phone customerId");
     res.status(200).json({ success: true, orders });
   } catch (error) {
@@ -97,16 +230,17 @@ export const getOrders = async (req, res) => {
 export const getOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate("items.product", "name slug images sku")
+      .populate("items.product", "name slug images sku variants")
       .populate(
         "user",
         "firstName lastName email phone customerId username role createdAt",
       );
 
-    if (!order)
+    if (!order) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+    }
 
     if (
       order.user._id.toString() !== req.user._id.toString() &&
@@ -122,16 +256,17 @@ export const getOrder = async (req, res) => {
   }
 };
 
-// @desc    Cancel order
+// @desc    Cancel order (user or admin)
 // @route   PUT /api/orders/:id/cancel
 // @access  Private
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (!order)
+    if (!order) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+    }
 
     if (
       order.user.toString() !== req.user._id.toString() &&
@@ -142,7 +277,6 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Not authorized" });
     }
 
-    // Only allow cancellation for pending or confirmed orders
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
@@ -150,7 +284,6 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
-    // If order is already cancelled, return
     if (order.orderStatus === "cancelled") {
       return res.status(400).json({
         success: false,
@@ -158,14 +291,52 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
-    // Restore stock for all items
-    for (const item of order.items) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: item.quantity },
-      });
+    // ✅ Restore stock for all items (only if order was confirmed)
+    if (order.orderStatus === "confirmed") {
+      for (const item of order.items) {
+        const product = await Product.findById(item.product);
+        if (product) {
+          // ✅ Validate quantity before restoring
+          const quantity = Number(item.quantity);
+          if (!Number.isFinite(quantity) || quantity <= 0) {
+            console.error(
+              `[ORDER] Invalid quantity for stock restoration: ${item.quantity}`,
+            );
+            continue;
+          }
+
+          if (item.variant && product.variants && product.variants.length > 0) {
+            const variantIndex = product.variants.findIndex(
+              (v) =>
+                v._id?.toString() === item.variant._id?.toString() ||
+                v.name === item.variant.name ||
+                v.sku === item.variant.sku,
+            );
+
+            if (variantIndex !== -1) {
+              product.variants[variantIndex].stock += quantity;
+              console.log(
+                `[ORDER] Restored stock for variant ${product.variants[variantIndex].name}`,
+              );
+            }
+          } else {
+            product.stock += quantity;
+            console.log(`[ORDER] Restored stock for ${product.name}`);
+          }
+
+          if (product.productType === "variable") {
+            let totalStock = 0;
+            product.variants.forEach((v) => {
+              totalStock += v.stock || 0;
+            });
+            product.stock = totalStock;
+          }
+
+          await product.save();
+        }
+      }
     }
 
-    // Restore coupon usage if applicable
     if (order.coupon?.code) {
       await Coupon.findOneAndUpdate(
         { code: order.coupon.code },
@@ -173,35 +344,29 @@ export const cancelOrder = async (req, res) => {
       );
     }
 
-    // Calculate refund amount
     let refundAmount = 0;
     let refundNote = "";
 
-    // Handle payment status for COD with advance
     if (order.codAdvance > 0 && order.paymentStatus === "paid") {
       refundAmount = order.codAdvance;
-      refundNote = `Order cancelled. Refund of ₹${refundAmount} (advance) is pending. Please process the refund.`;
+      refundNote = `Order cancelled. Refund of ₹${refundAmount} (advance) is pending.`;
       order.paymentStatus = "refund_pending";
     } else if (
       order.paymentStatus === "paid" &&
       order.paymentMethod === "online"
     ) {
-      // For online payments, refund the total amount
       refundAmount = order.total || 0;
-      refundNote = `Order cancelled. Refund of ₹${refundAmount} is pending for online payment.`;
+      refundNote = `Order cancelled. Refund of ₹${refundAmount} is pending.`;
       order.paymentStatus = "refund_pending";
     } else {
-      // For COD without advance or pending payments
       refundNote =
         req.user.role === "admin"
           ? "Cancelled by admin"
           : "Cancelled by customer";
-      order.paymentStatus = "pending"; // No refund needed
+      order.paymentStatus = "pending";
     }
 
-    // Store refund amount in order for reference
     order.refundAmount = refundAmount;
-
     order.orderStatus = "cancelled";
     order.statusHistory.push({
       status: "cancelled",
@@ -236,7 +401,7 @@ export const getAllOrders = async (req, res) => {
     const [orders, total] = await Promise.all([
       Order.find(query)
         .populate("user", "firstName lastName email phone customerId")
-        .populate("items.product", "name slug images sku")
+        .populate("items.product", "name slug images sku variants")
         .sort("-createdAt")
         .skip(skip)
         .limit(Number(limit)),
@@ -269,10 +434,11 @@ export const updateOrderStatus = async (req, res) => {
       "email firstName phone",
     );
 
-    if (!order)
+    if (!order) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+    }
 
     const oldStatus = order.orderStatus;
     order.orderStatus = status;
@@ -288,7 +454,7 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    // ============ SEND NOTIFICATION ============
+    // Send notification
     try {
       const statusEmails = {
         confirmed: "Order Confirmed",
@@ -299,11 +465,9 @@ export const updateOrderStatus = async (req, res) => {
       };
 
       const userEmail = order.user?.email;
-      const userPhone = order.shippingAddress?.phone || order.user?.phone;
       const customerName =
         order.shippingAddress?.fullName || order.user?.firstName || "Customer";
 
-      // Email HTML
       const emailHTML = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: #0B1C39; padding: 20px; text-align: center; border-radius: 12px 12px 0 0;">
@@ -332,34 +496,15 @@ export const updateOrderStatus = async (req, res) => {
         </div>
       `;
 
-      // Send Email
       if (userEmail) {
         await sendEmail({
           email: userEmail,
           subject: `Order ${statusEmails[status] || status} - ${order.orderNumber} | Spexxo`,
           html: emailHTML,
         });
-        // console.log(`✅ Email sent to ${userEmail}`);
-      }
-
-      // Send WhatsApp (if phone exists)
-      if (userPhone) {
-        const whatsappMessage =
-          `Hi *${customerName}*,\\n\\n` +
-          `Your order *#${order.orderNumber}* status has been updated to *${(statusEmails[status] || status).toUpperCase()}*.\\n\\n` +
-          `📦 *Order Details:*\\n` +
-          `• Total: ₹${order.total?.toLocaleString()}\\n` +
-          `• Payment: ${order.paymentMethod?.toUpperCase()}\\n` +
-          `${note ? `• Note: ${note}\\n` : ""}\\n` +
-          `Thank you for shopping with Spexxo! 👓`;
-
-        // console.log(
-        //   `📱 WhatsApp would be sent to ${userPhone}: ${whatsappMessage}`,
-        // );
       }
     } catch (notificationError) {
-      // console.log("Notification failed:", notificationError.message);
-      // Don't fail the request if notification fails
+      console.log("Notification failed:", notificationError.message);
     }
 
     res.status(200).json({
@@ -382,12 +527,13 @@ export const updateOrder = async (req, res) => {
       runValidators: true,
     })
       .populate("user", "firstName lastName email phone customerId")
-      .populate("items.product", "name slug images sku");
+      .populate("items.product", "name slug images sku variants");
 
-    if (!order)
+    if (!order) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+    }
     res.status(200).json({ success: true, order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

@@ -81,7 +81,7 @@ const Navigation = () => {
 
   // Get current filters from URL
   const params = new URLSearchParams(location.search);
-  const currentProductType = params.get("productType") || "";
+  const currentProductCategory = params.get("productCategory") || "";
   const currentFrameShape = params.get("frameShape") || "";
   const currentCategory = params.get("category") || "";
   const currentBrand = params.get("brand") || "";
@@ -91,9 +91,9 @@ const Navigation = () => {
     if (location.pathname === "/shop/eyeglasses") return "eyeglasses";
     if (location.pathname === "/shop/sunglasses") return "sunglasses";
     if (location.pathname === "/shop/contact-lens") return "contactlens";
-    if (currentProductType === "eyeglasses") return "eyeglasses";
-    if (currentProductType === "sunglasses") return "sunglasses";
-    if (currentProductType === "contactlens") return "contactlens";
+    if (currentProductCategory === "eyeglasses") return "eyeglasses";
+    if (currentProductCategory === "sunglasses") return "sunglasses";
+    if (currentProductCategory === "contactlens") return "contactlens";
     return "";
   };
 

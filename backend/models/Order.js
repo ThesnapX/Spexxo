@@ -25,6 +25,29 @@ const orderSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
+        name: {
+          type: String,
+          required: true,
+        },
+        image: {
+          type: String,
+          default: "",
+        },
+        price: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+          min: 1,
+        },
+        subtotal: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
         variant: {
           name: String,
           sku: String,
@@ -40,7 +63,6 @@ const orderSchema = new mongoose.Schema(
             material: String,
           },
         },
-        // ... other fields
       },
     ],
     shippingAddress: {
@@ -152,7 +174,6 @@ orderSchema.pre("validate", async function (next) {
     if (!this.orderNumber) {
       const date = new Date();
       const year = date.getFullYear().toString();
-      // Get count and pad to 8 digits
       const count = await mongoose.model("Order").countDocuments();
       const nextNumber = (count + 1).toString().padStart(8, "0");
       this.orderNumber = `ORD-${nextNumber}`;

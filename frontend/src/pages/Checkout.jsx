@@ -48,6 +48,11 @@ const Checkout = () => {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
 
+  // ✅ Track if Razorpay script is loaded
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
+  const [razorpayLoadAttempted, setRazorpayLoadAttempted] = useState(false);
+
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -64,6 +69,11 @@ const Checkout = () => {
   const hasDeactivatedProducts = cart.items.some(
     (item) => item.product?.isActive === false,
   );
+
+  // Check if running on localhost
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
 
   // Load default address on mount
   useEffect(() => {
@@ -117,6 +127,98 @@ const Checkout = () => {
       });
     }
   }, [user]);
+
+  // Refresh cart on mount
+  useEffect(() => {
+    refreshCartWithLatestData();
+  }, []);
+
+  // ✅ Load Razorpay script on component mount - with retry mechanism
+  useEffect(() => {
+    const loadRazorpay = async () => {
+      // If already loaded, skip
+      if (window.Razorpay) {
+        console.log("[PAYMENT] Razorpay already loaded");
+        setRazorpayLoaded(true);
+        setRazorpayLoadAttempted(true);
+        return;
+      }
+
+      // If already loading, skip
+      if (razorpayLoading) return;
+
+      setRazorpayLoading(true);
+      setRazorpayLoadAttempted(true);
+      console.log("[PAYMENT] Loading Razorpay script...");
+
+      try {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        script.async = true;
+        script.id = "razorpay-script";
+
+        // Check if script already exists
+        const existingScript = document.getElementById("razorpay-script");
+        if (existingScript) {
+          console.log(
+            "[PAYMENT] Razorpay script already exists, waiting for load...",
+          );
+          await new Promise((resolve) => {
+            if (window.Razorpay) {
+              resolve(true);
+              return;
+            }
+            existingScript.onload = () => {
+              console.log("[PAYMENT] Existing Razorpay script loaded");
+              resolve(true);
+            };
+          });
+          setRazorpayLoaded(true);
+          setRazorpayLoading(false);
+          return;
+        }
+
+        await new Promise((resolve, reject) => {
+          script.onload = () => {
+            console.log("[PAYMENT] Razorpay script loaded successfully");
+            // Wait a moment for Razorpay to initialize
+            setTimeout(() => {
+              resolve(true);
+            }, 500);
+          };
+          script.onerror = () => {
+            console.error("[PAYMENT] Failed to load Razorpay script");
+            reject(new Error("Failed to load Razorpay script"));
+          };
+          document.body.appendChild(script);
+        });
+
+        // Wait for Razorpay to be available
+        let attempts = 0;
+        while (!window.Razorpay && attempts < 20) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          attempts++;
+        }
+
+        if (window.Razorpay) {
+          console.log("[PAYMENT] window.Razorpay is available");
+          setRazorpayLoaded(true);
+        } else {
+          console.error(
+            "[PAYMENT] window.Razorpay not available after loading",
+          );
+          setRazorpayLoaded(false);
+        }
+      } catch (error) {
+        console.error("[PAYMENT] Razorpay loading error:", error);
+        setRazorpayLoaded(false);
+      } finally {
+        setRazorpayLoading(false);
+      }
+    };
+
+    loadRazorpay();
+  }, []);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -211,7 +313,6 @@ const Checkout = () => {
     }
   };
 
-  // ✅ FIXED: Build order items with variant details
   const buildOrderItems = () => {
     return cart.items
       .map((item) => {
@@ -248,10 +349,61 @@ const Checkout = () => {
       .filter(Boolean);
   };
 
+  // Handle zero amount payment (free orders)
+  const handleZeroAmountOrder = async (orderItems) => {
+    try {
+      const orderData = {
+        shippingAddress: form,
+        couponCode: couponCodeApplied || undefined,
+        paymentMethod: "online",
+        paymentStatus: "paid",
+        isCOD: false,
+        orderStatus: "confirmed",
+        items: orderItems,
+      };
+
+      const { data } = await axios.post(`${API_URL}/orders`, orderData);
+      await clearCart();
+      toast.success("Order placed successfully! 🎉");
+      navigate(`/account/orders/${data.order._id}`);
+      return true;
+    } catch (error) {
+      console.error("Zero amount order error:", error);
+      toast.error(error.response?.data?.message || "Failed to create order");
+      return false;
+    }
+  };
+
+  // ✅ Helper function to open Razorpay - extracted to avoid duplication
+  const openRazorpay = (options) => {
+    console.log("[PAYMENT] Opening Razorpay...");
+    console.log("[PAYMENT] Options:", {
+      key: options.key ? "Present" : "Missing",
+      amount: options.amount,
+      order_id: options.order_id ? "Present" : "Missing",
+    });
+
+    try {
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+      console.log("[PAYMENT] Razorpay opened successfully");
+      return true;
+    } catch (error) {
+      console.error("[PAYMENT] Failed to open Razorpay:", error);
+      toast.error("Failed to open payment window. Please try again.");
+      return false;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Check for deactivated products before proceeding
+    console.log("[PAYMENT] Checkout submitted");
+    console.log("[PAYMENT] Payment method:", paymentMethod);
+    console.log("[PAYMENT] Grand total:", grandTotal);
+    console.log("[PAYMENT] Razorpay loaded:", razorpayLoaded);
+    console.log("[PAYMENT] window.Razorpay exists:", !!window.Razorpay);
+
     if (hasDeactivatedProducts) {
       toast.error(
         "Your cart contains deactivated products. Please remove them to proceed.",
@@ -296,7 +448,6 @@ const Checkout = () => {
       }
     }
 
-    // ✅ Build order items with variant details
     const orderItems = buildOrderItems();
 
     if (orderItems.length === 0) {
@@ -304,10 +455,26 @@ const Checkout = () => {
       return;
     }
 
+    // Handle zero amount orders (100% coupon or free products)
+    if (grandTotal === 0) {
+      setLoading(true);
+      await handleZeroAmountOrder(orderItems);
+      setLoading(false);
+      return;
+    }
+
+    // ✅ Check if Razorpay is loaded before proceeding
+    if (!razorpayLoaded && !window.Razorpay) {
+      toast.error("Payment gateway is still loading. Please wait a moment...");
+      return;
+    }
+
     if (paymentMethod === "online") {
       setLoading(true);
       try {
-        // ✅ STEP 1: Create order in our database with items
+        console.log("[PAYMENT] Online payment flow started");
+
+        // STEP 1: Create pending order
         const orderData = {
           shippingAddress: form,
           couponCode: couponCodeApplied || undefined,
@@ -315,89 +482,175 @@ const Checkout = () => {
           paymentStatus: "pending",
           isCOD: false,
           orderStatus: "pending",
-          items: orderItems, // ✅ Send items with variant details
+          items: orderItems,
         };
+
+        console.log("[PAYMENT] Creating pending order...");
+        console.log(
+          "[PAYMENT] Order data:",
+          JSON.stringify(orderData, null, 2),
+        );
 
         const { data: orderResponse } = await axios.post(
           `${API_URL}/orders`,
           orderData,
         );
 
-        const createdOrder = orderResponse.order;
-        console.log("Order created:", createdOrder);
+        console.log("[PAYMENT] Order response:", orderResponse);
 
-        // ✅ STEP 2: Create Razorpay order with our order ID
+        const createdOrder = orderResponse.order;
+        console.log(
+          "[PAYMENT] Pending order created:",
+          createdOrder.orderNumber,
+        );
+
+        // STEP 2: Create Razorpay order
+        console.log("[PAYMENT] Creating Razorpay order...");
         const { data: razorpayData } = await axios.post(
           `${API_URL}/payment/create-order`,
           { orderId: createdOrder._id },
         );
 
-        console.log("Razorpay order created:", razorpayData);
+        console.log(
+          "[PAYMENT] Razorpay order created:",
+          razorpayData.razorpayOrderId,
+        );
+        console.log("[PAYMENT] Razorpay amount:", razorpayData.amount);
+        console.log("[PAYMENT] Razorpay key available:", !!razorpayData.key);
 
-        const amountInPaise = Math.round(createdOrder.total * 100);
         setProcessingPayment(true);
 
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.onload = () => {
-          const productNames = cart.items
-            .map((item) => item.product?.name || item.name)
-            .join(", ");
+        const razorpayKey = razorpayData.key || RAZORPAY_KEY;
 
-          const options = {
-            key: RAZORPAY_KEY,
-            amount: amountInPaise,
-            currency: "INR",
-            name: "Spexxo",
-            description: `Order ${createdOrder.orderNumber}`,
-            image: "/images/logo.png",
-            order_id: razorpayData.razorpayOrderId,
-            prefill: {
-              name: form.fullName,
-              email: user?.email || "customer@spexxo.com",
-              contact: form.phone || "9999999999",
+        const options = {
+          key: razorpayKey,
+          amount: razorpayData.amount,
+          currency: "INR",
+          name: "Spexxo",
+          description: `Order ${createdOrder.orderNumber}`,
+          image: window.location.origin + "/favicon.png",
+          order_id: razorpayData.razorpayOrderId,
+          prefill: {
+            name:
+              form.fullName ||
+              `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+              "Customer",
+            email: user?.email || "customer@spexxo.com",
+            contact: form.phone || user?.phone || "9999999999",
+          },
+          theme: { color: "#3D96EB" },
+          modal: {
+            ondismiss: function () {
+              console.log(
+                "[PAYMENT] Razorpay modal dismissed - payment cancelled",
+              );
+              setProcessingPayment(false);
+              setLoading(false);
+              toast.error("Payment cancelled");
+
+              // ✅ Delete the pending order
+              axios
+                .delete(`${API_URL}/orders/${createdOrder._id}/cancel-pending`)
+                .then(() => {
+                  console.log("[PAYMENT] Pending order deleted");
+                })
+                .catch((err) => {
+                  console.error(
+                    "[PAYMENT] Failed to delete pending order:",
+                    err,
+                  );
+                });
             },
-            theme: { color: "#3D96EB" },
-            modal: {
-              ondismiss: function () {
-                setProcessingPayment(false);
-                setLoading(false);
-                toast.error("Payment cancelled");
-              },
-            },
-            handler: async function (response) {
-              try {
-                setProcessingPayment(false);
+          },
+          handler: async function (response) {
+            console.log("[PAYMENT] Razorpay payment handler called");
+            try {
+              setProcessingPayment(false);
 
-                // ✅ STEP 3: Verify payment with order ID
-                const verifyData = {
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  orderId: createdOrder._id,
-                };
+              // ✅ Step 1: Verify payment
+              const verifyData = {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                orderId: createdOrder._id,
+              };
 
-                await axios.post(`${API_URL}/payment/verify`, verifyData);
+              console.log("[PAYMENT] Verifying payment...");
 
-                await clearCart();
-                toast.success("Payment successful! Order placed!");
-                navigate(`/account/orders/${createdOrder._id}`);
-              } catch (error) {
-                console.error("Order creation error:", error);
-                toast.error(
-                  "Order creation failed after payment. Contact support.",
+              // ✅ Step 2: Verify payment - this will also confirm the order
+              const { data } = await axios.post(
+                `${API_URL}/payment/verify`,
+                verifyData,
+              );
+
+              // ✅ Step 3: Order is now confirmed (stock reduced, cart cleared)
+              toast.success("Payment successful! Order placed! 🎉");
+              console.log(
+                "[PAYMENT] Order verified and confirmed:",
+                data.order?.orderNumber,
+              );
+
+              // ✅ Step 4: Navigate to order details
+              if (data.order) {
+                navigate(`/account/orders/${data.order._id}`);
+              } else {
+                // Fallback: fetch the order directly
+                const { data: orderData } = await axios.get(
+                  `${API_URL}/orders/${createdOrder._id}`,
                 );
-                navigate("/account/orders");
+                navigate(`/account/orders/${orderData.order._id}`);
               }
-            },
-          };
-          const rzp = new window.Razorpay(options);
-          rzp.open();
+            } catch (error) {
+              console.error("[PAYMENT] Order verification error:", error);
+
+              // ✅ If payment verification fails, delete the pending order
+              try {
+                await axios.delete(
+                  `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
+                );
+                console.log(
+                  "[PAYMENT] Pending order deleted due to payment failure",
+                );
+              } catch (deleteError) {
+                console.error(
+                  "[PAYMENT] Failed to delete pending order:",
+                  deleteError,
+                );
+              }
+
+              toast.error(
+                error.response?.data?.message ||
+                  "Payment verification failed. Please contact support.",
+              );
+              navigate("/");
+            }
+          },
         };
-        document.body.appendChild(script);
+
+        console.log("[PAYMENT] Opening Razorpay...");
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+        console.log("[PAYMENT] Razorpay opened successfully");
       } catch (error) {
-        console.error("Payment initiation error:", error);
-        toast.error("Payment initiation failed");
+        console.error("[PAYMENT] Payment initiation error:", error);
+        console.error("[PAYMENT] Error details:", error.response?.data);
+
+        if (error.response?.status === 404) {
+          toast.error(
+            "Payment endpoint not found. Please check server configuration.",
+          );
+        } else if (
+          error.response?.data?.details?.error?.code === "BAD_REQUEST_ERROR"
+        ) {
+          toast.error(
+            "⚠️ Razorpay configuration error. Please check your API keys.",
+          );
+        } else {
+          toast.error(
+            error.response?.data?.message ||
+              "Payment initiation failed. Please try again.",
+          );
+        }
         setProcessingPayment(false);
       } finally {
         setLoading(false);
@@ -406,9 +659,11 @@ const Checkout = () => {
       // COD Payment
       setLoading(true);
       try {
+        console.log("[PAYMENT] COD payment flow started");
+
         // For COD with advance payment
         if (advanceAmount > 0) {
-          // ✅ STEP 1: Create order with items
+          // STEP 1: Create pending COD order
           const orderData = {
             shippingAddress: form,
             couponCode: couponCodeApplied || undefined,
@@ -418,81 +673,137 @@ const Checkout = () => {
             orderStatus: "pending",
             codAdvance: advanceAmount,
             remainingCOD: remainingCOD,
-            items: orderItems, // ✅ Send items with variant details
+            items: orderItems,
           };
+
+          console.log("[PAYMENT] Creating pending COD order with advance...");
+          console.log(
+            "[PAYMENT] Order data:",
+            JSON.stringify(orderData, null, 2),
+          );
 
           const { data: orderResponse } = await axios.post(
             `${API_URL}/orders`,
             orderData,
           );
           const createdOrder = orderResponse.order;
+          console.log(
+            "[PAYMENT] Pending COD order created:",
+            createdOrder.orderNumber,
+          );
 
-          // ✅ STEP 2: Create Razorpay order for advance
+          // STEP 2: Create Razorpay order for advance
+          console.log("[PAYMENT] Creating Razorpay order for advance...");
           const { data: razorpayData } = await axios.post(
             `${API_URL}/payment/create-order`,
             { orderId: createdOrder._id },
           );
+          console.log(
+            "[PAYMENT] Razorpay order created:",
+            razorpayData.razorpayOrderId,
+          );
 
-          const advanceAmountInPaise = advanceAmount * 100;
           setProcessingPayment(true);
 
-          const script = document.createElement("script");
-          script.src = "https://checkout.razorpay.com/v1/checkout.js";
-          script.onload = () => {
-            const options = {
-              key: RAZORPAY_KEY,
-              amount: advanceAmountInPaise,
-              currency: "INR",
-              name: "Spexxo",
-              description: `10% Advance - Order ${createdOrder.orderNumber}`,
-              image: "/images/logo.png",
-              order_id: razorpayData.razorpayOrderId,
-              prefill: {
-                name: form.fullName,
-                email: user?.email || "customer@spexxo.com",
-                contact: form.phone || "9999999999",
-              },
-              theme: { color: "#3D96EB" },
-              modal: {
-                ondismiss: function () {
-                  setProcessingPayment(false);
-                  setLoading(false);
-                  toast.error("Advance payment is required for COD orders.");
-                },
-              },
-              handler: async function (response) {
-                try {
-                  setProcessingPayment(false);
+          const razorpayKey = razorpayData.key || RAZORPAY_KEY;
 
-                  // ✅ STEP 3: Verify COD advance payment
-                  await axios.post(`${API_URL}/payment/verify-cod-advance`, {
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
-                    orderId: createdOrder._id,
-                    isCODAdvance: true,
+          const options = {
+            key: razorpayKey,
+            amount: razorpayData.amount,
+            currency: "INR",
+            name: "Spexxo",
+            description: `Order ${createdOrder.orderNumber}`,
+            // ✅ Remove the image or use a public URL
+            // image: window.location.origin + "/favicon.png",
+            order_id: razorpayData.razorpayOrderId,
+            prefill: {
+              name:
+                form.fullName ||
+                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+                "Customer",
+              email: user?.email || "customer@spexxo.com",
+              contact: form.phone || user?.phone || "9999999999",
+            },
+            theme: { color: "#3D96EB" },
+            modal: {
+              ondismiss: function () {
+                console.log(
+                  "[PAYMENT] Razorpay modal dismissed - payment cancelled",
+                );
+                setProcessingPayment(false);
+                setLoading(false);
+                toast.error("Advance payment cancelled");
+
+                // ✅ Delete the pending order
+                axios
+                  .delete(
+                    `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
+                  )
+                  .then(() => {
+                    console.log("[PAYMENT] Pending order deleted");
+                  })
+                  .catch((err) => {
+                    console.error(
+                      "[PAYMENT] Failed to delete pending order:",
+                      err,
+                    );
                   });
-
-                  await clearCart();
-                  toast.success(
-                    "Order placed with 10% advance! Remaining ₹" +
-                      remainingCOD.toLocaleString() +
-                      " on delivery.",
-                  );
-                  navigate(`/account/orders/${createdOrder._id}`);
-                } catch (error) {
-                  console.error("COD order creation error:", error);
-                  toast.error("Order creation failed after advance payment.");
-                  navigate("/account/orders");
-                }
               },
-            };
-            const rzp = new window.Razorpay(options);
-            rzp.open();
+            },
+            handler: async function (response) {
+              console.log("[PAYMENT] Razorpay COD advance handler called");
+              try {
+                setProcessingPayment(false);
+
+                await axios.post(`${API_URL}/payment/verify-cod-advance`, {
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  orderId: createdOrder._id,
+                  isCODAdvance: true,
+                });
+
+                // ✅ Order is now confirmed (stock reduced)
+                toast.success(
+                  "Order placed with 10% advance! Remaining ₹" +
+                    remainingCOD.toLocaleString() +
+                    " on delivery.",
+                );
+                console.log("[PAYMENT] COD advance verified and completed");
+
+                // ✅ Navigate to order details
+                const { data: orderData } = await axios.get(
+                  `${API_URL}/orders/${createdOrder._id}`,
+                );
+                navigate(`/account/orders/${orderData.order._id}`);
+              } catch (error) {
+                console.error("[PAYMENT] COD order creation error:", error);
+
+                // ✅ Delete pending order on failure
+                try {
+                  await axios.delete(
+                    `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
+                  );
+                } catch (deleteError) {
+                  console.error(
+                    "[PAYMENT] Failed to delete pending order:",
+                    deleteError,
+                  );
+                }
+
+                toast.error("Order creation failed after advance payment.");
+                navigate("/");
+              }
+            },
           };
-          document.body.appendChild(script);
+
+          console.log("[PAYMENT] Opening Razorpay for COD advance...");
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+          console.log("[PAYMENT] Razorpay opened for COD advance");
         } else {
-          // COD without advance
+          // COD without advance - create order directly
+          console.log("[PAYMENT] Creating COD order without advance...");
           const orderData = {
             shippingAddress: form,
             couponCode: couponCodeApplied || undefined,
@@ -500,17 +811,33 @@ const Checkout = () => {
             paymentStatus: "pending",
             isCOD: true,
             orderStatus: "pending",
-            items: orderItems, // ✅ Send items with variant details
+            items: orderItems,
           };
+
+          console.log(
+            "[PAYMENT] Order data:",
+            JSON.stringify(orderData, null, 2),
+          );
 
           const { data } = await axios.post(`${API_URL}/orders`, orderData);
           await clearCart();
           toast.success("Order placed successfully!");
+          console.log("[PAYMENT] COD order completed");
           navigate(`/account/orders/${data.order._id}`);
         }
       } catch (error) {
-        console.error("COD order error:", error);
-        toast.error(error.response?.data?.message || "Failed to create order");
+        console.error("[PAYMENT] COD order error:", error);
+        console.error("[PAYMENT] Error details:", error.response?.data);
+
+        if (error.response?.status === 404) {
+          toast.error(
+            "Payment endpoint not found. Please check server configuration.",
+          );
+        } else {
+          toast.error(
+            error.response?.data?.message || "Failed to create order",
+          );
+        }
         setProcessingPayment(false);
       } finally {
         setLoading(false);
@@ -541,11 +868,6 @@ const Checkout = () => {
       </div>
     );
   }
-
-  // Refresh cart on mount to get latest data
-  useEffect(() => {
-    refreshCartWithLatestData();
-  }, []);
 
   return (
     <>
@@ -669,7 +991,8 @@ const Checkout = () => {
                 </div>
               )}
 
-              <form className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
+              {/* ✅ Fixed: Removed outer <form> tag to prevent nesting */}
+              <div className="space-y-4 bg-white p-5 rounded-xl border border-gray-100 mb-6">
                 <AddressForm
                   initialData={form}
                   onSubmit={(data) => {
@@ -680,7 +1003,7 @@ const Checkout = () => {
                   showTypeSelector={false}
                   showSaveToProfile={!!user}
                 />
-              </form>
+              </div>
 
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4">Payment Method</h3>
@@ -708,7 +1031,7 @@ const Checkout = () => {
                     </div>
                   </label>
 
-                  {paymentMethod === "cod" && (
+                  {paymentMethod === "cod" && grandTotal > 0 && (
                     <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <div className="flex items-start gap-3">
                         <div className="w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
@@ -758,6 +1081,41 @@ const Checkout = () => {
                 </div>
               </div>
 
+              {/* Show message for zero amount orders */}
+              {grandTotal === 0 && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircleIcon className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-700">
+                        Free Order! 🎉
+                      </p>
+                      <p className="text-sm text-green-600">
+                        Your total is ₹0. No payment required. Click "Place
+                        Order" to confirm.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ Show Razorpay loading status */}
+              {razorpayLoading && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-0.5"></div>
+                    <div>
+                      <p className="font-medium text-blue-700">
+                        Loading Payment Gateway...
+                      </p>
+                      <p className="text-sm text-blue-600">
+                        Please wait, the payment system is initializing.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleSubmit}
                 disabled={
@@ -773,9 +1131,11 @@ const Checkout = () => {
                     ? "Creating Order..."
                     : processingPayment
                       ? "Complete Payment in Popup..."
-                      : paymentMethod === "online"
-                        ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                        : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
+                      : grandTotal === 0
+                        ? "Place Order (Free) 🎉"
+                        : paymentMethod === "online"
+                          ? `Pay ₹${grandTotal.toLocaleString()} Online`
+                          : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
               </button>
               {hasDeactivatedProducts && (
                 <p className="text-red-500 text-sm text-center mt-2">
@@ -786,7 +1146,8 @@ const Checkout = () => {
               {paymentMethod === "cod" &&
                 !processingPayment &&
                 !loading &&
-                !hasDeactivatedProducts && (
+                !hasDeactivatedProducts &&
+                grandTotal > 0 && (
                   <p className="text-xs text-text-light text-center mt-2">
                     You'll pay remaining ₹{remainingCOD.toLocaleString()} on
                     delivery
@@ -938,33 +1299,42 @@ const Checkout = () => {
                       ₹{grandTotal.toLocaleString()}
                     </span>
                   </div>
-                  {couponDiscount > 0 && (
+                  {grandTotal === 0 && (
+                    <p className="text-xs text-green-600 text-center font-medium">
+                      🎉 Free Order! No payment needed.
+                    </p>
+                  )}
+                  {couponDiscount > 0 && grandTotal > 0 && (
                     <p className="text-xs text-green-600">
                       🎉 You saved ₹{couponDiscount.toLocaleString()}!
                     </p>
                   )}
-                  {paymentMethod === "cod" && !hasDeactivatedProducts && (
-                    <div className="bg-amber-50 p-3 rounded-lg mt-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium text-amber-800">
-                          Pay Now (10%)
-                        </span>
-                        <span className="font-semibold text-amber-600">
-                          ₹{advanceAmount.toLocaleString()}
-                        </span>
+                  {paymentMethod === "cod" &&
+                    !hasDeactivatedProducts &&
+                    grandTotal > 0 && (
+                      <div className="bg-amber-50 p-3 rounded-lg mt-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-medium text-amber-800">
+                            Pay Now (10%)
+                          </span>
+                          <span className="font-semibold text-amber-600">
+                            ₹{advanceAmount.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm mt-1">
+                          <span className="text-amber-700">
+                            Pay on Delivery
+                          </span>
+                          <span className="font-semibold text-amber-700">
+                            ₹{remainingCOD.toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-amber-600 mt-2 pt-2 border-t border-amber-200">
+                          <span>Total</span>
+                          <span>₹{grandTotal.toLocaleString()}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-sm mt-1">
-                        <span className="text-amber-700">Pay on Delivery</span>
-                        <span className="font-semibold text-amber-700">
-                          ₹{remainingCOD.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs text-amber-600 mt-2 pt-2 border-t border-amber-200">
-                        <span>Total</span>
-                        <span>₹{grandTotal.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
                 <Link
                   to="/cart"

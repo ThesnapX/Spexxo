@@ -624,9 +624,10 @@ Please confirm availability.`;
                         selectedVariant?._id === variant._id ||
                         selectedVariant?.name === variant.name;
                       const isVariantActive = variant.isActive !== false;
-                      const isVariantStock = variant.stock > 0;
+                      const isVariantOutOfStock = variant.stock <= 0;
+                      const isDisabled =
+                        !isVariantActive || isVariantOutOfStock;
                       const color = getColorDetails(variant.color);
-                      const isDisabled = !isVariantActive || !isVariantStock;
                       const variantPrice = variant.price || displayPrice;
                       const variantCompare = variant.comparePrice || 0;
 
@@ -640,14 +641,15 @@ Please confirm availability.`;
                           }}
                           disabled={isDisabled}
                           className={`
-                            relative p-3 rounded-xl border-2 transition-all text-left
-                            ${
-                              isSelected
-                                ? "border-primary bg-[#EBF4FC] ring-2 ring-primary/20"
-                                : "border-gray-200 hover:border-gray-300"
-                            }
-                            ${isDisabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                          `}
+              relative p-3 rounded-xl border-2 transition-all text-left
+              ${
+                isSelected && !isDisabled
+                  ? "border-primary bg-[#EBF4FC] ring-2 ring-primary/20"
+                  : isDisabled
+                    ? "border-gray-200 opacity-60 cursor-not-allowed"
+                    : "border-gray-200 hover:border-gray-300"
+              }
+            `}
                         >
                           {/* Color Swatch */}
                           <div className="flex items-center gap-2 mb-1.5">
@@ -675,14 +677,16 @@ Please confirm availability.`;
                               )}
                           </div>
 
-                          {/* Stock Status */}
+                          {/* ✅ Stock Status - Show Out of Stock for individual variants */}
                           <div className="text-xs mt-1">
-                            {variant.stock > 0 ? (
+                            {isVariantOutOfStock ? (
+                              <span className="text-red-500 font-medium">
+                                Out of Stock
+                              </span>
+                            ) : (
                               <span className="text-green-600">
                                 {variant.stock} in stock
                               </span>
-                            ) : (
-                              <span className="text-red-500">Out of Stock</span>
                             )}
                             {!isVariantActive && (
                               <span className="text-gray-400 ml-2">
@@ -695,6 +699,15 @@ Please confirm availability.`;
                           {isSelected && !isDisabled && (
                             <div className="absolute top-2 right-2">
                               <CheckCircleIcon className="w-4 h-4 text-primary" />
+                            </div>
+                          )}
+
+                          {/* Out of Stock Overlay */}
+                          {isVariantOutOfStock && (
+                            <div className="absolute inset-0 bg-gray-100/50 rounded-xl flex items-center justify-center">
+                              <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full rotate-[-15deg] shadow-lg">
+                                OUT OF STOCK
+                              </span>
                             </div>
                           )}
                         </button>
@@ -712,21 +725,19 @@ Please confirm availability.`;
                         </span>
                         {selectedVariant.sku &&
                           ` • SKU: ${selectedVariant.sku}`}
-                        {selectedVariant.stock !== undefined && (
-                          <span
-                            className={`ml-2 ${
-                              selectedVariant.stock > 0
-                                ? "text-green-600"
-                                : "text-red-500"
-                            }`}
-                          >
-                            {selectedVariant.stock > 0
-                              ? `${selectedVariant.stock} in stock`
-                              : "Out of Stock"}
-                          </span>
-                        )}
+                        {selectedVariant.stock !== undefined &&
+                          selectedVariant.stock > 0 && (
+                            <span className="ml-2 text-green-600">
+                              {selectedVariant.stock} in stock
+                            </span>
+                          )}
+                        {selectedVariant.stock !== undefined &&
+                          selectedVariant.stock <= 0 && (
+                            <span className="ml-2 text-red-500 font-medium">
+                              Out of Stock
+                            </span>
+                          )}
                       </p>
-                      {/* Show variant attributes if any */}
                       {selectedVariant.frameShape && (
                         <p className="text-xs text-text-light mt-1">
                           Frame Shape: {selectedVariant.frameShape}

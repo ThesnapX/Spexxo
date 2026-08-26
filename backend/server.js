@@ -1,3 +1,5 @@
+// backend/server.js
+
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -5,6 +7,7 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
+import rateLimit from "express-rate-limit";
 
 // Import routes
 import authRoutes from "./routes/authRoutes.js";
@@ -37,20 +40,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ============ CORS - SINGLE CONFIGURATION ============
-// const allowedOrigins = [
-//   "http://localhost:5173",
-//   "http://localhost:3000",
-//   "https://spexxo.vercel.app",
-//   "https://spexxo.vercel.app/",
-//   "https://spexxo.com",
-//   "https://www.spexxo.com",
-// ];
-
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173")
   .split(",")
   .map((url) => url.trim());
 
-// Add FRONTEND_URL from env if exists
 if (process.env.FRONTEND_URL) {
   allowedOrigins.push(process.env.FRONTEND_URL);
 }
@@ -58,9 +51,7 @@ if (process.env.FRONTEND_URL) {
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -82,7 +73,16 @@ app.use(cookieParser());
 // Static folder for uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// ============ RATE LIMITING ============
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests, please try again later.",
+});
+app.use("/api/", limiter);
+
 // ============ ROUTES ============
+console.log("✅ Registering routes...");
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -103,6 +103,8 @@ app.use("/api/shapes", shapeRoutes);
 app.use("/api/colors", colorRoutes);
 app.use("/api/lens-types", lensTypeRoutes);
 app.use("/api/frame-materials", frameMaterialRoutes);
+app.use("/api/pincode", pincodeRoutes);
+console.log("✅ All routes registered");
 
 // Generate sitemap
 app.get("/api/sitemap", async (req, res) => {
@@ -139,6 +141,7 @@ app.get("/api/health", (req, res) => {
 // ============ ERROR HANDLING ============
 app.use((err, req, res, next) => {
   console.error("Error:", err.message);
+  console.error("Stack:", err.stack);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
@@ -147,6 +150,7 @@ app.use((err, req, res, next) => {
 
 // 404 handler
 app.use((req, res) => {
+  console.log("404 - Route not found:", req.method, req.url);
   res.status(404).json({
     success: false,
     message: "Route not found",
@@ -159,7 +163,6 @@ const MONGODB_URI = process.env.MONGODB_URI;
 const connectDB = async () => {
   try {
     console.log("Connecting to MongoDB...");
-
     const options = {
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
@@ -198,13 +201,3 @@ app.listen(PORT, () => {
   console.log(`📡 API available at http://localhost:${PORT}/api`);
   console.log(`🔗 Allowed origins:`, allowedOrigins.join(", "));
 });
-
-//  RATE LIMITING
-import rateLimit from "express-rate-limit";
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests, please try again later.",
-});
-app.use("/api/", limiter);
