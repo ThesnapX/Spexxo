@@ -20,6 +20,7 @@ import {
   EyeSlashIcon,
   EyeIcon as EyeIconShow,
   Squares2X2Icon,
+  CubeIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 
@@ -36,7 +37,8 @@ const Products = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
-  const [productTypeFilter, setProductTypeFilter] = useState("");
+  const [productCategoryFilter, setProductCategoryFilter] = useState(""); // Changed from productTypeFilter
+  const [productTypeFilter, setProductTypeFilter] = useState(""); // NEW: simple/variable
   const [stockFilter, setStockFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -202,9 +204,17 @@ const Products = () => {
         typeof product.brand === "object" ? product.brand?._id : product.brand;
       if (brandId !== brandFilter) return false;
     }
-    // Product type filter
-    if (productTypeFilter && product.productType !== productTypeFilter)
+    // ✅ FIXED: Product Category filter (eyeglasses/sunglasses/contactlens)
+    if (
+      productCategoryFilter &&
+      product.productCategory !== productCategoryFilter
+    ) {
       return false;
+    }
+    // ✅ NEW: Product Type filter (simple/variable)
+    if (productTypeFilter && product.productType !== productTypeFilter) {
+      return false;
+    }
     // Stock filter - Check both main stock and variant stock
     if (stockFilter === "in-stock") {
       const totalStock = getTotalStock(product);
@@ -228,6 +238,7 @@ const Products = () => {
     setSearchQuery("");
     setCategoryFilter("");
     setBrandFilter("");
+    setProductCategoryFilter("");
     setProductTypeFilter("");
     setStockFilter("");
     setStatusFilter("");
@@ -240,6 +251,13 @@ const Products = () => {
     }
     const b = brands?.find((b) => b._id === product.brand);
     return b ? b.name : "N/A";
+  };
+
+  // Count products by type for display
+  const countByProductType = (type) => {
+    return (
+      productsData?.products?.filter((p) => p.productType === type).length || 0
+    );
   };
 
   return (
@@ -255,6 +273,11 @@ const Products = () => {
               </span>
             )}
           </p>
+          <div className="flex gap-3 mt-1 text-xs text-text-light">
+            <span>Simple: {countByProductType("simple")}</span>
+            <span>•</span>
+            <span>Variable: {countByProductType("variable")}</span>
+          </div>
         </div>
         <div className="flex gap-2">
           <button
@@ -290,7 +313,7 @@ const Products = () => {
       {/* Filters */}
       {showFilters && (
         <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
               <label className="block text-xs text-text-light mb-1">
                 Category
@@ -327,6 +350,21 @@ const Products = () => {
             </div>
             <div>
               <label className="block text-xs text-text-light mb-1">
+                Product Category
+              </label>
+              <select
+                value={productCategoryFilter}
+                onChange={(e) => setProductCategoryFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="">All</option>
+                <option value="eyeglasses">Eyeglasses</option>
+                <option value="sunglasses">Sunglasses</option>
+                <option value="contactlens">Contact Lens</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-text-light mb-1">
                 Product Type
               </label>
               <select
@@ -335,9 +373,8 @@ const Products = () => {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
               >
                 <option value="">All Types</option>
-                <option value="eyeglasses">Eyeglasses</option>
-                <option value="sunglasses">Sunglasses</option>
-                <option value="contactlens">Contact Lens</option>
+                <option value="simple">Simple</option>
+                <option value="variable">Variable</option>
               </select>
             </div>
             <div>
@@ -373,6 +410,7 @@ const Products = () => {
           {(searchQuery ||
             categoryFilter ||
             brandFilter ||
+            productCategoryFilter ||
             productTypeFilter ||
             stockFilter ||
             statusFilter) && (
@@ -447,6 +485,10 @@ const Products = () => {
             // ✅ Get the product image (with variant support)
             const productImage = getProductImage(product);
 
+            // Product type label
+            const productTypeLabel =
+              product.productType === "variable" ? "Variable" : "Simple";
+
             return (
               <div
                 key={product._id}
@@ -486,13 +528,21 @@ const Products = () => {
                       </span>
                     )
                   )}
-                  {/* Has Variants Badge - Top Right */}
-                  {hasVariants && !isDeactivated && (
-                    <span className="absolute top-2 right-2 bg-purple-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                  {/* Product Type Badge - Top Right */}
+                  <span
+                    className={`absolute top-2 right-2 text-white text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md ${
+                      product.productType === "variable"
+                        ? "bg-purple-500"
+                        : "bg-blue-500"
+                    }`}
+                  >
+                    {product.productType === "variable" ? (
                       <Squares2X2Icon className="w-3 h-3" />
-                      {variantCount} Variants
-                    </span>
-                  )}
+                    ) : (
+                      <CubeIcon className="w-3 h-3" />
+                    )}
+                    {productTypeLabel}
+                  </span>
                   {isDeactivated && (
                     <div className="absolute inset-0 bg-gray-400/10 flex items-center justify-center">
                       <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full rotate-[-15deg] shadow-lg">
@@ -599,6 +649,11 @@ const Products = () => {
                       <span className="px-1.5 py-0.5 bg-purple-100 text-purple-600 text-[10px] rounded-full flex items-center gap-0.5">
                         <Squares2X2Icon className="w-2.5 h-2.5" />
                         {variantCount} Variants
+                      </span>
+                    )}
+                    {product.productCategory && (
+                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded-full">
+                        {product.productCategory}
                       </span>
                     )}
                   </div>
