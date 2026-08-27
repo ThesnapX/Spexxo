@@ -372,7 +372,7 @@ const ProductCard = ({
     if (product.images && product.images.length > 0) {
       return product.images[0].url;
     }
-    return "https://picsum.photos/400/400";
+    return null;
   };
 
   // ✅ Check if product is out of stock (for simple products or all variants out of stock)
@@ -382,16 +382,24 @@ const ProductCard = ({
       product.stock === undefined
     : allVariantsOutOfStock;
 
+  const productImage = getProductImage();
+
   return (
     <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
       <div className="relative overflow-hidden bg-gray-50 flex-shrink-0">
         <Link to={`/product/${product.slug}`} className="block">
-          <img
-            src={getProductImage()}
-            alt={product.name}
-            className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-500"
-            loading="lazy"
-          />
+          {productImage ? (
+            <img
+              src={productImage}
+              alt={product.name}
+              className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-500"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full aspect-square bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-400 text-sm">No image</span>
+            </div>
+          )}
         </Link>
         {hasDiscount && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
@@ -1293,19 +1301,19 @@ const Shop = () => {
               </aside>
             )}
 
-            {/* Right Products */}
+            {/* Right Products - Responsive grid */}
             <div
               className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
             >
               {isLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {[...Array(6)].map((_, i) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {[...Array(8)].map((_, i) => (
                     <div
                       key={i}
                       className="bg-white rounded-xl border border-gray-100 overflow-hidden animate-pulse"
                     >
-                      <div className="h-48 bg-gray-200" />
+                      <div className="aspect-square bg-gray-200" />
                       <div className="p-4 space-y-2">
                         <div className="h-3 bg-gray-200 rounded w-1/2" />
                         <div className="h-4 bg-gray-200 rounded w-3/4" />
@@ -1316,7 +1324,14 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+                  {/* ✅ FIXED: Responsive grid that adapts to filter visibility */}
+                  <div
+                    className={`grid gap-3 md:gap-4 ${
+                      filtersOpen
+                        ? "grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-3"
+                        : "grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4"
+                    }`}
+                  >
                     {allProducts.map((product) => (
                       <ProductCard
                         key={product._id}
