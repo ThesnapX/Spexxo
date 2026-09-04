@@ -10,6 +10,13 @@ import "swiper/css/navigation";
 import SectionHeader from "../common/SectionHeader";
 import LoadingSkeleton from "../common/LoadingSkeleton";
 import { ShoppingBagIcon, EyeIcon } from "@heroicons/react/24/outline";
+import {
+  getProductImage,
+  hasVariants,
+  getProductPrice,
+  isProductOutOfStock,
+  getVariantCount,
+} from "../../utils/productHelpers";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -21,12 +28,10 @@ const ProductCarousel = ({
   linkTo,
   showSaleBadge = false,
   onRequireAuth,
-  getDisplayPrice,
-  getDisplayComparePrice,
-  hasVariants: hasVariantsProp,
 }) => {
-  const { data, isLoading } = useQuery({
-    queryKey: [queryKey],
+  // ✅ OPTIMIZED: Better caching and error handling
+  const { data, isLoading, error } = useQuery({
+    queryKey: [queryKey, JSON.stringify(apiParams)],
     queryFn: async () => {
       try {
         const queryString = new URLSearchParams({
@@ -35,59 +40,62 @@ const ProductCarousel = ({
         }).toString();
         const { data } = await axios.get(`${API_URL}/products?${queryString}`);
         return data.products || [];
-      } catch {
+      } catch (err) {
+        console.error(`Failed to fetch ${queryKey}:`, err);
         return [];
       }
     },
+    // ✅ Long cache time to prevent 429 errors
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const products = data || [];
 
+  // ✅ If error (like 429), show cached or empty state
+  if (error) {
+    return (
+      <section className="container-custom py-8">
+        <SectionHeader title={title} subtitle={subtitle} linkTo={linkTo} />
+        <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <svg
+              className="w-8 h-8 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+              />
+            </svg>
+          </div>
+          <h3 className="font-semibold text-text mb-1">Products Unavailable</h3>
+          <p className="text-text-light text-sm">
+            Please refresh the page to try again
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   const CarouselProductCard = ({ product }) => {
+    const productImage = getProductImage(product);
+    const hasVariantsFlag = hasVariants(product);
+    const variantCount = getVariantCount(product);
+    const { displayPrice, originalPrice, hasDiscount, discountPercent } =
+      getProductPrice(product);
+    const outOfStock = isProductOutOfStock(product);
     const isDeactivated = product.isActive === false;
-    const hasVariantsFlag = hasVariantsProp
-      ? hasVariantsProp(product)
-      : product.variants && product.variants.length > 0;
-    const variantCount = hasVariantsFlag ? product.variants.length : 0;
-    const displayPrice = getDisplayPrice
-      ? getDisplayPrice(product)
-      : product.comparePrice || product.price || 0;
-    const displayComparePrice = getDisplayComparePrice
-      ? getDisplayComparePrice(product)
-      : 0;
-    const hasDiscount =
-      displayComparePrice > 0 && displayComparePrice < displayPrice;
 
-    // ✅ FIX: Get the correct image - default variant image or fallback
-    let productImage = null;
-
-    // For variable products, get the default variant's image
-    if (hasVariantsFlag && product.variants.length > 0) {
-      // Find the default variant
-      let defaultVariant = product.variants.find((v) => v.isDefault === true);
-      // If no default variant is marked, use the first one
-      if (!defaultVariant) {
-        defaultVariant = product.variants[0];
-      }
-      // Check if the default variant has images
-      if (defaultVariant.images && defaultVariant.images.length > 0) {
-        productImage = defaultVariant.images[0].url;
-      }
-    }
-
-    // Fallback to product images if no variant image found
-    if (!productImage && product.images && product.images.length > 0) {
-      productImage = product.images[0].url;
-    }
-
-    // Check if ANY variant has stock (for variant products)
     const hasAnyVariantInStock =
       hasVariantsFlag && product.variants.some((v) => v.stock > 0);
-    const isOutOfStock =
-      !hasVariantsFlag &&
-      (product.stock === 0 ||
-        product.stock === null ||
-        product.stock === undefined);
 
     return (
       <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
@@ -112,7 +120,7 @@ const ProductCarousel = ({
             <span className="absolute top-3 left-3 bg-gray-600 text-white text-xs px-2 py-1 rounded-full">
               Inactive
             </span>
-          ) : isOutOfStock ? (
+          ) : outOfStock ? (
             <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
               Out of Stock
             </span>
@@ -120,10 +128,7 @@ const ProductCarousel = ({
             showSaleBadge &&
             hasDiscount && (
               <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                {Math.round(
-                  ((displayPrice - displayComparePrice) / displayPrice) * 100,
-                )}
-                % OFF
+                {discountPercent}% OFF
               </span>
             )
           )}
@@ -135,8 +140,7 @@ const ProductCarousel = ({
             </span>
           )}
 
-          {/* Out of Stock Overlay for simple products */}
-          {isOutOfStock && !isDeactivated && (
+          {outOfStock && !isDeactivated && (
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
               <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
                 OUT OF STOCK
@@ -159,21 +163,18 @@ const ProductCarousel = ({
 
           <div className="flex items-center gap-2 flex-wrap mt-auto">
             <span
-              className={`font-bold ${isDeactivated || isOutOfStock ? "text-gray-400" : "text-text"}`}
+              className={`font-bold ${isDeactivated || outOfStock ? "text-gray-400" : "text-text"}`}
             >
               ₹{displayPrice?.toLocaleString()}
             </span>
-            {hasDiscount && !isDeactivated && !isOutOfStock && (
+            {hasDiscount && !isDeactivated && !outOfStock && (
               <span className="text-sm text-gray-400 line-through">
-                ₹{displayComparePrice?.toLocaleString()}
+                ₹{originalPrice?.toLocaleString()}
               </span>
             )}
-            {hasDiscount && !isDeactivated && !isOutOfStock && (
+            {hasDiscount && !isDeactivated && !outOfStock && (
               <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                {Math.round(
-                  ((displayPrice - displayComparePrice) / displayPrice) * 100,
-                )}
-                % off
+                {discountPercent}% off
               </span>
             )}
             {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
@@ -183,7 +184,7 @@ const ProductCarousel = ({
             )}
           </div>
 
-          {/* ✅ FIX: Action buttons - now matches Shop page */}
+          {/* Action Buttons */}
           {hasVariantsFlag ? (
             <Link
               to={`/product/${product.slug}`}
@@ -194,20 +195,16 @@ const ProductCarousel = ({
           ) : (
             <button
               onClick={() => {
-                // Add to cart logic - using the addToCart from context
-                // The actual cart addition is handled in the parent component
-                // We'll use a custom event or prop if needed
-                if (!isDeactivated && !isOutOfStock) {
-                  // Trigger add to cart
+                if (!isDeactivated && !outOfStock) {
                   const event = new CustomEvent("add-to-cart", {
                     detail: { productId: product._id, quantity: 1 },
                   });
                   window.dispatchEvent(event);
                 }
               }}
-              disabled={isDeactivated || isOutOfStock}
+              disabled={isDeactivated || outOfStock}
               className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-                isDeactivated || isOutOfStock
+                isDeactivated || outOfStock
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
               }`}
@@ -215,7 +212,7 @@ const ProductCarousel = ({
               <ShoppingBagIcon className="w-4 h-4" />
               {isDeactivated
                 ? "Unavailable"
-                : isOutOfStock
+                : outOfStock
                   ? "Out of Stock"
                   : "Add to Cart"}
             </button>

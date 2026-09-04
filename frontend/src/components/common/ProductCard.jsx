@@ -11,6 +11,13 @@ import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
 import { useAuth } from "../../context/AuthContext";
 import toast from "react-hot-toast";
+import {
+  getProductImage,
+  hasVariants,
+  getProductPrice,
+  isProductOutOfStock,
+  getVariantCount,
+} from "../../utils/productHelpers";
 
 const PlaceholderImage = ({ className = "" }) => (
   <div
@@ -39,77 +46,17 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
 
   if (!product) return null;
 
+  // ✅ Get product data using helper functions
+  const productImage = getProductImage(product);
+  const hasVariantsFlag = hasVariants(product);
+  const variantCount = getVariantCount(product);
+  const { displayPrice, originalPrice, hasDiscount, discountPercent } =
+    getProductPrice(product);
+  const outOfStock = isProductOutOfStock(product);
   const isDeactivated = product.isActive === false;
-  const hasVariants = product.variants && product.variants.length > 0;
 
-  // Get the default variant's image if variants exist
-  const getProductImage = () => {
-    if (hasVariants && product.variants.length > 0) {
-      // Find the default variant
-      let defaultVariant = product.variants.find((v) => v.isDefault === true);
-      // If no default variant is marked, use the first one
-      if (!defaultVariant) {
-        defaultVariant = product.variants[0];
-      }
-      if (defaultVariant.images && defaultVariant.images.length > 0) {
-        return defaultVariant.images[0].url;
-      }
-    }
-    // Fallback to product images
-    if (product.images && product.images.length > 0) {
-      return product.images[0].url;
-    }
-    return null;
-  };
-
-  const productImage = getProductImage();
-
-  // Check stock for simple products
-  const isOutOfStock =
-    !hasVariants &&
-    (product.stock === 0 ||
-      product.stock === null ||
-      product.stock === undefined);
-
-  // ✅ FIXED: Get display price and original price
-  let displayPrice = product.price || 0;
-  let originalPrice = product.price || 0;
-  let hasDiscount = false;
-  let discountPercent = 0;
-
-  // For variable products, get the lowest price among variants
-  if (hasVariants) {
-    const variantPrices = product.variants.map((v) => v.price || 0);
-    const variantComparePrices = product.variants.map(
-      (v) => v.comparePrice || 0,
-    );
-    const minPrice = Math.min(...variantPrices);
-    const minCompare = Math.min(...variantComparePrices);
-
-    // If compare price exists and is less than price, it's a sale
-    if (minCompare > 0 && minCompare < minPrice) {
-      displayPrice = minCompare;
-      originalPrice = minPrice;
-      hasDiscount = true;
-      discountPercent = Math.round(((minPrice - minCompare) / minPrice) * 100);
-    } else {
-      displayPrice = minPrice;
-      originalPrice = minPrice;
-    }
-  } else {
-    // Simple product
-    if (product.comparePrice && product.comparePrice < product.price) {
-      displayPrice = product.comparePrice;
-      originalPrice = product.price;
-      hasDiscount = true;
-      discountPercent = Math.round(
-        ((product.price - product.comparePrice) / product.price) * 100,
-      );
-    } else {
-      displayPrice = product.price || 0;
-      originalPrice = product.price || 0;
-    }
-  }
+  const hasAnyVariantInStock =
+    hasVariantsFlag && product.variants.some((v) => v.stock > 0);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -118,7 +65,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
       toast.error("This product is currently deactivated");
       return;
     }
-    if (isOutOfStock) {
+    if (outOfStock) {
       toast.error("This product is out of stock");
       return;
     }
@@ -132,7 +79,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
       if (onRequireAuth) onRequireAuth();
       return;
     }
-    if (isDeactivated || isOutOfStock) {
+    if (isDeactivated || outOfStock) {
       toast.error(
         isDeactivated
           ? "This product is deactivated"
@@ -145,12 +92,11 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
       : addToWishlist(product._id);
   };
 
-  // Determine card styling
   let cardClasses =
     "group bg-white rounded-xl border overflow-hidden hover:shadow-xl transition-all duration-300 ";
   if (isDeactivated) {
     cardClasses += "border-gray-200 opacity-60 grayscale";
-  } else if (isOutOfStock) {
+  } else if (outOfStock) {
     cardClasses += "border-gray-200 opacity-70";
   } else {
     cardClasses += "border-gray-100";
@@ -178,7 +124,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             <span className="bg-gray-600 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
               Deactivated
             </span>
-          ) : isOutOfStock ? (
+          ) : outOfStock ? (
             <span className="bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
               Out of Stock
             </span>
@@ -190,10 +136,10 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
               </span>
             )
           )}
-          {hasVariants && !isDeactivated && (
+          {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
             <span className="bg-purple-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
               <span className="text-[10px]">📦</span>
-              {product.variants.length} Variants
+              {variantCount} Variants
             </span>
           )}
         </div>
@@ -201,11 +147,11 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
         <button
           onClick={handleWishlist}
           className={`absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md transition-all z-10 ${
-            isDeactivated || isOutOfStock
+            isDeactivated || outOfStock
               ? "cursor-not-allowed opacity-50"
               : "hover:bg-primary hover:text-white"
           }`}
-          disabled={isDeactivated || isOutOfStock}
+          disabled={isDeactivated || outOfStock}
         >
           {isInWishlist(product._id) ? (
             <HeartSolid className="w-4 h-4 text-red-500" />
@@ -215,7 +161,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
         </button>
 
         {/* Out of Stock Overlay */}
-        {isOutOfStock && !isDeactivated && (
+        {outOfStock && !isDeactivated && (
           <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
             <div className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
               OUT OF STOCK
@@ -236,37 +182,35 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           </h3>
         </Link>
 
-        {/* ✅ FIXED: Price with discount display */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span
             className={`font-bold ${
-              isDeactivated || isOutOfStock ? "text-gray-400" : "text-text"
+              isDeactivated || outOfStock ? "text-gray-400" : "text-text"
             }`}
           >
             ₹{displayPrice?.toLocaleString()}
           </span>
           {hasDiscount &&
             !isDeactivated &&
-            !isOutOfStock &&
+            !outOfStock &&
             originalPrice > displayPrice && (
               <span className="text-sm text-gray-400 line-through">
                 ₹{originalPrice?.toLocaleString()}
               </span>
             )}
-          {hasDiscount && !isDeactivated && !isOutOfStock && (
+          {hasDiscount && !isDeactivated && !outOfStock && (
             <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
               {discountPercent}% off
             </span>
           )}
-          {hasVariants && !isDeactivated && (
+          {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
             <span className="text-xs text-purple-500 font-medium">
-              ({product.variants.length} variants)
+              ({variantCount} variants)
             </span>
           )}
         </div>
 
-        {/* Show "View Product" for variant products */}
-        {hasVariants ? (
+        {hasVariantsFlag ? (
           <Link
             to={`/product/${product.slug}`}
             className="w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 bg-purple-500/10 text-purple-600 hover:bg-purple-500 hover:text-white"
@@ -276,9 +220,9 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
         ) : (
           <button
             onClick={handleAddToCart}
-            disabled={isDeactivated || isOutOfStock}
+            disabled={isDeactivated || outOfStock}
             className={`w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-              isDeactivated || isOutOfStock
+              isDeactivated || outOfStock
                 ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                 : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
             }`}
@@ -286,7 +230,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             <ShoppingBagIcon className="w-4 h-4" />
             {isDeactivated
               ? "Unavailable"
-              : isOutOfStock
+              : outOfStock
                 ? "Out of Stock"
                 : "Add to Cart"}
           </button>
@@ -296,7 +240,7 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             ⚠️ Product deactivated
           </p>
         )}
-        {isOutOfStock && !isDeactivated && (
+        {outOfStock && !isDeactivated && (
           <p className="text-xs text-red-500 text-center mt-1">
             ⚠️ Out of stock
           </p>

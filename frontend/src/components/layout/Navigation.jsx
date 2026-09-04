@@ -437,6 +437,8 @@ const MegaMenuContent = ({ type, onClose, buildGenderUrl }) => {
       const { data } = await axios.get(`${API_URL}/categories`);
       return data.categories || [];
     },
+    staleTime: 15 * 60 * 1000, // ✅ Add this
+    gcTime: 30 * 60 * 1000, // ✅ Add this
   });
 
   // Fetch brands
@@ -446,6 +448,8 @@ const MegaMenuContent = ({ type, onClose, buildGenderUrl }) => {
       const { data } = await axios.get(`${API_URL}/brands`);
       return data.brands || [];
     },
+    staleTime: 15 * 60 * 1000, // ✅ Add this
+    gcTime: 30 * 60 * 1000, // ✅ Add this
   });
 
   // Fetch products for the specific category using productCategory
@@ -463,6 +467,8 @@ const MegaMenuContent = ({ type, onClose, buildGenderUrl }) => {
       );
       return data.products || [];
     },
+    staleTime: 15 * 60 * 1000, // ✅ Add this
+    gcTime: 30 * 60 * 1000, // ✅ Add this
   });
 
   const products = productsData || [];

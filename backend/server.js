@@ -76,10 +76,18 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // ============ RATE LIMITING ============
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: process.env.NODE_ENV === "production" ? 500 : 200,
   message: "Too many requests, please try again later.",
 });
 app.use("/api/", limiter);
+
+// ✅ Products endpoint can have higher limit
+const productsLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: "Too many product requests, please slow down.",
+});
+app.use("/api/products", productsLimiter);
 
 // ============ ROUTES ============
 console.log("✅ Registering routes...");
