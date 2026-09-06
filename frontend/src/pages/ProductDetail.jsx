@@ -190,31 +190,47 @@ const ProductDetail = () => {
   const displayRelated =
     smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
 
-  // Get display price - use variant price or fallback to main product price
-  const getDisplayPrice = () => {
-    if (selectedVariant?.price) {
-      return selectedVariant.price;
+  // ✅ FIXED: Get display price with proper variant discount support
+  const getVariantPriceInfo = (variant) => {
+    if (!variant) {
+      // Fallback to product level
+      const productPrice = product?.price || 0;
+      const productCompare = product?.comparePrice || 0;
+      const hasDisc = productCompare > 0 && productCompare < productPrice;
+      return {
+        displayPrice: hasDisc ? productCompare : productPrice,
+        originalPrice: productPrice,
+        comparePrice: productCompare,
+        hasDiscount: hasDisc,
+        discountPercent: hasDisc
+          ? Math.round(((productPrice - productCompare) / productPrice) * 100)
+          : 0,
+      };
     }
-    return product?.comparePrice || product?.price || 0;
+
+    const price = variant.price || 0;
+    const compare = variant.comparePrice || 0;
+    const hasDisc = compare > 0 && compare < price;
+
+    return {
+      displayPrice: hasDisc ? compare : price,
+      originalPrice: price,
+      comparePrice: compare,
+      hasDiscount: hasDisc,
+      discountPercent: hasDisc
+        ? Math.round(((price - compare) / price) * 100)
+        : 0,
+    };
   };
 
-  const getOriginalPrice = () => {
-    if (selectedVariant?.comparePrice) {
-      return selectedVariant.comparePrice;
-    }
-    return product?.price || 0;
-  };
+  // Get current price info based on selected variant or product
+  const currentPriceInfo = getVariantPriceInfo(selectedVariant);
 
-  const getComparePrice = () => {
-    if (selectedVariant?.comparePrice) {
-      return selectedVariant.comparePrice;
-    }
-    return product?.comparePrice || 0;
-  };
-
-  const displayPrice = getDisplayPrice();
-  const originalPrice = getOriginalPrice();
-  const comparePrice = getComparePrice();
+  const displayPrice = currentPriceInfo.displayPrice;
+  const originalPrice = currentPriceInfo.originalPrice;
+  const comparePrice = currentPriceInfo.comparePrice;
+  const hasDiscount = currentPriceInfo.hasDiscount;
+  const discountPercent = currentPriceInfo.discountPercent;
 
   const getDisplayStock = () => {
     if (selectedVariant?.stock !== undefined) {
@@ -404,12 +420,6 @@ const ProductDetail = () => {
       setSubmittingReview(false);
     }
   };
-
-  // Only show discount if comparePrice exists and is less than price
-  const hasDiscount = comparePrice > 0 && comparePrice < displayPrice;
-  const discountPercent = hasDiscount
-    ? Math.round(((displayPrice - comparePrice) / displayPrice) * 100)
-    : 0;
 
   // Get frame colors with color swatches
   const getFrameColorsWithSwatches = (frameColorValue) => {
@@ -610,9 +620,9 @@ Please confirm availability.`;
                   >
                     ₹{displayPrice?.toLocaleString()}
                   </span>
-                  {comparePrice > 0 && comparePrice < displayPrice && (
+                  {hasDiscount && (
                     <span className="text-lg text-gray-400 line-through">
-                      ₹{comparePrice?.toLocaleString()}
+                      ₹{originalPrice?.toLocaleString()}
                     </span>
                   )}
                   {hasDiscount && (
@@ -657,8 +667,13 @@ Please confirm availability.`;
                       const isDisabled =
                         !isVariantActive || isVariantOutOfStock;
                       const color = getColorDetails(variant.color);
-                      const variantPrice = variant.price || displayPrice;
-                      const variantCompare = variant.comparePrice || 0;
+
+                      // ✅ Get variant price info
+                      const variantPriceInfo = getVariantPriceInfo(variant);
+                      const vDisplayPrice = variantPriceInfo.displayPrice;
+                      const vOriginalPrice = variantPriceInfo.originalPrice;
+                      const vHasDiscount = variantPriceInfo.hasDiscount;
+                      const vDiscountPercent = variantPriceInfo.discountPercent;
 
                       return (
                         <button
@@ -670,15 +685,15 @@ Please confirm availability.`;
                           }}
                           disabled={isDisabled}
                           className={`
-              relative p-3 rounded-xl border-2 transition-all text-left
-              ${
-                isSelected && !isDisabled
-                  ? "border-primary bg-[#EBF4FC] ring-2 ring-primary/20"
-                  : isDisabled
-                    ? "border-gray-200 opacity-60 cursor-not-allowed"
-                    : "border-gray-200 hover:border-gray-300"
-              }
-            `}
+                            relative p-3 rounded-xl border-2 transition-all text-left
+                            ${
+                              isSelected && !isDisabled
+                                ? "border-primary bg-[#EBF4FC] ring-2 ring-primary/20"
+                                : isDisabled
+                                  ? "border-gray-200 opacity-60 cursor-not-allowed"
+                                  : "border-gray-200 hover:border-gray-300"
+                            }
+                          `}
                         >
                           {/* Color Swatch */}
                           <div className="flex items-center gap-2 mb-1.5">
@@ -695,18 +710,22 @@ Please confirm availability.`;
                             </span>
                           </div>
 
-                          {/* Price */}
+                          {/* ✅ Price with discount */}
                           <div className="text-xs text-text-light">
-                            ₹{variantPrice?.toLocaleString()}
-                            {variantCompare > 0 &&
-                              variantCompare < variantPrice && (
-                                <span className="text-gray-400 line-through ml-1.5">
-                                  ₹{variantCompare?.toLocaleString()}
-                                </span>
-                              )}
+                            ₹{vDisplayPrice?.toLocaleString()}
+                            {vHasDiscount && (
+                              <span className="text-gray-400 line-through ml-1.5">
+                                ₹{vOriginalPrice?.toLocaleString()}
+                              </span>
+                            )}
+                            {vHasDiscount && (
+                              <span className="text-green-600 font-medium ml-1.5">
+                                {vDiscountPercent}% off
+                              </span>
+                            )}
                           </div>
 
-                          {/* ✅ REMOVED: "in stock" text - only show when out of stock */}
+                          {/* Stock status */}
                           <div className="text-xs mt-1">
                             {isVariantOutOfStock && (
                               <span className="text-red-500 font-medium">
@@ -750,9 +769,7 @@ Please confirm availability.`;
                         </span>
                         {selectedVariant.sku &&
                           ` • SKU: ${selectedVariant.sku}`}
-                        {/* ✅ REMOVED: "in stock" text from selected variant */}
                       </p>
-                      {/* Show variant attributes if any */}
                       {selectedVariant.frameShape && (
                         <p className="text-xs text-text-light mt-1">
                           Frame Shape: {selectedVariant.frameShape}
@@ -832,7 +849,6 @@ Please confirm availability.`;
                     <PlusIcon className="w-4 h-4" />
                   </button>
                 </div>
-                {/* ✅ REMOVED: "in stock" text - only show when unavailable */}
                 {(isDeactivated || isVariantOutOfStock) && (
                   <span className="text-xs text-red-500">
                     {isDeactivated ? "Unavailable" : "Out of Stock"}

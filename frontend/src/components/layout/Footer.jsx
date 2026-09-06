@@ -1,3 +1,5 @@
+// frontend/src/components/layout/Footer.jsx
+
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -76,29 +78,71 @@ const Footer = () => {
             <img
               src="/images/logo-white.png"
               alt="Spexxo"
-              className="h-8 md:h-12 w-auto "
+              className="h-8 md:h-12 w-auto mb-4"
               onError={(e) => {
                 e.target.style.display = "none";
                 e.target.nextSibling.style.display = "block";
               }}
             />
-            <p className="text-gray-400 mb-6 leading-relaxed">
+            <span className="hidden text-2xl font-bold text-white">
+              Spe<span className="text-primary">xx</span>o
+            </span>
+            <p className="text-gray-400 mb-6 leading-relaxed text-sm">
               Your premium destination for eyeglasses, sunglasses, and contact
               lenses. Quality eyewear at affordable prices with free shipping.
             </p>
             <div className="flex gap-3">
-              {[FaFacebook, FaInstagram, FaTwitter, FaYoutube].map(
-                (Icon, i) => (
-                  <a
-                    key={i}
-                    href="#"
-                    className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-primary transition-colors"
-                  >
-                    <Icon className="text-white text-lg" />
-                  </a>
-                ),
-              )}
+              {[
+                { icon: FaFacebook, url: "https://facebook.com/spexxo" },
+                { icon: FaInstagram, url: "https://instagram.com/spexxo" },
+                { icon: FaTwitter, url: "https://twitter.com/spexxo" },
+                { icon: FaYoutube, url: "https://youtube.com/spexxo" },
+              ].map((social, i) => (
+                <a
+                  key={i}
+                  href={social.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-primary transition-colors"
+                  aria-label={`Follow us on ${social.icon.name}`}
+                >
+                  <social.icon className="text-white text-lg" />
+                </a>
+              ))}
             </div>
+          </div>
+
+          {/* Shop Categories */}
+          <div>
+            <h4 className="text-lg font-semibold mb-6">Shop by Category</h4>
+            <ul className="space-y-3">
+              {[
+                {
+                  name: "Eyeglasses",
+                  path: "/shop?productCategory=eyeglasses",
+                },
+                {
+                  name: "Sunglasses",
+                  path: "/shop?productCategory=sunglasses",
+                },
+                {
+                  name: "Contact Lenses",
+                  path: "/shop?productCategory=contactlens",
+                },
+                { name: "Men's Eyewear", path: "/shop?gender=men" },
+                { name: "Women's Eyewear", path: "/shop?gender=women" },
+                { name: "Kids Eyewear", path: "/shop?gender=kids" },
+              ].map((link) => (
+                <li key={link.name}>
+                  <Link
+                    to={link.path}
+                    className="text-gray-400 hover:text-primary transition text-sm"
+                  >
+                    {link.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Quick Links */}
@@ -116,37 +160,7 @@ const Footer = () => {
                 <li key={link.name}>
                   <Link
                     to={link.path}
-                    className="text-gray-400 hover:text-primary transition"
-                  >
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Categories */}
-          <div>
-            <h4 className="text-lg font-semibold mb-6">Categories</h4>
-            <ul className="space-y-3">
-              {[
-                { name: "Men Eyeglasses", path: "/shop/eyeglasses?gender=men" },
-                {
-                  name: "Women Eyeglasses",
-                  path: "/shop/eyeglasses?gender=women",
-                },
-                { name: "Men Sunglasses", path: "/shop/sunglasses?gender=men" },
-                {
-                  name: "Women Sunglasses",
-                  path: "/shop/sunglasses?gender=women",
-                },
-                { name: "Contact Lenses", path: "/shop/contact-lens" },
-                { name: "Blue Cut Glasses", path: "/shop?lensType=blue-cut" },
-              ].map((link) => (
-                <li key={link.name}>
-                  <Link
-                    to={link.path}
-                    className="text-gray-400 hover:text-primary transition"
+                    className="text-gray-400 hover:text-primary transition text-sm"
                   >
                     {link.name}
                   </Link>
@@ -184,6 +198,24 @@ const Footer = () => {
                   satyapatanakar5@gmail.com
                 </a>
               </li>
+              <li className="flex gap-3">
+                <div className="w-5 h-5 text-primary flex-shrink-0">
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm">Store Hours</p>
+                  <p className="text-white text-sm font-medium">
+                    Mon-Sat: 10:00 AM - 8:00 PM
+                  </p>
+                  <p className="text-gray-500 text-xs">Sunday: Closed</p>
+                </div>
+              </li>
             </ul>
           </div>
         </div>
@@ -195,7 +227,7 @@ const Footer = () => {
           <p className="text-gray-400 text-sm">
             © {new Date().getFullYear()} Spexxo. All rights reserved.
           </p>
-          <div className="flex gap-6">
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
             {[
               { name: "Privacy Policy", path: "/privacy" },
               { name: "Terms & Conditions", path: "/terms" },

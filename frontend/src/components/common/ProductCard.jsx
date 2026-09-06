@@ -17,6 +17,8 @@ import {
   getProductPrice,
   isProductOutOfStock,
   getVariantCount,
+  hasAnyDiscount,
+  getBestDiscount,
 } from "../../utils/productHelpers";
 
 const PlaceholderImage = ({ className = "" }) => (
@@ -54,6 +56,8 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
     getProductPrice(product);
   const outOfStock = isProductOutOfStock(product);
   const isDeactivated = product.isActive === false;
+  const hasAnyDiscountFlag = hasAnyDiscount(product);
+  const bestDiscount = getBestDiscount(product);
 
   const hasAnyVariantInStock =
     hasVariantsFlag && product.variants.some((v) => v.stock > 0);
@@ -102,6 +106,9 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
     cardClasses += "border-gray-100";
   }
 
+  // ✅ Use best discount for badge if available
+  const displayDiscount = hasDiscount ? discountPercent : bestDiscount;
+
   return (
     <div className={cardClasses}>
       <div className="relative overflow-hidden bg-gray-50">
@@ -130,9 +137,10 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
             </span>
           ) : (
             showSaleBadge &&
-            hasDiscount && (
+            hasAnyDiscountFlag &&
+            displayDiscount > 0 && (
               <span className="bg-red-500 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
-                {discountPercent}% OFF
+                {displayDiscount}% OFF
               </span>
             )
           )}
@@ -177,7 +185,8 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           </p>
         )}
         <Link to={`/product/${product.slug}`}>
-          <h3 className="font-medium text-sm text-text mb-2 line-clamp-1 hover:text-primary transition">
+          {/* ✅ Product name - FULL, not clipped */}
+          <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
             {product.name}
           </h3>
         </Link>
@@ -203,6 +212,14 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
               {discountPercent}% off
             </span>
           )}
+          {!hasDiscount &&
+            hasAnyDiscountFlag &&
+            !isDeactivated &&
+            !outOfStock && (
+              <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                {displayDiscount}% off
+              </span>
+            )}
           {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
             <span className="text-xs text-purple-500 font-medium">
               ({variantCount} variants)

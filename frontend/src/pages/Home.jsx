@@ -68,13 +68,14 @@ const Home = () => {
       <FeaturesSection />
       <PromoBanners />
 
+      {/* ✅ Flash Sales - Now shows products with discounts (comparePrice exists) */}
       {carouselsLoaded.flash && (
         <ProductCarousel
           title="Flash Sales"
           subtitle="Limited time deals, grab them fast!"
           queryKey="flash-sale-products"
-          apiParams={{ isFeatured: true, sort: "price-low" }}
-          linkTo="/shop?isFeatured=true"
+          apiParams={{ hasDiscount: true, sort: "price-low" }}
+          linkTo="/shop?sort=price-low"
           showSaleBadge={true}
           onRequireAuth={() => setShowAuthPopup(true)}
         />

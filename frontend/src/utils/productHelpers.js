@@ -37,7 +37,18 @@ export const hasVariants = (product) => {
 };
 
 /**
+ * Get the default variant of a product
+ */
+export const getDefaultVariant = (product) => {
+  if (!product.variants || product.variants.length === 0) return null;
+  return (
+    product.variants.find((v) => v.isDefault === true) || product.variants[0]
+  );
+};
+
+/**
  * Get display price with discount for product
+ * Checks both parent level and variant level comparePrice
  */
 export const getProductPrice = (product) => {
   let displayPrice = product.price || 0;
@@ -45,34 +56,66 @@ export const getProductPrice = (product) => {
   let hasDiscount = false;
   let discountPercent = 0;
 
-  if (hasVariants(product)) {
-    const variantPrices = product.variants.map((v) => v.price || 0);
-    const variantComparePrices = product.variants.map(
-      (v) => v.comparePrice || 0,
+  // ✅ Check parent level discount first
+  if (
+    product.comparePrice &&
+    product.comparePrice > 0 &&
+    product.comparePrice < product.price
+  ) {
+    displayPrice = product.comparePrice;
+    originalPrice = product.price;
+    hasDiscount = true;
+    discountPercent = Math.round(
+      ((product.price - product.comparePrice) / product.price) * 100,
     );
-    const minPrice = Math.min(...variantPrices);
-    const minCompare = Math.min(...variantComparePrices);
+    return { displayPrice, originalPrice, hasDiscount, discountPercent };
+  }
 
-    if (minCompare > 0 && minCompare < minPrice) {
+  // ✅ If variable product, check variant-level discounts
+  if (hasVariants(product)) {
+    const defaultVariant = getDefaultVariant(product);
+
+    if (defaultVariant) {
+      const variantPrice = defaultVariant.price || 0;
+      const variantCompare = defaultVariant.comparePrice || 0;
+
+      // ✅ Check if variant has a discount (comparePrice > 0 and comparePrice < price)
+      if (variantCompare > 0 && variantCompare < variantPrice) {
+        displayPrice = variantCompare;
+        originalPrice = variantPrice;
+        hasDiscount = true;
+        discountPercent = Math.round(
+          ((variantPrice - variantCompare) / variantPrice) * 100,
+        );
+      } else {
+        // Use variant price
+        displayPrice = variantPrice;
+        originalPrice = variantPrice;
+      }
+    }
+
+    // Also check if any variant has a better discount (for "from" price display)
+    let minPrice = Infinity;
+    let minCompare = Infinity;
+    let foundDiscount = false;
+
+    product.variants.forEach((v) => {
+      const price = v.price || 0;
+      const compare = v.comparePrice || 0;
+
+      if (price < minPrice) minPrice = price;
+      if (compare > 0 && compare < price) {
+        if (compare < minCompare) minCompare = compare;
+        foundDiscount = true;
+      }
+    });
+
+    // If we found any variant with discount and it's better than current
+    if (foundDiscount && minCompare < minPrice) {
       displayPrice = minCompare;
       originalPrice = minPrice;
       hasDiscount = true;
       discountPercent = Math.round(((minPrice - minCompare) / minPrice) * 100);
-    } else {
-      displayPrice = minPrice;
-      originalPrice = minPrice;
-    }
-  } else {
-    if (product.comparePrice && product.comparePrice < product.price) {
-      displayPrice = product.comparePrice;
-      originalPrice = product.price;
-      hasDiscount = true;
-      discountPercent = Math.round(
-        ((product.price - product.comparePrice) / product.price) * 100,
-      );
-    } else {
-      displayPrice = product.price || 0;
-      originalPrice = product.price || 0;
     }
   }
 
@@ -98,4 +141,61 @@ export const isProductOutOfStock = (product) => {
  */
 export const getVariantCount = (product) => {
   return product.variants ? product.variants.length : 0;
+};
+
+/**
+ * Check if product has any discount (at parent or variant level)
+ */
+export const hasAnyDiscount = (product) => {
+  // Check parent level
+  if (
+    product.comparePrice &&
+    product.comparePrice > 0 &&
+    product.comparePrice < product.price
+  ) {
+    return true;
+  }
+
+  // Check variant level
+  if (hasVariants(product)) {
+    return product.variants.some((v) => {
+      const compare = v.comparePrice || 0;
+      const price = v.price || 0;
+      return compare > 0 && compare < price;
+    });
+  }
+
+  return false;
+};
+
+/**
+ * Get the best discount percentage from product (parent or variants)
+ */
+export const getBestDiscount = (product) => {
+  let bestDiscount = 0;
+
+  // Check parent level
+  if (
+    product.comparePrice &&
+    product.comparePrice > 0 &&
+    product.comparePrice < product.price
+  ) {
+    bestDiscount = Math.round(
+      ((product.price - product.comparePrice) / product.price) * 100,
+    );
+  }
+
+  // Check variant level
+  if (hasVariants(product)) {
+    product.variants.forEach((v) => {
+      const compare = v.comparePrice || 0;
+      const price = v.price || 0;
+      if (compare > 0 && compare < price) {
+        const discount = Math.round(((price - compare) / price) * 100);
+        if (discount > bestDiscount) bestDiscount = discount;
+      }
+    });
+  }
+
+  return bestDiscount;
 };

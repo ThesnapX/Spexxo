@@ -1,6 +1,6 @@
 // frontend/src/pages/admin/Products.jsx
 
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -22,30 +22,91 @@ import {
   Squares2X2Icon,
   CubeIcon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-// ✅ FIX: Use VITE_SITE_URL for production
+// ✅ FIX: Prefer environment variable over window.location.origin
 const FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
-  // window.location.origin ||
   "https://spexxo.vercel.app";
 
 const Products = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [copiedId, setCopiedId] = useState(null);
 
-  // Search and Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [brandFilter, setBrandFilter] = useState("");
-  const [productCategoryFilter, setProductCategoryFilter] = useState("");
-  const [productTypeFilter, setProductTypeFilter] = useState("");
-  const [stockFilter, setStockFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  // ✅ Load filter state from URL params on mount
+  const getInitialFilters = () => {
+    const params = new URLSearchParams(location.search);
+    return {
+      searchQuery: params.get("search") || "",
+      categoryFilter: params.get("category") || "",
+      brandFilter: params.get("brand") || "",
+      productCategoryFilter: params.get("productCategory") || "",
+      productTypeFilter: params.get("productType") || "",
+      stockFilter: params.get("stock") || "",
+      statusFilter: params.get("status") || "",
+    };
+  };
+
+  // Search and Filter states - initialized from URL
+  const [searchQuery, setSearchQuery] = useState(
+    getInitialFilters().searchQuery,
+  );
+  const [categoryFilter, setCategoryFilter] = useState(
+    getInitialFilters().categoryFilter,
+  );
+  const [brandFilter, setBrandFilter] = useState(
+    getInitialFilters().brandFilter,
+  );
+  const [productCategoryFilter, setProductCategoryFilter] = useState(
+    getInitialFilters().productCategoryFilter,
+  );
+  const [productTypeFilter, setProductTypeFilter] = useState(
+    getInitialFilters().productTypeFilter,
+  );
+  const [stockFilter, setStockFilter] = useState(
+    getInitialFilters().stockFilter,
+  );
+  const [statusFilter, setStatusFilter] = useState(
+    getInitialFilters().statusFilter,
+  );
+  const [showFilters, setShowFilters] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.toString().length > 0;
+  });
+
+  // ✅ Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set("search", searchQuery);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (brandFilter) params.set("brand", brandFilter);
+    if (productCategoryFilter)
+      params.set("productCategory", productCategoryFilter);
+    if (productTypeFilter) params.set("productType", productTypeFilter);
+    if (stockFilter) params.set("stock", stockFilter);
+    if (statusFilter) params.set("status", statusFilter);
+
+    const newUrl = params.toString()
+      ? `${location.pathname}?${params.toString()}`
+      : location.pathname;
+    if (newUrl !== location.pathname + location.search) {
+      navigate(newUrl, { replace: true });
+    }
+  }, [
+    searchQuery,
+    categoryFilter,
+    brandFilter,
+    productCategoryFilter,
+    productTypeFilter,
+    stockFilter,
+    statusFilter,
+    location.pathname,
+    navigate,
+  ]);
 
   // Fetch products - include ALL products (including inactive)
   const { data: productsData, isLoading } = useQuery({
@@ -136,43 +197,54 @@ const Products = () => {
     return total;
   };
 
-  // ✅ Helper function to get display price with discount
+  // ✅ Helper function to get display price with discount (checks variant level too)
   const getDisplayPrice = (product) => {
     let displayPrice = product.price || 0;
     let originalPrice = product.price || 0;
     let hasDiscount = false;
     let discountPercent = 0;
 
-    if (product.variants && product.variants.length > 0) {
-      const variantPrices = product.variants.map((v) => v.price || 0);
-      const variantComparePrices = product.variants.map(
-        (v) => v.comparePrice || 0,
+    // Check parent level discount
+    if (
+      product.comparePrice &&
+      product.comparePrice > 0 &&
+      product.comparePrice < product.price
+    ) {
+      displayPrice = product.comparePrice;
+      originalPrice = product.price;
+      hasDiscount = true;
+      discountPercent = Math.round(
+        ((product.price - product.comparePrice) / product.price) * 100,
       );
-      const minPrice = Math.min(...variantPrices);
-      const minCompare = Math.min(...variantComparePrices);
+      return { displayPrice, originalPrice, hasDiscount, discountPercent };
+    }
 
-      if (minCompare > 0 && minCompare < minPrice) {
+    // Check variant level discounts
+    if (product.variants && product.variants.length > 0) {
+      let minPrice = Infinity;
+      let minCompare = Infinity;
+      let foundDiscount = false;
+
+      product.variants.forEach((v) => {
+        const price = v.price || 0;
+        const compare = v.comparePrice || 0;
+        if (price < minPrice) minPrice = price;
+        if (compare > 0 && compare < price) {
+          if (compare < minCompare) minCompare = compare;
+          foundDiscount = true;
+        }
+      });
+
+      if (foundDiscount && minCompare < minPrice) {
         displayPrice = minCompare;
         originalPrice = minPrice;
         hasDiscount = true;
         discountPercent = Math.round(
           ((minPrice - minCompare) / minPrice) * 100,
         );
-      } else {
+      } else if (minPrice !== Infinity) {
         displayPrice = minPrice;
         originalPrice = minPrice;
-      }
-    } else {
-      if (product.comparePrice && product.comparePrice < product.price) {
-        displayPrice = product.comparePrice;
-        originalPrice = product.price;
-        hasDiscount = true;
-        discountPercent = Math.round(
-          ((product.price - product.comparePrice) / product.price) * 100,
-        );
-      } else {
-        displayPrice = product.price || 0;
-        originalPrice = product.price || 0;
       }
     }
 
@@ -234,6 +306,9 @@ const Products = () => {
     setProductTypeFilter("");
     setStockFilter("");
     setStatusFilter("");
+    setShowFilters(false);
+    // Clear URL params
+    navigate(location.pathname, { replace: true });
   };
 
   const getBrandName = (product) => {
@@ -250,6 +325,16 @@ const Products = () => {
       productsData?.products?.filter((p) => p.productType === type).length || 0
     );
   };
+
+  // ✅ Check if any filter is active
+  const hasActiveFilters =
+    searchQuery ||
+    categoryFilter ||
+    brandFilter ||
+    productCategoryFilter ||
+    productTypeFilter ||
+    stockFilter ||
+    statusFilter;
 
   return (
     <div>
@@ -268,14 +353,21 @@ const Products = () => {
             <span>Simple: {countByProductType("simple")}</span>
             <span>•</span>
             <span>Variable: {countByProductType("variable")}</span>
+            {hasActiveFilters && (
+              <span className="text-primary font-medium">
+                • Filters applied
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="btn-outline text-sm flex items-center gap-1"
+            className={`btn-outline text-sm flex items-center gap-1 ${
+              showFilters ? "bg-primary/10 border-primary text-primary" : ""
+            }`}
           >
-            <FunnelIcon className="w-4 h-4" />{" "}
+            <FunnelIcon className="w-4 h-4" />
             {showFilters ? "Hide Filters" : "Show Filters"}
           </button>
           <button
@@ -286,8 +378,6 @@ const Products = () => {
           </button>
         </div>
       </div>
-
-      {/* Rest of the component remains the same... */}
 
       {/* Search Bar */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
@@ -400,13 +490,7 @@ const Products = () => {
               </select>
             </div>
           </div>
-          {(searchQuery ||
-            categoryFilter ||
-            brandFilter ||
-            productCategoryFilter ||
-            productTypeFilter ||
-            stockFilter ||
-            statusFilter) && (
+          {hasActiveFilters && (
             <button
               onClick={clearFilters}
               className="text-sm text-red-500 hover:underline mt-3"
@@ -467,7 +551,7 @@ const Products = () => {
             const variantCount = hasVariants ? product.variants.length : 0;
             const totalStock = getTotalStock(product);
 
-            // Get price with discount
+            // Get price with discount (checks variant level too)
             const {
               displayPrice,
               originalPrice,
@@ -545,9 +629,7 @@ const Products = () => {
                   )}
                 </div>
                 <div
-                  className={`p-4 cursor-pointer ${
-                    isDeactivated ? "opacity-75" : ""
-                  }`}
+                  className={`p-4 cursor-pointer ${isDeactivated ? "opacity-75" : ""}`}
                   onClick={() =>
                     navigate(`/admin/products/view/${product._id}`)
                   }
@@ -565,7 +647,8 @@ const Products = () => {
                       </span>
                     )}
                   </p>
-                  <h3 className="font-medium text-sm text-text mb-2 line-clamp-1">
+                  {/* ✅ Product name - FULL, not clipped */}
+                  <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
                     {product.name}
                   </h3>
 
@@ -577,11 +660,13 @@ const Products = () => {
                     >
                       ₹{displayPrice?.toLocaleString()}
                     </span>
-                    {hasDiscount && !isDeactivated && (
-                      <span className="text-sm text-gray-400 line-through">
-                        ₹{originalPrice?.toLocaleString()}
-                      </span>
-                    )}
+                    {hasDiscount &&
+                      !isDeactivated &&
+                      originalPrice > displayPrice && (
+                        <span className="text-sm text-gray-400 line-through">
+                          ₹{originalPrice?.toLocaleString()}
+                        </span>
+                      )}
                     {hasDiscount && !isDeactivated && (
                       <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                         {discountPercent}% off

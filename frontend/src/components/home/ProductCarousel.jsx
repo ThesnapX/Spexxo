@@ -1,5 +1,6 @@
 // frontend/src/components/home/ProductCarousel.jsx
 
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -16,7 +17,12 @@ import {
   getProductPrice,
   isProductOutOfStock,
   getVariantCount,
+  hasAnyDiscount,
+  getBestDiscount,
 } from "../../utils/productHelpers";
+import { useCart } from "../../context/CartContext";
+import { useAuth } from "../../context/AuthContext";
+import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -29,6 +35,9 @@ const ProductCarousel = ({
   showSaleBadge = false,
   onRequireAuth,
 }) => {
+  const { addToCart, isAddingToCart } = useCart();
+  const { isAuthenticated } = useAuth();
+
   // ✅ OPTIMIZED: Better caching and error handling
   const { data, isLoading, error } = useQuery({
     queryKey: [queryKey, JSON.stringify(apiParams)],
@@ -45,15 +54,57 @@ const ProductCarousel = ({
         return [];
       }
     },
-    // ✅ Long cache time to prevent 429 errors
-    staleTime: 15 * 60 * 1000, // 15 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    staleTime: 15 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     retry: 1,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
 
-  const products = data || [];
+  // ✅ Filter products to only show those with discounts for Flash Sales
+  const filteredProducts = useMemo(() => {
+    if (queryKey === "flash-sale-products") {
+      // For Flash Sales, only show products that have a discount
+      return (data || []).filter((product) => {
+        // Check if product has variants with discounts
+        if (product.variants && product.variants.length > 0) {
+          return product.variants.some(
+            (v) =>
+              v.comparePrice && v.comparePrice > 0 && v.comparePrice < v.price,
+          );
+        }
+        // Simple product discount check
+        return (
+          product.comparePrice &&
+          product.comparePrice > 0 &&
+          product.comparePrice < product.price
+        );
+      });
+    }
+    return data || [];
+  }, [data, queryKey]);
+
+  const products = filteredProducts;
+
+  // ✅ Handle Add to Cart
+  const handleAddToCart = async (productId, event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (!isAuthenticated) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
+    try {
+      await addToCart(productId, 1);
+    } catch (error) {
+      // Error is already handled in CartContext
+      console.error("Add to cart error:", error);
+    }
+  };
 
   // ✅ If error (like 429), show cached or empty state
   if (error) {
@@ -93,9 +144,35 @@ const ProductCarousel = ({
       getProductPrice(product);
     const outOfStock = isProductOutOfStock(product);
     const isDeactivated = product.isActive === false;
+    const hasAnyDiscountFlag = hasAnyDiscount(product);
+    const bestDiscount = getBestDiscount(product);
 
     const hasAnyVariantInStock =
       hasVariantsFlag && product.variants.some((v) => v.stock > 0);
+
+    // Use best discount for badge if available
+    const displayDiscount = hasDiscount ? discountPercent : bestDiscount;
+
+    // ✅ Handle Add to Cart with loading state
+    const handleAddToCartClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isDeactivated || outOfStock) {
+        toast.error(
+          isDeactivated ? "This product is deactivated" : "Out of stock",
+        );
+        return;
+      }
+
+      if (!isAuthenticated) {
+        if (onRequireAuth) onRequireAuth();
+        return;
+      }
+
+      // Use the product ID directly - CartContext will handle the rest
+      addToCart(product._id, 1);
+    };
 
     return (
       <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
@@ -126,9 +203,10 @@ const ProductCarousel = ({
             </span>
           ) : (
             showSaleBadge &&
-            hasDiscount && (
+            hasAnyDiscountFlag &&
+            displayDiscount > 0 && (
               <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                {discountPercent}% OFF
+                {displayDiscount}% OFF
               </span>
             )
           )}
@@ -156,7 +234,8 @@ const ProductCarousel = ({
             </p>
           )}
           <Link to={`/product/${product.slug}`} className="block flex-shrink-0">
-            <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition">
+            {/* ✅ Product name - FULL, not clipped */}
+            <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
               {product.name}
             </h3>
           </Link>
@@ -167,16 +246,27 @@ const ProductCarousel = ({
             >
               ₹{displayPrice?.toLocaleString()}
             </span>
-            {hasDiscount && !isDeactivated && !outOfStock && (
-              <span className="text-sm text-gray-400 line-through">
-                ₹{originalPrice?.toLocaleString()}
-              </span>
-            )}
+            {hasDiscount &&
+              !isDeactivated &&
+              !outOfStock &&
+              originalPrice > displayPrice && (
+                <span className="text-sm text-gray-400 line-through">
+                  ₹{originalPrice?.toLocaleString()}
+                </span>
+              )}
             {hasDiscount && !isDeactivated && !outOfStock && (
               <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                 {discountPercent}% off
               </span>
             )}
+            {!hasDiscount &&
+              hasAnyDiscountFlag &&
+              !isDeactivated &&
+              !outOfStock && (
+                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                  {displayDiscount}% off
+                </span>
+              )}
             {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
               <span className="text-xs text-purple-500 font-medium">
                 ({variantCount} variants)
@@ -194,27 +284,29 @@ const ProductCarousel = ({
             </Link>
           ) : (
             <button
-              onClick={() => {
-                if (!isDeactivated && !outOfStock) {
-                  const event = new CustomEvent("add-to-cart", {
-                    detail: { productId: product._id, quantity: 1 },
-                  });
-                  window.dispatchEvent(event);
-                }
-              }}
-              disabled={isDeactivated || outOfStock}
+              onClick={handleAddToCartClick}
+              disabled={isDeactivated || outOfStock || isAddingToCart}
               className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-                isDeactivated || outOfStock
+                isDeactivated || outOfStock || isAddingToCart
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
               }`}
             >
-              <ShoppingBagIcon className="w-4 h-4" />
-              {isDeactivated
-                ? "Unavailable"
-                : outOfStock
-                  ? "Out of Stock"
-                  : "Add to Cart"}
+              {isAddingToCart ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <ShoppingBagIcon className="w-4 h-4" />
+                  {isDeactivated
+                    ? "Unavailable"
+                    : outOfStock
+                      ? "Out of Stock"
+                      : "Add to Cart"}
+                </>
+              )}
             </button>
           )}
         </div>
@@ -247,9 +339,15 @@ const ProductCarousel = ({
               />
             </svg>
           </div>
-          <h3 className="font-semibold text-text mb-1">Coming Soon</h3>
+          <h3 className="font-semibold text-text mb-1">
+            {queryKey === "flash-sale-products"
+              ? "No Discounted Products"
+              : "Coming Soon"}
+          </h3>
           <p className="text-text-light text-sm">
-            Products will appear here once added
+            {queryKey === "flash-sale-products"
+              ? "No products with discounts available at the moment"
+              : "Products will appear here once added"}
           </p>
         </div>
       ) : (

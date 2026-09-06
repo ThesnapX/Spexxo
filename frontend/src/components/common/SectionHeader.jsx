@@ -1,6 +1,8 @@
+// frontend/src/components/common/SectionHeader.jsx
+
 import { Link } from "react-router-dom";
 
-const SectionHeader = ({ title, subtitle, linkTo, linkText = "See More" }) => {
+const SectionHeader = ({ title, subtitle, linkTo, linkText = "View All" }) => {
   return (
     <div className="flex items-center justify-between mb-6">
       <div>
@@ -10,7 +12,7 @@ const SectionHeader = ({ title, subtitle, linkTo, linkText = "See More" }) => {
       {linkTo && (
         <Link
           to={linkTo}
-          className="text-sm font-medium text-[#3D96EB] hover:text-[#2B7DD3] transition flex items-center gap-1"
+          className="text-sm font-medium text-[#3D96EB] hover:text-[#2B7DD3] transition flex items-center gap-1 whitespace-nowrap"
         >
           {linkText}
           <svg

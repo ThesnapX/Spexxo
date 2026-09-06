@@ -357,25 +357,21 @@ const ProductCard = ({
   // ✅ FIXED: Get the default variant's image
   const getProductImage = () => {
     if (hasVariantsFlag && product.variants.length > 0) {
-      // Find the default variant
       let defaultVariant = product.variants.find((v) => v.isDefault === true);
-      // If no default variant is marked, use the first one
       if (!defaultVariant) {
         defaultVariant = product.variants[0];
       }
-      // Check if the default variant has images
       if (defaultVariant.images && defaultVariant.images.length > 0) {
         return defaultVariant.images[0].url;
       }
     }
-    // Fallback to product images
     if (product.images && product.images.length > 0) {
       return product.images[0].url;
     }
     return null;
   };
 
-  // ✅ Check if product is out of stock (for simple products or all variants out of stock)
+  // ✅ Check if product is out of stock
   const isOutOfStock = !hasVariantsFlag
     ? product.stock === 0 ||
       product.stock === null ||
@@ -412,7 +408,6 @@ const ProductCard = ({
             {variantCount} Variants
           </span>
         )}
-        {/* ✅ Show Out of Stock badge if all variants are out of stock */}
         {isOutOfStock && (
           <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
             <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
@@ -448,7 +443,8 @@ const ProductCard = ({
           </p>
         )}
         <Link to={`/product/${product.slug}`} className="block flex-shrink-0">
-          <h3 className="font-medium text-sm text-text mb-2 line-clamp-1 hover:text-primary transition">
+          {/* ✅ Product name - FULL, not clipped */}
+          <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
             {product.name}
           </h3>
         </Link>
