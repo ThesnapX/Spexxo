@@ -26,8 +26,12 @@ import {
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// ✅ FIX: Use VITE_SITE_URL for production
 const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
+  import.meta.env.VITE_SITE_URL ||
+  import.meta.env.VITE_FRONTEND_URL ||
+  window.location.origin ||
+  "https://spexxo.vercel.app";
 
 const ProductDetailView = () => {
   const { id } = useParams();
@@ -106,7 +110,7 @@ const ProductDetailView = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-product-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       toast.success(
-        `Product ${product?.isActive ? "deactivated" : "activated"} successfully!`,
+        `Product ${productData?.isActive ? "deactivated" : "activated"} successfully!`,
       );
       refetch();
     },
@@ -274,6 +278,9 @@ const ProductDetailView = () => {
         )
       : 0;
 
+  // ✅ Build store link only after product is available
+  const storeLink = `${FRONTEND_URL}/product/${product.slug}`;
+
   return (
     <div>
       {/* Back Button */}
@@ -366,8 +373,9 @@ const ProductDetailView = () => {
               <PencilIcon className="w-4 h-4" /> Edit Product
             </button>
             <Link
-              to={`${FRONTEND_URL}/product/${product.slug}`}
+              to={storeLink}
               target="_blank"
+              rel="noopener noreferrer"
               className="btn-outline text-sm"
             >
               View in Store
@@ -375,6 +383,8 @@ const ProductDetailView = () => {
           </div>
         </div>
       </div>
+
+      {/* Rest of the component remains the same... */}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b mb-6 overflow-x-auto">

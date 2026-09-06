@@ -25,8 +25,12 @@ import {
 import { useState } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// ✅ FIX: Use VITE_SITE_URL for production
 const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
+  import.meta.env.VITE_SITE_URL ||
+  import.meta.env.VITE_FRONTEND_URL ||
+  window.location.origin ||
+  "https://spexxo.vercel.app";
 
 const Products = () => {
   const navigate = useNavigate();
@@ -37,8 +41,8 @@ const Products = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
-  const [productCategoryFilter, setProductCategoryFilter] = useState(""); // Changed from productTypeFilter
-  const [productTypeFilter, setProductTypeFilter] = useState(""); // NEW: simple/variable
+  const [productCategoryFilter, setProductCategoryFilter] = useState("");
+  const [productTypeFilter, setProductTypeFilter] = useState("");
   const [stockFilter, setStockFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -106,20 +110,15 @@ const Products = () => {
 
   // ✅ Helper function to get the product image (with variant support)
   const getProductImage = (product) => {
-    // For variable products, try to get the default variant's image
     if (product.variants && product.variants.length > 0) {
-      // Find the default variant
       let defaultVariant = product.variants.find((v) => v.isDefault === true);
-      // If no default variant is marked, use the first one
       if (!defaultVariant) {
         defaultVariant = product.variants[0];
       }
-      // Check if the default variant has images
       if (defaultVariant.images && defaultVariant.images.length > 0) {
         return defaultVariant.images[0].url;
       }
     }
-    // Fallback to product images
     if (product.images && product.images.length > 0) {
       return product.images[0].url;
     }
@@ -182,7 +181,6 @@ const Products = () => {
 
   // Filter products - includes ALL products
   const products = (productsData?.products || []).filter((product) => {
-    // Search filter
     if (searchQuery) {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
@@ -191,31 +189,26 @@ const Products = () => {
         product.description?.toLowerCase().includes(searchLower);
       if (!matchesSearch) return false;
     }
-    // Category filter
     if (categoryFilter) {
       const catIds = product.category
         ? product.category.split(",").filter(Boolean)
         : [];
       if (!catIds.includes(categoryFilter)) return false;
     }
-    // Brand filter
     if (brandFilter) {
       const brandId =
         typeof product.brand === "object" ? product.brand?._id : product.brand;
       if (brandId !== brandFilter) return false;
     }
-    // ✅ FIXED: Product Category filter (eyeglasses/sunglasses/contactlens)
     if (
       productCategoryFilter &&
       product.productCategory !== productCategoryFilter
     ) {
       return false;
     }
-    // ✅ NEW: Product Type filter (simple/variable)
     if (productTypeFilter && product.productType !== productTypeFilter) {
       return false;
     }
-    // Stock filter - Check both main stock and variant stock
     if (stockFilter === "in-stock") {
       const totalStock = getTotalStock(product);
       if (totalStock <= 0) return false;
@@ -228,7 +221,6 @@ const Products = () => {
       const totalStock = getTotalStock(product);
       if (totalStock > 3) return false;
     }
-    // Status filter - already handled by API, but also filter locally
     if (statusFilter === "active" && !product.isActive) return false;
     if (statusFilter === "inactive" && product.isActive) return false;
     return true;
@@ -253,7 +245,6 @@ const Products = () => {
     return b ? b.name : "N/A";
   };
 
-  // Count products by type for display
   const countByProductType = (type) => {
     return (
       productsData?.products?.filter((p) => p.productType === type).length || 0
@@ -295,6 +286,8 @@ const Products = () => {
           </button>
         </div>
       </div>
+
+      {/* Rest of the component remains the same... */}
 
       {/* Search Bar */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">

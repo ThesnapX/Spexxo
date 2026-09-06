@@ -29,7 +29,13 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
+// ✅ FIX: Single declaration of API_URL and FRONTEND_URL
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const FRONTEND_URL =
+  import.meta.env.VITE_SITE_URL ||
+  import.meta.env.VITE_FRONTEND_URL ||
+  window.location.origin ||
+  "https://spexxo.vercel.app";
 
 const OrderDetailView = () => {
   const { id } = useParams();
@@ -51,6 +57,8 @@ const OrderDetailView = () => {
     },
     enabled: !!id,
   });
+
+  // ... rest of the component remains the same ...
 
   // Update order status mutation
   const updateStatusMutation = useMutation({
