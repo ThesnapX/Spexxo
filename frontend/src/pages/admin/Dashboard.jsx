@@ -16,7 +16,6 @@ import {
   XCircleIcon,
   PackageIcon,
   TrendingUpIcon,
-  TrendingDownIcon,
   EyeIcon,
   HeartIcon,
   ExclamationTriangleIcon,
