@@ -26,11 +26,10 @@ import {
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-// ✅ FIX: Use VITE_SITE_URL for production
+// ✅ FIX: Prefer environment variable over window.location.origin
 const FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
-  window.location.origin ||
   "https://spexxo.vercel.app";
 
 const ProductDetailView = () => {
@@ -278,7 +277,7 @@ const ProductDetailView = () => {
         )
       : 0;
 
-  // ✅ Build store link only after product is available
+  // ✅ Build store link using FRONTEND_URL environment variable
   const storeLink = `${FRONTEND_URL}/product/${product.slug}`;
 
   return (
@@ -385,7 +384,6 @@ const ProductDetailView = () => {
       </div>
 
       {/* Rest of the component remains the same... */}
-
       {/* Tabs */}
       <div className="flex gap-1 border-b mb-6 overflow-x-auto">
         {tabs.map((tab) => (
@@ -413,8 +411,7 @@ const ProductDetailView = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
-      {/* META TAB */}
+      {/* Tab Content - META TAB */}
       {activeTab === "meta" && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold mb-4">Product Meta</h2>

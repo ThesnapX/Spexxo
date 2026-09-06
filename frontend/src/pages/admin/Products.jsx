@@ -29,7 +29,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
-  window.location.origin ||
+  // window.location.origin ||
   "https://spexxo.vercel.app";
 
 const Products = () => {
