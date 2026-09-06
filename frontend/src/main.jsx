@@ -1,4 +1,4 @@
-// frontend/src/main.jsx - Complete optimized version
+// frontend/src/main.jsx - Complete optimized version (without analytics)
 
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -29,22 +29,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// ✅ Defer analytics loading for better performance
-const loadAnalytics = () => {
-  import("./utils/analytics")
-    .then(({ initGA }) => {
-      initGA();
-    })
-    .catch(() => {
-      // Silently fail if analytics isn't set up yet
-    });
-};
-
-// Load analytics after page is interactive
-if (typeof window !== "undefined") {
-  setTimeout(loadAnalytics, 3000);
-}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
