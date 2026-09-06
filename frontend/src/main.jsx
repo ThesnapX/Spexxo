@@ -23,13 +23,28 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnMount: true,
       refetchOnReconnect: false,
-      // ✅ Don't automatically refetch
       refetchInterval: false,
-      // ✅ Only retry on network errors
       retryOnMount: true,
+      keepPreviousData: true,
     },
   },
 });
+
+// ✅ Defer analytics loading for better performance
+const loadAnalytics = () => {
+  import("./utils/analytics")
+    .then(({ initGA }) => {
+      initGA();
+    })
+    .catch(() => {
+      // Silently fail if analytics isn't set up yet
+    });
+};
+
+// Load analytics after page is interactive
+if (typeof window !== "undefined") {
+  setTimeout(loadAnalytics, 3000);
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

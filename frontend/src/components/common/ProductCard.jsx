@@ -1,6 +1,8 @@
 // frontend/src/components/common/ProductCard.jsx
 
 import { Link } from "react-router-dom";
+import { LazyLoadImage } from "react-lazy-load-image-component";
+import "react-lazy-load-image-component/src/effects/blur.css";
 import {
   HeartIcon,
   ShoppingBagIcon,
@@ -114,11 +116,18 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
       <div className="relative overflow-hidden bg-gray-50">
         <Link to={`/product/${product.slug}`}>
           {productImage ? (
-            <img
+            <LazyLoadImage
               src={productImage}
               alt={product.name}
-              className="w-full h-56 md:h-64 object-cover group-hover:scale-110 transition-transform duration-500"
-              loading="lazy"
+              effect="blur"
+              wrapperClassName="w-full h-56 md:h-64"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              width={400}
+              height={400}
+              threshold={100}
+              placeholder={
+                <div className="w-full h-full bg-gray-200 animate-pulse" />
+              }
             />
           ) : (
             <PlaceholderImage className="w-full h-56 md:h-64" />
@@ -154,6 +163,11 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
 
         <button
           onClick={handleWishlist}
+          aria-label={
+            isInWishlist(product._id)
+              ? "Remove from wishlist"
+              : "Add to wishlist"
+          }
           className={`absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md transition-all z-10 ${
             isDeactivated || outOfStock
               ? "cursor-not-allowed opacity-50"
@@ -185,7 +199,6 @@ const ProductCard = ({ product, showSaleBadge = false, onRequireAuth }) => {
           </p>
         )}
         <Link to={`/product/${product.slug}`}>
-          {/* ✅ Product name - FULL, not clipped */}
           <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
             {product.name}
           </h3>

@@ -7,26 +7,25 @@
 export const getProductImage = (product) => {
   if (!product) return null;
 
+  let imageUrl = null;
+
   // For variable products, try to get the default variant's image
   if (product.variants && product.variants.length > 0) {
-    // Find the default variant
     let defaultVariant = product.variants.find((v) => v.isDefault === true);
-    // If no default variant is marked, use the first one
     if (!defaultVariant) {
       defaultVariant = product.variants[0];
     }
-    // Check if the default variant has images
     if (defaultVariant.images && defaultVariant.images.length > 0) {
-      return defaultVariant.images[0].url;
+      imageUrl = defaultVariant.images[0].url;
     }
   }
 
   // Fallback to product images
-  if (product.images && product.images.length > 0) {
-    return product.images[0].url;
+  if (!imageUrl && product.images && product.images.length > 0) {
+    imageUrl = product.images[0].url;
   }
 
-  return null;
+  return imageUrl || null;
 };
 
 /**
@@ -79,7 +78,7 @@ export const getProductPrice = (product) => {
       const variantPrice = defaultVariant.price || 0;
       const variantCompare = defaultVariant.comparePrice || 0;
 
-      // ✅ Check if variant has a discount (comparePrice > 0 and comparePrice < price)
+      // ✅ Check if variant has a discount
       if (variantCompare > 0 && variantCompare < variantPrice) {
         displayPrice = variantCompare;
         originalPrice = variantPrice;
@@ -88,13 +87,12 @@ export const getProductPrice = (product) => {
           ((variantPrice - variantCompare) / variantPrice) * 100,
         );
       } else {
-        // Use variant price
         displayPrice = variantPrice;
         originalPrice = variantPrice;
       }
     }
 
-    // Also check if any variant has a better discount (for "from" price display)
+    // Also check if any variant has a better discount
     let minPrice = Infinity;
     let minCompare = Infinity;
     let foundDiscount = false;
