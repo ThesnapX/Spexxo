@@ -1,3 +1,5 @@
+# frontend/public/robots.txt
+
 User-agent: *
 Allow: /
 Disallow: /admin
@@ -6,8 +8,24 @@ Disallow: /cart
 Disallow: /checkout
 Disallow: /login
 Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/*
 
-Sitemap: https://spexxo.com/sitemap.xml
+# Allow product pages, shop, blog, etc.
+Allow: /product/*
+Allow: /shop/*
+Allow: /blog/*
+Allow: /about
+Allow: /contact
+Allow: /faq
+Allow: /privacy
+Allow: /terms
+Allow: /shipping
+Allow: /refund
 
-# Crawl delay
+# Sitemap location
+Sitemap: https://spexxo.vercel.app/sitemap.xml
+
+# Crawl delay (helps prevent server overload)
 Crawl-delay: 10
