@@ -1,3 +1,5 @@
+// frontend/src/pages/admin/Popups.jsx
+
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -9,6 +11,8 @@ import {
   XMarkIcon,
   PhotoIcon,
   EyeIcon,
+  LinkIcon,
+  ClipboardIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -23,17 +27,15 @@ const Popups = () => {
 
   const [form, setForm] = useState({
     name: "",
-    title: "",
-    content: "",
-    buttonText: "",
+    buttonType: "visit",
+    buttonText: "Shop Now",
     buttonLink: "",
+    buttonCopyText: "",
     triggerType: "onload",
     triggerDelay: "0",
     frequency: "once-per-session",
     pages: "",
     excludePages: "",
-    position: "center",
-    overlay: true,
     isActive: true,
     startDate: "",
     endDate: "",
@@ -92,17 +94,15 @@ const Popups = () => {
   const resetForm = () => {
     setForm({
       name: "",
-      title: "",
-      content: "",
-      buttonText: "",
+      buttonType: "visit",
+      buttonText: "Shop Now",
       buttonLink: "",
+      buttonCopyText: "",
       triggerType: "onload",
       triggerDelay: "0",
       frequency: "once-per-session",
       pages: "",
       excludePages: "",
-      position: "center",
-      overlay: true,
       isActive: true,
       startDate: "",
       endDate: "",
@@ -127,17 +127,15 @@ const Popups = () => {
     setEditPopup(popup);
     setForm({
       name: popup.name || "",
-      title: popup.title || "",
-      content: popup.content || "",
-      buttonText: popup.buttonText || "",
+      buttonType: popup.buttonType || "visit",
+      buttonText: popup.buttonText || "Shop Now",
       buttonLink: popup.buttonLink || "",
+      buttonCopyText: popup.buttonCopyText || "",
       triggerType: popup.triggerType || "onload",
       triggerDelay: popup.triggerDelay || "0",
       frequency: popup.frequency || "once-per-session",
       pages: popup.pages?.join(", ") || "",
       excludePages: popup.excludePages?.join(", ") || "",
-      position: popup.position || "center",
-      overlay: popup.overlay !== false,
       isActive: popup.isActive !== false,
       startDate: popup.startDate?.split("T")[0] || "",
       endDate: popup.endDate?.split("T")[0] || "",
@@ -157,7 +155,7 @@ const Popups = () => {
       formData.append("image", imageFile);
       try {
         const { data } = await axios.post(`${API_URL}/upload/single`, formData);
-        imageData = { url: data.image.url, alt: form.title || form.name };
+        imageData = { url: data.image.url, alt: form.name };
       } catch (error) {
         toast.error("Image upload failed");
         setUploading(false);
@@ -166,11 +164,16 @@ const Popups = () => {
     }
 
     const payload = {
-      ...form,
-      triggerDelay: Number(form.triggerDelay),
-      overlay: form.overlay,
-      isActive: form.isActive,
+      name: form.name,
       image: imageData,
+      buttonType: form.buttonType,
+      buttonText: form.buttonType !== "none" ? form.buttonText : "",
+      buttonLink: form.buttonType === "visit" ? form.buttonLink : "",
+      buttonCopyText: form.buttonType === "copy" ? form.buttonCopyText : "",
+      triggerType: form.triggerType,
+      triggerDelay: Number(form.triggerDelay),
+      frequency: form.frequency,
+      isActive: form.isActive,
       pages: form.pages
         ? form.pages
             .split(",")
@@ -183,6 +186,8 @@ const Popups = () => {
             .map((p) => p.trim())
             .filter(Boolean)
         : [],
+      startDate: form.startDate || undefined,
+      endDate: form.endDate || undefined,
     };
 
     if (editPopup) {
@@ -254,7 +259,7 @@ const Popups = () => {
             {/* Popup Name */}
             <div>
               <label className="block text-sm font-medium mb-1">
-                Popup Name *
+                Popup Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -269,32 +274,8 @@ const Popups = () => {
               </p>
             </div>
 
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Title</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-                placeholder="e.g. 🎉 Big Sale!"
-              />
-            </div>
-
-            {/* Content */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">Content</label>
-              <textarea
-                rows="3"
-                value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-                placeholder="e.g. Get 50% off on all sunglasses. Limited time offer!"
-              />
-            </div>
-
             {/* Popup Image */}
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-sm font-medium mb-2">
                 Popup Image
               </label>
@@ -343,39 +324,89 @@ const Popups = () => {
                   </label>
                 )}
               </div>
+              <p className="text-xs text-text-light mt-2">
+                Recommended: Square or landscape images (e.g., 800×800 or
+                1200×800)
+              </p>
             </div>
 
-            {/* Button Text */}
+            {/* Button Type */}
             <div>
               <label className="block text-sm font-medium mb-1">
-                Button Text
+                Button Type
               </label>
-              <input
-                type="text"
-                value={form.buttonText}
+              <select
+                value={form.buttonType}
                 onChange={(e) =>
-                  setForm({ ...form, buttonText: e.target.value })
+                  setForm({ ...form, buttonType: e.target.value })
                 }
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-                placeholder="e.g. Shop Now"
-              />
+              >
+                <option value="visit">Visit (Link)</option>
+                <option value="copy">Copy (Text to Clipboard)</option>
+                <option value="none">No Button</option>
+              </select>
             </div>
 
-            {/* Button Link */}
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Button Link
-              </label>
-              <input
-                type="text"
-                value={form.buttonLink}
-                onChange={(e) =>
-                  setForm({ ...form, buttonLink: e.target.value })
-                }
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-                placeholder="e.g. /shop/sunglasses"
-              />
-            </div>
+            {/* Button Text - Only show if not "none" */}
+            {form.buttonType !== "none" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Button Text
+                </label>
+                <input
+                  type="text"
+                  value={form.buttonText}
+                  onChange={(e) =>
+                    setForm({ ...form, buttonText: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
+                  placeholder="Shop Now"
+                />
+              </div>
+            )}
+
+            {/* Visit Button Link */}
+            {form.buttonType === "visit" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Button Link
+                </label>
+                <input
+                  type="text"
+                  value={form.buttonLink}
+                  onChange={(e) =>
+                    setForm({ ...form, buttonLink: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
+                  placeholder="e.g. /shop/sunglasses"
+                />
+                <p className="text-xs text-text-light mt-1">
+                  Internal path or external URL
+                </p>
+              </div>
+            )}
+
+            {/* Copy Button Text to Copy */}
+            {form.buttonType === "copy" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Text to Copy
+                </label>
+                <input
+                  type="text"
+                  value={form.buttonCopyText}
+                  onChange={(e) =>
+                    setForm({ ...form, buttonCopyText: e.target.value })
+                  }
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
+                  placeholder="e.g. DISCOUNT50"
+                />
+                <p className="text-xs text-text-light mt-1">
+                  This text will be copied when user clicks "Copy"
+                </p>
+              </div>
+            )}
 
             {/* Trigger Type */}
             <div>
@@ -411,13 +442,6 @@ const Popups = () => {
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
                 min="0"
               />
-              <p className="text-xs text-text-light mt-1">
-                {form.triggerType === "time-delay"
-                  ? "Show after X seconds"
-                  : form.triggerType === "scroll"
-                    ? "Show after scrolling X%"
-                    : "Delay before showing"}
-              </p>
             </div>
 
             {/* Frequency */}
@@ -437,22 +461,6 @@ const Popups = () => {
                 <option value="once-per-day">Once Per Day</option>
                 <option value="once-per-week">Once Per Week</option>
                 <option value="once-only">Once Only (Never Again)</option>
-              </select>
-            </div>
-
-            {/* Position */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Position</label>
-              <select
-                value={form.position}
-                onChange={(e) => setForm({ ...form, position: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#3D96EB]"
-              >
-                <option value="center">Center</option>
-                <option value="top">Top</option>
-                <option value="bottom">Bottom</option>
-                <option value="left">Left</option>
-                <option value="right">Right</option>
               </select>
             </div>
 
@@ -518,21 +526,8 @@ const Popups = () => {
               />
             </div>
 
-            {/* Options */}
-            <div className="md:col-span-2 flex flex-wrap gap-6 p-4 bg-gray-50 rounded-xl">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.overlay}
-                  onChange={(e) =>
-                    setForm({ ...form, overlay: e.target.checked })
-                  }
-                  className="w-4 h-4 text-[#3D96EB] rounded"
-                />
-                <span className="text-sm font-medium">
-                  Show Overlay Background
-                </span>
-              </label>
+            {/* Active */}
+            <div className="md:col-span-2 flex items-center gap-2 p-4 bg-gray-50 rounded-xl">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -595,8 +590,7 @@ const Popups = () => {
               key={popup._id}
               className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md transition"
             >
-              {/* Preview Image */}
-              <div className="h-40 bg-gray-50 flex items-center justify-center">
+              <div className="h-48 bg-gray-50 flex items-center justify-center overflow-hidden">
                 {popup.image?.url ? (
                   <img
                     src={popup.image.url}
@@ -617,9 +611,23 @@ const Popups = () => {
                     <h3 className="font-semibold text-text text-sm">
                       {popup.name}
                     </h3>
-                    {popup.title && (
-                      <p className="text-xs text-text-light">{popup.title}</p>
-                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      {popup.buttonType === "visit" && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <LinkIcon className="w-3 h-3" /> Visit
+                        </span>
+                      )}
+                      {popup.buttonType === "copy" && (
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <ClipboardIcon className="w-3 h-3" /> Copy
+                        </span>
+                      )}
+                      {popup.buttonType === "none" && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                          No Button
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs ${
@@ -632,7 +640,6 @@ const Popups = () => {
                   </span>
                 </div>
 
-                {/* Details */}
                 <div className="space-y-1 mb-3">
                   <div className="flex items-center gap-2 text-xs text-text-light">
                     <span className="font-medium">Trigger:</span>
@@ -654,7 +661,6 @@ const Popups = () => {
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="flex justify-end gap-1 pt-3 border-t">
                   <button
                     onClick={() => setPreviewPopup(popup)}
@@ -690,55 +696,79 @@ const Popups = () => {
           className="fixed inset-0 z-[100] flex items-center justify-center p-4"
           onClick={() => setPreviewPopup(null)}
         >
-          <div className="absolute inset-0 bg-black/50" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl"
+            className="relative max-w-[90vw] max-h-[90vh] w-auto h-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setPreviewPopup(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+              className="absolute -top-4 -right-4 z-50 bg-white rounded-full p-1.5 shadow-lg hover:bg-gray-100 transition-colors"
             >
-              <XMarkIcon className="w-6 h-6" />
+              <XMarkIcon className="w-6 h-6 text-gray-700" />
             </button>
 
-            {previewPopup.image?.url && (
-              <img
-                src={previewPopup.image.url}
-                alt={previewPopup.title || previewPopup.name}
-                className="w-full h-48 object-cover rounded-xl mb-4"
-              />
-            )}
+            {previewPopup.image?.url ? (
+              <div className="relative rounded-xl overflow-hidden shadow-2xl">
+                <img
+                  src={previewPopup.image.url}
+                  alt={previewPopup.name || "Popup"}
+                  className="max-w-[90vw] max-h-[75vh] w-auto h-auto object-contain"
+                  style={{ position: "relative", zIndex: 1 }}
+                />
 
-            {previewPopup.title && (
-              <h2 className="text-2xl font-bold text-text mb-2">
-                {previewPopup.title}
-              </h2>
+                {/* ✅ Glassmorphism Button Overlay at Bottom - z-index higher than image */}
+                {previewPopup.buttonType !== "none" &&
+                  previewPopup.buttonText && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70 via-black/30 to-transparent"
+                      style={{ zIndex: 10 }}
+                    >
+                      <div className="flex justify-center">
+                        {previewPopup.buttonType === "visit" &&
+                          previewPopup.buttonLink && (
+                            <a
+                              href={previewPopup.buttonLink}
+                              target={
+                                previewPopup.buttonLink.startsWith("http")
+                                  ? "_blank"
+                                  : "_self"
+                              }
+                              rel="noopener noreferrer"
+                              className="px-8 py-3 text-white font-semibold rounded-full transition shadow-lg backdrop-blur-md bg-white/20 hover:bg-white/30 border border-white/30"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {previewPopup.buttonText}
+                            </a>
+                          )}
+                        {previewPopup.buttonType === "copy" &&
+                          previewPopup.buttonCopyText && (
+                            <button
+                              className="inline-flex items-center gap-2 px-8 py-3 text-white font-semibold rounded-full transition shadow-lg backdrop-blur-md bg-white/20 hover:bg-white/30 border border-white/30"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(
+                                  previewPopup.buttonCopyText,
+                                );
+                                toast.success(
+                                  `Copied: ${previewPopup.buttonCopyText}`,
+                                );
+                              }}
+                            >
+                              <ClipboardIcon className="w-5 h-5" />
+                              Copy
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-8 max-w-md mx-auto text-center">
+                <PhotoIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-text-light">No image uploaded</p>
+              </div>
             )}
-
-            {previewPopup.content && (
-              <p className="text-text-light mb-6">{previewPopup.content}</p>
-            )}
-
-            {previewPopup.buttonText && (
-              <a
-                href={previewPopup.buttonLink || "#"}
-                target={
-                  previewPopup.buttonLink?.startsWith("http")
-                    ? "_blank"
-                    : "_self"
-                }
-                rel="noopener noreferrer"
-                className="btn-primary w-full text-center block"
-              >
-                {previewPopup.buttonText}
-              </a>
-            )}
-
-            <p className="text-xs text-text-light text-center mt-4">
-              Trigger: {triggerLabels[previewPopup.triggerType]} | Frequency:{" "}
-              {frequencyLabels[previewPopup.frequency]}
-            </p>
           </div>
         </div>
       )}

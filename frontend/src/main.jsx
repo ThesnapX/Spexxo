@@ -1,4 +1,4 @@
-// frontend/src/main.jsx
+// frontend/src/main.jsx - Complete optimized version
 
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -12,7 +12,7 @@ import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import "./index.css";
 
-// ✅ OPTIMIZED: Better caching for production
+// ✅ Production-optimized QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -23,6 +23,10 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnMount: true,
       refetchOnReconnect: false,
+      // ✅ Don't automatically refetch
+      refetchInterval: false,
+      // ✅ Only retry on network errors
+      retryOnMount: true,
     },
   },
 });

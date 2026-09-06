@@ -74,7 +74,7 @@ export const validateCoupon = async (req, res) => {
   }
 };
 
-// @desc    Apply coupon (mark as used)
+// @desc    Apply coupon (mark as used) - ✅ FIXED
 // @route   POST /api/coupons/apply
 // @access  Private
 export const applyCoupon = async (req, res) => {
@@ -93,28 +93,35 @@ export const applyCoupon = async (req, res) => {
         .json({ success: false, message: "Invalid coupon" });
     }
 
-    // Increment total usage
+    // ✅ FIX: Increment total usage
     coupon.usedCount = (coupon.usedCount || 0) + 1;
 
-    // Track per-user usage
+    // ✅ FIX: Update per-user usage
     const userIndex = coupon.usedBy?.findIndex(
       (u) => u.user.toString() === userId.toString(),
     );
 
-    if (userIndex > -1) {
-      coupon.usedBy[userIndex].count += 1;
+    if (userIndex > -1 && userIndex !== undefined) {
+      coupon.usedBy[userIndex].count =
+        (coupon.usedBy[userIndex].count || 0) + 1;
     } else {
       coupon.usedBy.push({ user: userId, count: 1 });
     }
 
     await coupon.save();
 
-    res.status(200).json({ success: true, message: "Coupon applied" });
+    res.status(200).json({
+      success: true,
+      message: "Coupon applied",
+      coupon: {
+        code: coupon.code,
+        usedCount: coupon.usedCount,
+      },
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
 };
-
 export const getCoupons = async (req, res) => {
   try {
     const coupons = await Coupon.find().sort("-createdAt");

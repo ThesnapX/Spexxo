@@ -1,3 +1,5 @@
+// backend/routes/popupRoutes.js
+
 import express from "express";
 import {
   getActivePopups,

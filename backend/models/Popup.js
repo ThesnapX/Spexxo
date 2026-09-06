@@ -1,3 +1,5 @@
+// backend/models/Popup.js
+
 import mongoose from "mongoose";
 
 const popupSchema = new mongoose.Schema(
@@ -6,21 +8,27 @@ const popupSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    title: {
-      type: String,
-    },
-    content: {
-      type: String,
-    },
     image: {
       url: String,
       alt: String,
     },
+    // ✅ Button fields - ADD THESE
+    buttonType: {
+      type: String,
+      enum: ["visit", "copy", "none"],
+      default: "visit",
+    },
     buttonText: {
       type: String,
+      default: "Shop Now",
     },
     buttonLink: {
       type: String,
+      default: "",
+    },
+    buttonCopyText: {
+      type: String,
+      default: "",
     },
     triggerType: {
       type: String,
@@ -42,32 +50,11 @@ const popupSchema = new mongoose.Schema(
       ],
       default: "once-per-session",
     },
-    pages: [
-      {
-        type: String,
-      },
-    ],
-    excludePages: [
-      {
-        type: String,
-      },
-    ],
-    startDate: {
-      type: Date,
-    },
-    endDate: {
-      type: Date,
-    },
+    pages: [String],
+    excludePages: [String],
+    startDate: Date,
+    endDate: Date,
     isActive: {
-      type: Boolean,
-      default: true,
-    },
-    position: {
-      type: String,
-      enum: ["center", "top", "bottom", "left", "right"],
-      default: "center",
-    },
-    overlay: {
       type: Boolean,
       default: true,
     },
