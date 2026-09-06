@@ -26,8 +26,7 @@ import {
   TagIcon,
   TrophyIcon,
   UserPlusIcon,
-  UserCheckIcon,
-  ArrowPathIcon as RefreshIcon,
+  UserMinusIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -781,7 +780,7 @@ const Dashboard = () => {
             disabled={isRefreshing}
             className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
-            <RefreshIcon
+            <ArrowPathIcon
               className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
             />
           </button>
@@ -1218,7 +1217,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <UserCheckIcon className="w-4 h-4 text-blue-500" />
+              <UserMinusIcon className="w-4 h-4 text-blue-500" />
               <p className="text-xs text-text-light">Returning Customers</p>
             </div>
             <p className="text-xl font-bold text-text">
