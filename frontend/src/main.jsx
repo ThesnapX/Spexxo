@@ -1,4 +1,4 @@
-// frontend/src/main.jsx - Complete optimized version (without analytics)
+// frontend/src/main.jsx
 
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -16,8 +16,8 @@ import "./index.css";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 10 * 60 * 1000, // 10 minutes
-      gcTime: 30 * 60 * 1000, // 30 minutes
+      staleTime: 10 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       refetchOnWindowFocus: false,
@@ -29,6 +29,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// ✅ Defer analytics loading (will work once analytics.js is configured)
+const loadAnalytics = () => {
+  import("./utils/analytics")
+    .then(({ initGA }) => {
+      initGA();
+    })
+    .catch(() => {
+      // Silently fail if analytics isn't set up
+    });
+};
+
+// Load analytics after page is interactive
+if (typeof window !== "undefined") {
+  setTimeout(loadAnalytics, 3000);
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

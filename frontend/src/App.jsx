@@ -58,13 +58,9 @@ const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
 
-// ❌ REMOVE THIS IMPORT - No longer needed
-// import MaintenanceMode from "./components/common/MaintenanceMode";
-
 function App() {
   const { refreshCartWithLatestData } = useCart();
 
-  // Listen for product update events (from admin)
   useEffect(() => {
     const handleProductUpdate = (event) => {
       if (event.detail?.productId) {
@@ -78,12 +74,6 @@ function App() {
       window.removeEventListener("product-updated", handleProductUpdate);
     };
   }, [refreshCartWithLatestData]);
-
-  // ❌ REMOVE THIS - No maintenance mode check
-  // const isMaintenance = import.meta.env.VITE_MAINTENANCE_MODE === "true";
-  // if (isMaintenance) {
-  //   return <MaintenanceMode />;
-  // }
 
   return (
     <Suspense fallback={<Loading />}>

@@ -13,19 +13,15 @@ export default defineConfig({
     },
   },
   build: {
-    // ✅ Enable chunk splitting for better caching
     rollupOptions: {
       output: {
         manualChunks: {
-          // Split vendor chunks
           vendor: ["react", "react-dom", "react-router-dom"],
           ui: ["@heroicons/react", "framer-motion"],
           data: ["@tanstack/react-query", "axios"],
-          charts: ["recharts"],
         },
       },
     },
-    // ✅ Reduce chunk size warning threshold
     chunkSizeWarningLimit: 1000,
   },
 });
