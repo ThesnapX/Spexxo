@@ -107,7 +107,13 @@ const OrderDetail = () => {
 
   return (
     <>
-      <SEO title={`Order #${order.orderNumber}`} />
+      <SEO
+        title={`Order #${order.orderNumber} | Spexxo`}
+        description={`View order details for #${order.orderNumber} at Spexxo. Track your order status and items.`}
+        ogType="website"
+        canonicalUrl={`https://spexxo.vercel.app/account/orders/${id}`}
+        noIndex={true}
+      />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-4xl">
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">

@@ -91,7 +91,13 @@ const Login = () => {
 
   return (
     <>
-      <SEO title="Login" />
+      <SEO
+        title="Login | Spexxo"
+        description="Login to your Spexxo account to access your orders, wishlist, and profile."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/login"
+        noIndex={true}
+      />
       <div className="pt-28 pb-16 register-page">
         <div className="container-custom max-w-md">
           <h1 className="text-3xl font-bold text-text text-center mb-2">

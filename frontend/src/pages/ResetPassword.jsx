@@ -88,7 +88,13 @@ const ResetPassword = () => {
 
   return (
     <>
-      <SEO title="Reset Password" />
+      <SEO
+        title="Reset Password | Spexxo"
+        description="Create a new password for your Spexxo account."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/reset-password/:token"
+        noIndex={true}
+      />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-md">
           <h1 className="text-3xl font-bold text-text text-center mb-2">

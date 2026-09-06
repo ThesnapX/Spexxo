@@ -35,8 +35,10 @@ const FAQ = () => {
   return (
     <>
       <SEO
-        title="FAQ"
-        description="Frequently asked questions about Spexxo eyewear."
+        title="FAQ - Frequently Asked Questions | Spexxo"
+        description="Find answers to frequently asked questions about Spexxo eyewear, returns, shipping, payments, and more."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/faq"
       />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-3xl">

@@ -2,7 +2,12 @@ import SEO from "../components/common/SEO";
 
 const Terms = () => (
   <>
-    <SEO title="Terms & Conditions" />
+    <SEO
+      title="Terms & Conditions | Spexxo"
+      description="Read Spexxo's terms and conditions for using our website, placing orders, and other services."
+      ogType="website"
+      canonicalUrl="https://spexxo.vercel.app/terms"
+    />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">
         <h1 className="text-4xl font-bold text-text mb-8">

@@ -2,7 +2,12 @@ import SEO from "../components/common/SEO";
 
 const Shipping = () => (
   <>
-    <SEO title="Shipping Policy" />
+    <SEO
+      title="Shipping Policy | Spexxo"
+      description="Learn about Spexxo's shipping policy, delivery times, and free shipping on orders above ₹999."
+      ogType="website"
+      canonicalUrl="https://spexxo.vercel.app/shipping"
+    />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">
         <h1 className="text-4xl font-bold text-text mb-8">Shipping Policy</h1>

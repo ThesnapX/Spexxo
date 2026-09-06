@@ -46,9 +46,15 @@ const BlogDetail = () => {
     <>
       <SEO
         title={blog.title}
-        description={blog.excerpt}
+        description={
+          blog.excerpt ||
+          blog.content?.substring(0, 160) ||
+          `Read ${blog.title} on Spexxo blog.`
+        }
         ogImage={blog.featuredImage?.url}
         ogType="article"
+        canonicalUrl={`https://spexxo.vercel.app/blog/${blog.slug}`}
+        blog={blog}
       />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-3xl">

@@ -23,8 +23,10 @@ const Blog = () => {
   return (
     <>
       <SEO
-        title="Blog"
-        description="Eye care tips, latest trends, and guides on eyeglasses, sunglasses, and contact lenses."
+        title="Eye Care Blog - Tips & Guides"
+        description="Read the latest eye care tips, eyewear trends, and guides on choosing the perfect eyeglasses, sunglasses, and contact lenses."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/blog"
       />
       <div className="pt-28 pb-16">
         <div className="container-custom">

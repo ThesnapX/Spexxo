@@ -5,8 +5,10 @@ const About = () => {
   return (
     <>
       <SEO
-        title="About Us"
-        description="Learn about Spexxo - your premium eyewear destination in Mumbai."
+        title="About Spexxo - Premium Eyewear Store"
+        description="Learn about Spexxo - your premium eyewear destination in Mumbai. We offer quality eyeglasses, sunglasses, and contact lenses at affordable prices."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/about"
       />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-4xl">

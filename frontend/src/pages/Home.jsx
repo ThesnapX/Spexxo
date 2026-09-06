@@ -47,7 +47,9 @@ const Home = () => {
     <>
       <SEO
         title="Premium Eyeglasses, Sunglasses & Contact Lenses"
-        description="Shop the latest collection of premium eyewear at Spexxo. Free shipping, COD available, best prices on eyeglasses, sunglasses & contact lenses."
+        description="Shop the latest collection of premium eyewear at Spexxo. Free shipping, COD available, best prices on eyeglasses, sunglasses & contact lenses. Quality eyewear at affordable prices."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/"
       />
 
       <HeroSlider />

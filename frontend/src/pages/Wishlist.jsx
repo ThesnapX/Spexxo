@@ -13,7 +13,13 @@ const Wishlist = () => {
 
   return (
     <>
-      <SEO title="My Wishlist" />
+      <SEO
+        title="My Wishlist | Spexxo"
+        description="View and manage your saved wishlist items at Spexxo. Save your favorite eyewear for later."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/account/wishlist"
+        noIndex={true} // Wishlist is user-specific, don't index
+      />
       <div className="pt-24 pb-16">
         <div className="container-custom max-w-6xl">
           <div className="flex items-center justify-between mb-8">

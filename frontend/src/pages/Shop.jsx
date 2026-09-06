@@ -1169,7 +1169,9 @@ const Shop = () => {
     <>
       <SEO
         title={getPageTitle()}
-        description={`Browse our ${getPageTitle().toLowerCase()} collection at Spexxo.`}
+        description={`Browse our ${getPageTitle().toLowerCase()} collection at Spexxo. Find the perfect eyewear with premium quality and affordable prices. Shop now with COD available.`}
+        ogType="website"
+        canonicalUrl={`https://spexxo.vercel.app/shop${window.location.search}`}
       />
 
       <div className="pt-16 md:pt-10 md:pb-20 h-[calc(100vh-64px)] flex flex-col">

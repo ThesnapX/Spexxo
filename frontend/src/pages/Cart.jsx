@@ -192,7 +192,13 @@ const Cart = () => {
   if (!cart?.items?.length) {
     return (
       <>
-        <SEO title="Shopping Cart" />
+        <SEO
+          title="Shopping Cart | Spexxo"
+          description="Review your cart items at Spexxo. Add or remove products before checkout."
+          ogType="website"
+          canonicalUrl="https://spexxo.vercel.app/cart"
+          noIndex={true} // Cart is user-specific, don't index
+        />
         <div className="pt-24">
           <div className="container-custom text-center py-20">
             <p className="text-6xl mb-4">🛒</p>
@@ -218,7 +224,13 @@ const Cart = () => {
 
   return (
     <>
-      <SEO title="Shopping Cart" />
+      <SEO
+        title="Shopping Cart | Spexxo"
+        description="Review your cart items at Spexxo. Add or remove products before checkout."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/cart"
+        noIndex={true} // Cart is user-specific, don't index
+      />
       <div className="pt-24 pb-16">
         <div className="container-custom">
           <div className="flex items-center justify-between mb-8 flex-wrap gap-4">

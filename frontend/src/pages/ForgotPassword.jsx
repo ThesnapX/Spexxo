@@ -34,7 +34,13 @@ const ForgotPassword = () => {
   if (sent) {
     return (
       <>
-        <SEO title="Check Your Email" />
+        <SEO
+          title="Forgot Password | Spexxo"
+          description="Reset your Spexxo account password. Enter your email to receive a password reset link."
+          ogType="website"
+          canonicalUrl="https://spexxo.vercel.app/forgot-password"
+          noIndex={true}
+        />
         <div className="pt-28 pb-16">
           <div className="container-custom max-w-md">
             <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm text-center">

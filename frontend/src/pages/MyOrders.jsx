@@ -41,7 +41,13 @@ const MyOrders = () => {
 
   return (
     <>
-      <SEO title="My Orders" />
+      <SEO
+        title="My Orders | Spexxo"
+        description="View your order history and track your shipments at Spexxo."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/account/orders"
+        noIndex={true}
+      />
       <div className="pt-24 pb-16">
         <div className="container-custom max-w-4xl">
           <div className="flex items-center justify-between mb-8">

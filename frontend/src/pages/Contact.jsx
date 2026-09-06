@@ -40,8 +40,10 @@ const Contact = () => {
   return (
     <>
       <SEO
-        title="Contact Us"
-        description="Get in touch with Spexxo eyewear store in Mumbai."
+        title="Contact Spexxo - Eyewear Store in Mumbai"
+        description="Get in touch with Spexxo eyewear store. Visit us at IIT Market, Powai, Mumbai or call us at +91 9969538739 for any queries."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/contact"
       />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-6xl">

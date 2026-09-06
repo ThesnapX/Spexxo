@@ -225,7 +225,13 @@ const Register = () => {
 
   return (
     <>
-      <SEO title="Register" />
+      <SEO
+        title="Create Account | Spexxo"
+        description="Create a Spexxo account to start shopping for premium eyewear with exclusive offers."
+        ogType="website"
+        canonicalUrl="https://spexxo.vercel.app/register"
+        noIndex={true}
+      />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-md">
           <h1 className="text-3xl font-bold text-text text-center mb-2">

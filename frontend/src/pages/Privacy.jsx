@@ -2,7 +2,12 @@ import SEO from "../components/common/SEO";
 
 const Privacy = () => (
   <>
-    <SEO title="Privacy Policy" />
+    <SEO
+      title="Privacy Policy | Spexxo"
+      description="Read Spexxo's privacy policy to understand how we collect, use, and protect your personal information."
+      ogType="website"
+      canonicalUrl="https://spexxo.vercel.app/privacy"
+    />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">
         <h1 className="text-4xl font-bold text-text mb-8">Privacy Policy</h1>

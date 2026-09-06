@@ -490,9 +490,14 @@ Please confirm availability.`;
     <>
       <SEO
         title={product.name}
-        description={product.description?.substring(0, 160)}
+        description={
+          product.description?.substring(0, 160) ||
+          `Buy ${product.name} at Spexxo. Premium quality eyewear with best prices.`
+        }
         ogImage={product.images?.[0]?.url}
         ogType="product"
+        canonicalUrl={`https://spexxo.vercel.app/product/${product.slug}`}
+        product={product}
       />
 
       <div className="pt-20 md:pt-24 pb-16">
