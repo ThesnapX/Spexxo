@@ -4,31 +4,31 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import {
-  ShoppingCart,
-  IndianRupee,
-  ShoppingBag,
-  Users,
-  Clock,
-  ArrowUp,
-  ArrowDown,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Package,
-  TrendingUp,
-  TrendingDown,
-  Eye,
-  Heart,
-  AlertTriangle,
-  CreditCard,
-  RefreshCw,
-  Calendar,
-  Tag,
-  Award,
-  UserPlus,
-  UserCheck,
-  Repeat,
-} from "lucide-react";
+  ShoppingCartIcon,
+  CurrencyRupeeIcon,
+  ShoppingBagIcon,
+  UsersIcon,
+  ClockIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  TruckIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  PackageIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  EyeIcon,
+  HeartIcon,
+  ExclamationTriangleIcon,
+  CreditCardIcon,
+  ArrowPathIcon,
+  CalendarIcon,
+  TagIcon,
+  TrophyIcon,
+  UserPlusIcon,
+  UserCheckIcon,
+  ArrowPathIcon as RefreshIcon,
+} from "@heroicons/react/24/outline";
 import {
   LineChart,
   Line,
@@ -85,15 +85,6 @@ const formatIndianCurrency = (amount) => {
     maximumFractionDigits: 0,
   });
   return `${sign}₹${formatted}`;
-};
-
-const formatCompactCurrency = (amount) => {
-  if (amount === undefined || amount === null || isNaN(amount)) return "₹0";
-  const num = Number(amount);
-  if (num >= 10000000) return `₹${(num / 10000000).toFixed(1)}Cr`;
-  if (num >= 100000) return `₹${(num / 100000).toFixed(1)}L`;
-  if (num >= 1000) return `₹${(num / 1000).toFixed(1)}K`;
-  return `₹${num.toLocaleString("en-IN")}`;
 };
 
 const formatNumber = (num) => {
@@ -285,44 +276,11 @@ const Dashboard = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const {
-    data: wishlistData,
-    isLoading: wishlistLoading,
-    error: wishlistError,
-    refetch: refetchWishlist,
-  } = useQuery({
-    queryKey: ["admin-wishlist-all"],
-    queryFn: async () => {
-      try {
-        // We need to fetch all users' wishlists - this requires multiple requests
-        // or a backend aggregation endpoint. For now, we'll fetch all users and their wishlists.
-        const users = usersData?.users || [];
-        const wishlistItems = [];
-        for (const user of users) {
-          if (user.wishlist && user.wishlist.length > 0) {
-            wishlistItems.push(...user.wishlist);
-          }
-        }
-        return { wishlist: wishlistItems };
-      } catch {
-        return { wishlist: [] };
-      }
-    },
-    enabled: !!usersData?.users,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const isLoading =
-    ordersLoading || productsLoading || usersLoading || wishlistLoading;
+  const isLoading = ordersLoading || productsLoading || usersLoading;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([
-      refetchOrders(),
-      refetchProducts(),
-      refetchUsers(),
-      refetchWishlist(),
-    ]);
+    await Promise.all([refetchOrders(), refetchProducts(), refetchUsers()]);
     setLastUpdated(new Date());
     setIsRefreshing(false);
   };
@@ -597,45 +555,10 @@ const Dashboard = () => {
         );
         if (!productData) return;
 
-        // Get category from product
-        let categoryName = "Uncategorized";
-        if (productData.category) {
-          // If category is a string ID, try to resolve it
-          if (
-            typeof productData.category === "string" &&
-            productData.category.includes(",")
-          ) {
-            const catIds = productData.category.split(",").filter(Boolean);
-            // Use first category
-            if (catIds.length > 0) {
-              // We don't have category names here, use productCategory instead
-              categoryName =
-                productData.productCategory ||
-                productData.productType ||
-                "Uncategorized";
-            }
-          } else if (typeof productData.category === "string") {
-            categoryName =
-              productData.productCategory ||
-              productData.productType ||
-              "Uncategorized";
-          } else if (
-            typeof productData.category === "object" &&
-            productData.category?.name
-          ) {
-            categoryName = productData.category.name;
-          } else {
-            categoryName =
-              productData.productCategory ||
-              productData.productType ||
-              "Uncategorized";
-          }
-        } else {
-          categoryName =
-            productData.productCategory ||
-            productData.productType ||
-            "Uncategorized";
-        }
+        let categoryName =
+          productData.productCategory ||
+          productData.productType ||
+          "Uncategorized";
 
         if (!categories[categoryName]) {
           categories[categoryName] = {
@@ -749,49 +672,6 @@ const Dashboard = () => {
   }, [products]);
 
   // ============================================
-  // WISHLIST ANALYTICS
-  // ============================================
-  const wishlistAnalytics = useMemo(() => {
-    const wishlistCounts = {};
-
-    users.forEach((user) => {
-      if (user.wishlist && Array.isArray(user.wishlist)) {
-        user.wishlist.forEach((productId) => {
-          wishlistCounts[productId] = (wishlistCounts[productId] || 0) + 1;
-        });
-      }
-    });
-
-    // Get product details for wishlist items
-    const wishlistProducts = Object.entries(wishlistCounts)
-      .map(([productId, count]) => {
-        const product = products.find((p) => p._id === productId);
-        return {
-          productId,
-          name: product?.name || "Unknown Product",
-          image: product?.images?.[0]?.url || null,
-          price: product?.price || 0,
-          count,
-          product,
-        };
-      })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    const totalWishlistItems = Object.values(wishlistCounts).reduce(
-      (sum, c) => sum + c,
-      0,
-    );
-    const uniqueProductsInWishlist = Object.keys(wishlistCounts).length;
-
-    return {
-      topProducts: wishlistProducts,
-      totalItems: totalWishlistItems,
-      uniqueProducts: uniqueProductsInWishlist,
-    };
-  }, [users, products]);
-
-  // ============================================
   // RENDER HELPERS
   // ============================================
   const renderChangeIndicator = (change) => {
@@ -802,9 +682,9 @@ const Dashboard = () => {
         className={`inline-flex items-center gap-1 text-xs font-semibold ${isPositive ? "text-green-600" : "text-red-600"}`}
       >
         {isPositive ? (
-          <ArrowUp className="w-3 h-3" />
+          <ArrowUpIcon className="w-3 h-3" />
         ) : (
-          <ArrowDown className="w-3 h-3" />
+          <ArrowDownIcon className="w-3 h-3" />
         )}
         {Math.abs(change)}%
       </span>
@@ -901,7 +781,7 @@ const Dashboard = () => {
             disabled={isRefreshing}
             className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
           >
-            <RefreshCw
+            <RefreshIcon
               className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
             />
           </button>
@@ -919,7 +799,7 @@ const Dashboard = () => {
           "Revenue",
           kpis.totalRevenue,
           kpis.revenueChange,
-          <IndianRupee className="w-5 h-5" />,
+          <CurrencyRupeeIcon className="w-5 h-5" />,
           `vs previous ${label}`,
           formatIndianCurrency,
         )}
@@ -927,13 +807,13 @@ const Dashboard = () => {
           "Total Orders",
           kpis.totalOrders,
           kpis.ordersChange,
-          <ShoppingCart className="w-5 h-5" />,
+          <ShoppingCartIcon className="w-5 h-5" />,
         )}
         {renderKPI(
           "Avg Order Value",
           kpis.avgOrderValue,
           kpis.aovChange,
-          <TrendingUp className="w-5 h-5" />,
+          <TrendingUpIcon className="w-5 h-5" />,
           undefined,
           formatIndianCurrency,
         )}
@@ -941,7 +821,7 @@ const Dashboard = () => {
           "Products Sold",
           kpis.productsSold,
           kpis.productsSoldChange,
-          <Package className="w-5 h-5" />,
+          <PackageIcon className="w-5 h-5" />,
         )}
       </div>
 
@@ -950,25 +830,25 @@ const Dashboard = () => {
           "Pending Orders",
           kpis.pendingOrders,
           null,
-          <Clock className="w-5 h-5 text-yellow-500" />,
+          <ClockIcon className="w-5 h-5 text-yellow-500" />,
         )}
         {renderKPI(
           "Delivered Orders",
           kpis.deliveredOrders,
           null,
-          <CheckCircle className="w-5 h-5 text-green-500" />,
+          <CheckCircleIcon className="w-5 h-5 text-green-500" />,
         )}
         {renderKPI(
           "Cancelled Orders",
           kpis.cancelledOrders,
           null,
-          <XCircle className="w-5 h-5 text-red-500" />,
+          <XCircleIcon className="w-5 h-5 text-red-500" />,
         )}
         {renderKPI(
           "Total Customers",
           kpis.totalCustomers,
           null,
-          <Users className="w-5 h-5" />,
+          <UsersIcon className="w-5 h-5" />,
           `${kpis.returningCustomers} returning (${Math.round(kpis.repeatPurchaseRate)}% repeat)`,
         )}
       </div>
@@ -1178,7 +1058,7 @@ const Dashboard = () => {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-text-light" />
+                    <CreditCardIcon className="w-4 h-4 text-text-light" />
                     <span className="text-sm font-medium">{method.name}</span>
                   </div>
                   <div className="text-right">
@@ -1320,7 +1200,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-primary" />
+              <UsersIcon className="w-4 h-4 text-primary" />
               <p className="text-xs text-text-light">Total Customers</p>
             </div>
             <p className="text-xl font-bold text-text">
@@ -1329,7 +1209,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <UserPlus className="w-4 h-4 text-green-500" />
+              <UserPlusIcon className="w-4 h-4 text-green-500" />
               <p className="text-xs text-text-light">New Customers</p>
             </div>
             <p className="text-xl font-bold text-text">
@@ -1338,7 +1218,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <UserCheck className="w-4 h-4 text-blue-500" />
+              <UserCheckIcon className="w-4 h-4 text-blue-500" />
               <p className="text-xs text-text-light">Returning Customers</p>
             </div>
             <p className="text-xl font-bold text-text">
@@ -1347,7 +1227,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <Repeat className="w-4 h-4 text-purple-500" />
+              <TrophyIcon className="w-4 h-4 text-purple-500" />
               <p className="text-xs text-text-light">Repeat Purchase Rate</p>
             </div>
             <p className="text-xl font-bold text-text">
@@ -1376,7 +1256,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <ExclamationTriangleIcon className="w-4 h-4 text-red-500" />
               <p className="text-sm font-medium text-red-700">Out of Stock</p>
             </div>
             <p className="text-2xl font-bold text-red-600">
@@ -1386,7 +1266,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-yellow-500" />
+              <ExclamationTriangleIcon className="w-4 h-4 text-yellow-500" />
               <p className="text-sm font-medium text-yellow-700">Low Stock</p>
             </div>
             <p className="text-2xl font-bold text-yellow-600">
@@ -1396,7 +1276,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-green-50 border border-green-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1">
-              <CheckCircle className="w-4 h-4 text-green-500" />
+              <CheckCircleIcon className="w-4 h-4 text-green-500" />
               <p className="text-sm font-medium text-green-700">
                 Healthy Stock
               </p>
@@ -1481,51 +1361,17 @@ const Dashboard = () => {
               Most Added to Wishlist
             </h2>
             <div className="flex items-center gap-2 text-xs text-text-light">
-              <Heart className="w-3 h-3 text-red-400" />
-              <span>{wishlistAnalytics.uniqueProducts} unique products</span>
+              <HeartIcon className="w-3 h-3 text-red-400" />
+              <span>Wishlist data available</span>
             </div>
           </div>
-          {wishlistAnalytics.topProducts.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-text-light">
-              No wishlist data
+          <div className="h-48 flex items-center justify-center text-text-light">
+            <div className="text-center">
+              <HeartIcon className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p>Wishlist analytics coming soon</p>
+              <p className="text-xs mt-1">Requires backend aggregation</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {wishlistAnalytics.topProducts.slice(0, 5).map((item) => (
-                <div
-                  key={item.productId}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                >
-                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                        No img
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-text-light">
-                      {formatIndianCurrency(item.price)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-1 text-sm font-semibold text-red-500">
-                      <Heart className="w-3 h-3 fill-current" />
-                      {formatNumber(item.count)}
-                    </div>
-                    <p className="text-xs text-text-light">wishlists</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
