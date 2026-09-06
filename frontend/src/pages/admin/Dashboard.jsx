@@ -14,7 +14,7 @@ import {
   TruckIcon,
   CheckCircleIcon,
   XCircleIcon,
-  PackageIcon,
+  CubeIcon,
   EyeIcon,
   HeartIcon,
   ExclamationTriangleIcon,
@@ -821,7 +821,7 @@ const Dashboard = () => {
           "Products Sold",
           kpis.productsSold,
           kpis.productsSoldChange,
-          <PackageIcon className="w-5 h-5" />,
+          <CubeIcon className="w-5 h-5" />,
         )}
       </div>
 
