@@ -15,10 +15,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          ui: ["@heroicons/react", "framer-motion"],
-          data: ["@tanstack/react-query", "axios"],
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            return "vendor";
+          }
+          return null;
         },
       },
     },

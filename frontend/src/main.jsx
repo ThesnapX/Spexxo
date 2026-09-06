@@ -12,7 +12,6 @@ import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import "./index.css";
 
-// ✅ Production-optimized QueryClient
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -29,22 +28,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-// ✅ Defer analytics loading (will work once analytics.js is configured)
-const loadAnalytics = () => {
-  import("./utils/analytics")
-    .then(({ initGA }) => {
-      initGA();
-    })
-    .catch(() => {
-      // Silently fail if analytics isn't set up
-    });
-};
-
-// Load analytics after page is interactive
-if (typeof window !== "undefined") {
-  setTimeout(loadAnalytics, 3000);
-}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
