@@ -15,7 +15,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   PackageIcon,
-  TrendingUpIcon,
   EyeIcon,
   HeartIcon,
   ExclamationTriangleIcon,
@@ -23,9 +22,12 @@ import {
   ArrowPathIcon,
   CalendarIcon,
   TagIcon,
-  TrophyIcon,
   UserPlusIcon,
   UserMinusIcon,
+  ChartBarIcon,
+  DocumentTextIcon,
+  PhotoIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline";
 import {
   LineChart,
@@ -811,7 +813,7 @@ const Dashboard = () => {
           "Avg Order Value",
           kpis.avgOrderValue,
           kpis.aovChange,
-          <TrendingUpIcon className="w-5 h-5" />,
+          <ArrowUpIcon className="w-5 h-5" />,
           undefined,
           formatIndianCurrency,
         )}
@@ -1225,7 +1227,7 @@ const Dashboard = () => {
           </div>
           <div className="bg-gray-50 p-4 rounded-xl text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
-              <TrophyIcon className="w-4 h-4 text-purple-500" />
+              <ChartBarIcon className="w-4 h-4 text-purple-500" />
               <p className="text-xs text-text-light">Repeat Purchase Rate</p>
             </div>
             <p className="text-xl font-bold text-text">
