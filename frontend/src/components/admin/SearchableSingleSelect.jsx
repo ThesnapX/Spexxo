@@ -30,7 +30,6 @@ const SearchableSingleSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ REMOVED SORTING - Keep options in original order
   const filteredOptions = options.filter((opt) =>
     String(renderOption(opt)).toLowerCase().includes(search.toLowerCase()),
   );
@@ -113,10 +112,12 @@ const SearchableSingleSelect = ({
         </div>
       </div>
 
-      {/* Dropdown with live search results - NO SORTING */}
+      {/* ✅ FIXED: Dropdown with clean border - no double border */}
       {isOpen && (
-        <div className="absolute z-20 left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-          <div className="overflow-y-auto max-h-48">
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          <div
+            className={`overflow-y-auto max-h-48 ${filteredOptions.length > 0 ? "border-b border-gray-100" : ""}`}
+          >
             <button
               type="button"
               onClick={() => handleSelect("")}
@@ -145,7 +146,6 @@ const SearchableSingleSelect = ({
                 No options found
               </div>
             ) : (
-              // ✅ REMOVED .sort() - keeping original order
               filteredOptions.map((opt) => {
                 const val = getValue(opt);
                 const isSelected = value === val;
@@ -181,7 +181,7 @@ const SearchableSingleSelect = ({
             )}
           </div>
           {filteredOptions.length > 0 && (
-            <div className="p-2 border-t border-gray-100 bg-gray-50 text-xs text-text-light flex justify-between">
+            <div className="p-2 bg-gray-50 text-xs text-text-light flex justify-between border-t border-gray-100">
               <span>{filteredOptions.length} options</span>
               {value && (
                 <button

@@ -61,13 +61,11 @@ const SearchableMultiSelect = ({
     return String(result || "");
   };
 
-  // ✅ REMOVED SORTING - Keep options in original order
   const filteredOptions = options.filter((opt) => {
     const displayText = getDisplayText(opt).toLowerCase();
     return displayText.includes(search.toLowerCase());
   });
 
-  // ✅ FIX: Create a map for quick lookup
   const optionsMap = {};
   options.forEach((opt) => {
     const val = getValue(opt);
@@ -90,19 +88,12 @@ const SearchableMultiSelect = ({
     onChange(current.filter((v) => v !== val));
   };
 
-  // ✅ FIX: Build selected labels in the order of selectedValues
-  // This ensures the swatch stays with the correct color
   const selectedLabels = selectedValues
-    .filter((val) => optionsMap[val]) // Only include if option still exists
+    .filter((val) => optionsMap[val])
     .map((val) => {
       const opt = optionsMap[val];
       return renderOption(opt);
     });
-
-  // ✅ FIX: Keep track of which option a selected value belongs to
-  const getSelectedOption = (val) => {
-    return optionsMap[val] || null;
-  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Escape") {
@@ -145,7 +136,6 @@ const SearchableMultiSelect = ({
     return String(label || "");
   };
 
-  // ✅ FIX: Get the color swatch for a specific selected value
   const getColorSwatchForValue = (val) => {
     const opt = optionsMap[val];
     return getColorSwatch(opt);
@@ -168,7 +158,6 @@ const SearchableMultiSelect = ({
         }}
       >
         <div className="flex flex-wrap items-center gap-1.5 p-2 min-h-[42px]">
-          {/* ✅ FIX: Selected items as pills - maintain correct order */}
           {selectedLabels.map((label, idx) => {
             const val = selectedValues[idx];
             const labelText = getLabelText(label);
@@ -213,12 +202,12 @@ const SearchableMultiSelect = ({
         </div>
       </div>
 
-      {/* Dropdown with live search results - NO SORTING */}
+      {/* ✅ FIXED: Dropdown with clean border - no double border */}
       {isOpen && (
-        <div
-          className={`absolute z-20 left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden ${maxHeight}`}
-        >
-          <div className="overflow-y-auto max-h-48">
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          <div
+            className={`overflow-y-auto max-h-48 ${filteredOptions.length > 0 ? "border-b border-gray-100" : ""}`}
+          >
             {filteredOptions.length === 0 ? (
               <div className="p-4 text-center text-sm text-text-light">
                 {creatable && onCreateNew && search.trim() ? (
@@ -239,7 +228,6 @@ const SearchableMultiSelect = ({
                 )}
               </div>
             ) : (
-              // ✅ REMOVED .sort() - keeping original order
               filteredOptions.map((opt) => {
                 const val = getValue(opt);
                 const isSelected = selectedValues.includes(val);
@@ -290,7 +278,7 @@ const SearchableMultiSelect = ({
             )}
           </div>
           {filteredOptions.length > 0 && (
-            <div className="p-2 border-t border-gray-100 bg-gray-50 text-xs text-text-light flex justify-between">
+            <div className="p-2 bg-gray-50 text-xs text-text-light flex justify-between">
               <span>{filteredOptions.length} options</span>
               {selectedValues.length > 0 && (
                 <button

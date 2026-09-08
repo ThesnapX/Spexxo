@@ -53,6 +53,23 @@
     font-family: var(--font-poppins);
     font-weight: 600;
   }
+
+  /* ✅ FIX: Remove default outline on inputs and keep it clean */
+  input:focus,
+  select:focus,
+  textarea:focus,
+  button:focus {
+    outline: none !important;
+  }
+
+  /* ✅ FIX: Use ring instead of outline for better control */
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none !important;
+    ring: 2px solid var(--color-primary);
+    ring-offset: 1px;
+  }
 }
 
 @layer utilities {
@@ -70,6 +87,16 @@
 
   .btn-secondary {
     @apply bg-text text-white px-6 py-3 rounded-full font-medium transition-all duration-300 hover:bg-gray-800 active:scale-95 inline-flex items-center gap-2;
+  }
+
+  /* ✅ FIX: Clean input focus - no rectangle border */
+  .input-clean {
+    @apply border border-gray-200 rounded-lg focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all;
+  }
+
+  /* ✅ FIX: Remove focus ring from search inputs inside dropdowns */
+  .search-input-no-focus {
+    @apply focus:outline-none focus:ring-0 focus:border-transparent;
   }
 }
 
@@ -527,7 +554,7 @@ textarea {
 }
 
 .toast-close-btn:focus-visible {
-  outline: 2px solid #3d96eb;
+  outline: 2px solid #3d96ea;
   outline-offset: 2px;
 }
 
@@ -637,4 +664,50 @@ textarea {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* ✅ FIX: Remove rectangle border from search inputs */
+.search-input-no-focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
+.search-input-no-focus:focus,
+.search-input-no-focus:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  ring: 0 !important;
+}
+
+/* ✅ FIX: Override for all input focus states inside dropdowns */
+.dropdown-input input:focus,
+.dropdown-input input:focus-visible,
+.dropdown-input input:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  ring: 0 !important;
+}
+
+/* ✅ FIX: Remove default focus ring from all inputs inside select components */
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="number"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ✅ FIX: Only apply focus styles to actual form inputs, not search inputs inside selects */
+.form-input:focus {
+  border-color: var(--color-primary) !important;
+  ring: 2px solid var(--color-primary) !important;
+  ring-opacity: 0.2 !important;
+}
+
+.search-input:focus {
+  outline: none !important;
+  ring: none !important;
+  border-color: transparent !important;
 }
