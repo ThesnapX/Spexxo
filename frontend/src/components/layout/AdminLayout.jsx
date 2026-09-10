@@ -24,6 +24,7 @@ import {
   PaintBrushIcon,
   Squares2X2Icon,
   MegaphoneIcon,
+  TruckIcon,
 } from "@heroicons/react/24/outline";
 
 const AdminLayout = () => {
@@ -278,6 +279,17 @@ const AdminLayout = () => {
               )}
             </div>
 
+            {/* Shipping */}
+            <Link
+              to="/admin/shipping"
+              onClick={closeSidebar}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive("/admin/shipping") ? activeClass : inactiveClass
+              }`}
+            >
+              <TruckIcon className="w-5 h-5" />
+              <span>Shipping</span>
+            </Link>
             {/* Marketing Dropdown */}
             <div>
               <button

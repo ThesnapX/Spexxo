@@ -1,3 +1,5 @@
+// frontend/src/pages/Cart.jsx
+
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -10,6 +12,7 @@ import {
   XCircleIcon,
   ExclamationCircleIcon,
   ArrowPathIcon,
+  TruckIcon,
 } from "@heroicons/react/24/outline";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -37,6 +40,8 @@ const Cart = () => {
   const [couponError, setCouponError] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isCartLoading, setIsCartLoading] = useState(true);
+  const [shippingEstimate, setShippingEstimate] = useState(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
 
   // Check for deactivated items
   const hasDeactivated =
@@ -65,8 +70,36 @@ const Cart = () => {
   useEffect(() => {
     if (!loading && cart?.items) {
       setIsCartLoading(false);
+      // Get shipping estimate
+      fetchShippingEstimate();
     }
   }, [loading, cart]);
+
+  // Fetch shipping estimate
+  const fetchShippingEstimate = async () => {
+    setShippingLoading(true);
+    try {
+      // Use a default pincode or get from user's saved address
+      const pincode = "400076"; // Default or from user profile
+      const items = cart.items.map((item) => ({
+        productId: item.product?._id,
+        quantity: item.quantity,
+      }));
+
+      const { data } = await axios.post(`${API_URL}/shipping/calculate`, {
+        pincode: pincode,
+        items: items,
+      });
+
+      if (data.success) {
+        setShippingEstimate(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch shipping estimate:", error);
+    } finally {
+      setShippingLoading(false);
+    }
+  };
 
   // Replace the loading check with:
   if (isCartLoading || loading) {
@@ -83,6 +116,7 @@ const Cart = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshCartWithLatestData();
+    await fetchShippingEstimate();
     setIsRefreshing(false);
     toast.success("Cart updated with latest prices");
   };
@@ -95,7 +129,9 @@ const Cart = () => {
   };
 
   const subtotal = cartTotal;
-  const shippingCost = subtotal >= 999 ? 0 : 99;
+  const shippingCost = shippingEstimate?.basePrice || 99;
+  const shippingDisplay =
+    shippingEstimate?.basePrice === 0 ? "FREE" : `₹${shippingCost}`;
 
   const calculateCouponDiscount = () => {
     if (!appliedCoupon) return 0;
@@ -172,6 +208,8 @@ const Cart = () => {
     }
 
     updateQuantity(itemId, newQuantity);
+    // Update shipping estimate after quantity change
+    setTimeout(fetchShippingEstimate, 500);
   };
 
   if (loading || isRefreshing) {
@@ -193,11 +231,8 @@ const Cart = () => {
     return (
       <>
         <SEO
-          title="Shopping Cart | Spexxo"
+          title="Shopping Cart"
           description="Review your cart items at Spexxo. Add or remove products before checkout."
-          ogType="website"
-          canonicalUrl="https://spexxo.vercel.app/cart"
-          noIndex={true} // Cart is user-specific, don't index
         />
         <div className="pt-24">
           <div className="container-custom text-center py-20">
@@ -225,11 +260,8 @@ const Cart = () => {
   return (
     <>
       <SEO
-        title="Shopping Cart | Spexxo"
+        title="Shopping Cart"
         description="Review your cart items at Spexxo. Add or remove products before checkout."
-        ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/cart"
-        noIndex={true} // Cart is user-specific, don't index
       />
       <div className="pt-24 pb-16">
         <div className="container-custom">
@@ -632,20 +664,23 @@ const Cart = () => {
                       <span>-₹{couponDiscount.toLocaleString()}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-text-light">Shipping</span>
                     <span
                       className={
                         shippingCost === 0 ? "text-green-600 font-medium" : ""
                       }
                     >
-                      {shippingCost === 0 ? "Free" : `₹${shippingCost}`}
+                      {shippingLoading ? (
+                        <ArrowPathIcon className="w-4 h-4 animate-spin text-gray-400" />
+                      ) : (
+                        shippingDisplay
+                      )}
                     </span>
                   </div>
                   {shippingCost > 0 && (
                     <p className="text-xs text-text-light">
-                      Add ₹{(999 - subtotal).toLocaleString()} more for free
-                      shipping
+                      Shipping cost may vary based on your pincode
                     </p>
                   )}
                 </div>

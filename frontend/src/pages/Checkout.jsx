@@ -17,6 +17,8 @@ import {
   ExclamationCircleIcon,
   TicketIcon,
   XCircleIcon,
+  TruckIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -60,6 +62,14 @@ const Checkout = () => {
   const [razorpayLoading, setRazorpayLoading] = useState(false);
   const [razorpayLoadAttempted, setRazorpayLoadAttempted] = useState(false);
 
+  // ✅ Shipping State - Updated for Pincode-based shipping
+  const [shippingOptions, setShippingOptions] = useState([]);
+  const [selectedShipping, setSelectedShipping] = useState(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [isPincodeValid, setIsPincodeValid] = useState(false);
+  const [pincodeChecked, setPincodeChecked] = useState(false);
+  const [shippingError, setShippingError] = useState("");
+
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -76,11 +86,6 @@ const Checkout = () => {
   const hasDeactivatedProducts = cart.items.some(
     (item) => item.product?.isActive === false,
   );
-
-  // Check if running on localhost
-  const isLocalhost =
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
 
   // ✅ Check for Buy Now on mount
   useEffect(() => {
@@ -99,6 +104,76 @@ const Checkout = () => {
       }
     }
   }, []);
+
+  // ✅ Fetch shipping based on pincode
+  const fetchShippingOptions = async (pincode) => {
+    if (!pincode || pincode.length !== 6) {
+      setShippingOptions([]);
+      setSelectedShipping(null);
+      setIsPincodeValid(false);
+      setPincodeChecked(false);
+      return;
+    }
+
+    setShippingLoading(true);
+    setShippingError("");
+    setPincodeChecked(false);
+
+    try {
+      const items = isBuyNow ? buyNowItems : cart.items;
+      const { data } = await axios.post(`${API_URL}/shipping/options`, {
+        pincode: pincode,
+        items: items,
+      });
+
+      if (data.success) {
+        if (data.isServiceable && data.options.length > 0) {
+          setShippingOptions(data.options);
+          setIsPincodeValid(true);
+          setPincodeChecked(true);
+          // Select first option by default
+          if (
+            !selectedShipping ||
+            !data.options.some((o) => o.id === selectedShipping?.id)
+          ) {
+            setSelectedShipping(data.options[0]);
+          }
+          toast.success(`Shipping available for pincode ${pincode}`);
+        } else {
+          setShippingOptions([]);
+          setIsPincodeValid(false);
+          setPincodeChecked(true);
+          setShippingError("We don't deliver to this pincode yet");
+          toast.error("We don't deliver to this pincode yet");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch shipping options:", error);
+      setShippingOptions([]);
+      setIsPincodeValid(false);
+      setPincodeChecked(true);
+      setShippingError("Failed to check shipping availability");
+      toast.error("Failed to check shipping availability");
+    } finally {
+      setShippingLoading(false);
+    }
+  };
+
+  // ✅ Check shipping when pincode changes (with debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (form.pincode && form.pincode.length === 6) {
+        fetchShippingOptions(form.pincode);
+      } else {
+        setShippingOptions([]);
+        setSelectedShipping(null);
+        setIsPincodeValid(false);
+        setPincodeChecked(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [form.pincode]);
 
   // Load default address on mount
   useEffect(() => {
@@ -249,7 +324,19 @@ const Checkout = () => {
   const effectiveCartTotal = isBuyNow ? buyNowCartTotal : cartTotal;
   const effectiveItems = isBuyNow ? buyNowItems : cart.items;
 
-  const shippingCost = effectiveCartTotal >= 999 ? 0 : 99;
+  // ✅ Get shipping cost from selected shipping option
+  const getShippingCost = () => {
+    if (selectedShipping && isPincodeValid) {
+      return selectedShipping.price;
+    }
+    // Fallback: try to get from shippingOptions
+    if (shippingOptions.length > 0 && shippingOptions[0]) {
+      return shippingOptions[0].price;
+    }
+    return 99; // Default fallback
+  };
+
+  const shippingCost = getShippingCost();
 
   const calculateCouponDiscount = () => {
     if (!appliedCoupon) return 0;
@@ -366,16 +453,13 @@ const Checkout = () => {
         const price = item.price || product.comparePrice || product.price || 0;
         const variant = item.variant;
 
-        // ✅ Get variant image if available, otherwise use product image
         let variantImage = "";
         if (variant && variant.images && variant.images.length > 0) {
           variantImage = variant.images[0]?.url || "";
         }
-        // If variant has no images, check if the variant object has a direct image field
         if (!variantImage && variant && variant.image) {
           variantImage = variant.image;
         }
-        // Fallback to product image
         if (!variantImage) {
           variantImage = product.images?.[0]?.url || "";
         }
@@ -400,7 +484,6 @@ const Checkout = () => {
                     }
                   : null,
                 attributes: variant.attributes || {},
-                // ✅ Store variant images for display
                 images: variant.images || [],
               }
             : null,
@@ -420,6 +503,11 @@ const Checkout = () => {
         isCOD: false,
         orderStatus: "confirmed",
         items: orderItems,
+        shippingMethod: selectedShipping?.id || "basic",
+        shippingMethodName: selectedShipping?.name || "Basic Shipping",
+        shippingCost: shippingCost,
+        shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+        pincode: form.pincode,
       };
 
       const { data } = await axios.post(`${API_URL}/orders`, orderData);
@@ -486,6 +574,12 @@ const Checkout = () => {
       return;
     }
 
+    // ✅ Check if pincode is valid for shipping
+    if (!isPincodeValid && shippingOptions.length === 0) {
+      toast.error("Please enter a valid pincode for shipping");
+      return;
+    }
+
     if (user && saveAddressToProfile && !useSavedAddress) {
       const addressExists = user.addresses?.some(
         (addr) =>
@@ -546,6 +640,11 @@ const Checkout = () => {
           isCOD: false,
           orderStatus: "pending",
           items: orderItems,
+          shippingMethod: selectedShipping?.id || "basic",
+          shippingMethodName: selectedShipping?.name || "Basic Shipping",
+          shippingCost: shippingCost,
+          shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+          pincode: form.pincode,
         };
 
         console.log("[PAYMENT] Creating pending order...");
@@ -701,6 +800,11 @@ const Checkout = () => {
             codAdvance: advanceAmount,
             remainingCOD: remainingCOD,
             items: orderItems,
+            shippingMethod: selectedShipping?.id || "basic",
+            shippingMethodName: selectedShipping?.name || "Basic Shipping",
+            shippingCost: shippingCost,
+            shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+            pincode: form.pincode,
           };
 
           console.log("[PAYMENT] Creating pending COD order with advance...");
@@ -833,6 +937,11 @@ const Checkout = () => {
             isCOD: true,
             orderStatus: "pending",
             items: orderItems,
+            shippingMethod: selectedShipping?.id || "basic",
+            shippingMethodName: selectedShipping?.name || "Basic Shipping",
+            shippingCost: shippingCost,
+            shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+            pincode: form.pincode,
           };
 
           const { data } = await axios.post(`${API_URL}/orders`, orderData);
@@ -1057,6 +1166,82 @@ const Checkout = () => {
                 />
               </div>
 
+              {/* ✅ Shipping Options - Updated with Pincode Check */}
+              <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
+                <h3 className="font-semibold text-text mb-4 flex items-center gap-2">
+                  <TruckIcon className="w-5 h-5 text-primary" />
+                  Shipping Options
+                  {shippingLoading && (
+                    <ArrowPathIcon className="w-4 h-4 animate-spin text-primary ml-2" />
+                  )}
+                </h3>
+
+                {form.pincode && form.pincode.length !== 6 && (
+                  <p className="text-sm text-yellow-600 mb-3">
+                    ⚠️ Please enter a valid 6-digit pincode to see shipping
+                    options
+                  </p>
+                )}
+
+                {shippingLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <span className="ml-2 text-sm text-text-light">
+                      Checking shipping availability...
+                    </span>
+                  </div>
+                ) : shippingError ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-600">{shippingError}</p>
+                  </div>
+                ) : shippingOptions.length > 0 && isPincodeValid ? (
+                  <div className="space-y-3">
+                    {shippingOptions.map((option) => (
+                      <label
+                        key={option.id}
+                        className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${
+                          selectedShipping?.id === option.id
+                            ? "border-primary bg-[#EBF4FC]"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="shipping"
+                          value={option.id}
+                          checked={selectedShipping?.id === option.id}
+                          onChange={() => setSelectedShipping(option)}
+                          className="mt-1 text-primary"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium text-text">
+                              {option.name}
+                            </p>
+                            <p className="font-bold text-primary">
+                              ₹{option.price}
+                            </p>
+                          </div>
+                          <p className="text-xs text-text-light">
+                            {option.delivery}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ) : form.pincode &&
+                  form.pincode.length === 6 &&
+                  !isPincodeValid &&
+                  !shippingLoading ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm text-yellow-700">
+                      ⚠️ We don't deliver to this pincode yet. Please check your
+                      pincode.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4">Payment Method</h3>
                 <div className="space-y-3">
@@ -1169,7 +1354,10 @@ const Checkout = () => {
               <button
                 onClick={handleSubmit}
                 disabled={
-                  loading || processingPayment || hasDeactivatedProducts
+                  loading ||
+                  processingPayment ||
+                  hasDeactivatedProducts ||
+                  !isPincodeValid
                 }
                 className={`w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed ${
                   hasDeactivatedProducts ? "bg-gray-400 hover:bg-gray-400" : ""
@@ -1177,15 +1365,19 @@ const Checkout = () => {
               >
                 {hasDeactivatedProducts
                   ? "Remove deactivated items to proceed"
-                  : loading && !processingPayment
-                    ? "Creating Order..."
-                    : processingPayment
-                      ? "Complete Payment in Popup..."
-                      : grandTotal === 0
-                        ? "Place Order (Free) 🎉"
-                        : paymentMethod === "online"
-                          ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                          : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
+                  : !isPincodeValid && form.pincode && form.pincode.length === 6
+                    ? "Pincode not serviceable"
+                    : !form.pincode || form.pincode.length !== 6
+                      ? "Enter pincode to proceed"
+                      : loading && !processingPayment
+                        ? "Creating Order..."
+                        : processingPayment
+                          ? "Complete Payment in Popup..."
+                          : grandTotal === 0
+                            ? "Place Order (Free) 🎉"
+                            : paymentMethod === "online"
+                              ? `Pay ₹${grandTotal.toLocaleString()} Online`
+                              : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
               </button>
               {hasDeactivatedProducts && (
                 <p className="text-red-500 text-sm text-center mt-2">

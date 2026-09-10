@@ -30,7 +30,6 @@ const Contact = lazy(() => import("./pages/Contact"));
 const FAQ = lazy(() => import("./pages/FAQ"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
-const Shipping = lazy(() => import("./pages/Shipping"));
 const Refund = lazy(() => import("./pages/Refund"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -57,6 +56,7 @@ const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
 const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
+const Shipping = lazy(() => import("./pages/admin/Shipping"));
 
 function App() {
   const { refreshCartWithLatestData } = useCart();
@@ -136,7 +136,6 @@ function App() {
           <Route path="faq" element={<FAQ />} />
           <Route path="privacy" element={<Privacy />} />
           <Route path="terms" element={<Terms />} />
-          <Route path="shipping" element={<Shipping />} />
           <Route path="refund" element={<Refund />} />
         </Route>
 
@@ -171,6 +170,7 @@ function App() {
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
           <Route path="email-marketing" element={<EmailMarketing />} />
+          <Route path="shipping" element={<Shipping />} />
         </Route>
 
         {/* 404 */}

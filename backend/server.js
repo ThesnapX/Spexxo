@@ -32,6 +32,7 @@ import colorRoutes from "./routes/colorRoutes.js";
 import lensTypeRoutes from "./routes/lensTypeRoutes.js";
 import frameMaterialRoutes from "./routes/frameMaterialRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
+import shippingRoutes from "./routes/shippingRoutes.js";
 
 dotenv.config();
 
@@ -112,6 +113,8 @@ app.use("/api/colors", colorRoutes);
 app.use("/api/lens-types", lensTypeRoutes);
 app.use("/api/frame-materials", frameMaterialRoutes);
 app.use("/api/pincode", pincodeRoutes);
+app.use("/api/shipping", shippingRoutes);
+
 console.log("✅ All routes registered");
 
 // Generate sitemap

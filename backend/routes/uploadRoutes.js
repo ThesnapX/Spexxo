@@ -6,19 +6,39 @@ import {
   uploadMultipleImages,
 } from "../controllers/uploadController.js";
 import { protect, admin } from "../middleware/auth.js";
-import { upload } from "../middleware/upload.js";
+import { upload, handleMulterError } from "../middleware/upload.js";
 
 const router = express.Router();
 
-// Single image upload
-router.post("/single", protect, admin, upload.single("image"), uploadImage);
+// Single image upload with error handling
+router.post(
+  "/single",
+  protect,
+  admin,
+  (req, res, next) => {
+    upload.single("image")(req, res, (err) => {
+      if (err) {
+        return handleMulterError(err, req, res, next);
+      }
+      next();
+    });
+  },
+  uploadImage,
+);
 
-// Multiple images upload
+// Multiple images upload with error handling
 router.post(
   "/multiple",
   protect,
   admin,
-  upload.array("images", 10),
+  (req, res, next) => {
+    upload.array("images", 10)(req, res, (err) => {
+      if (err) {
+        return handleMulterError(err, req, res, next);
+      }
+      next();
+    });
+  },
   uploadMultipleImages,
 );
 

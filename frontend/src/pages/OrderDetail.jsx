@@ -105,6 +105,31 @@ const OrderDetail = () => {
     }
   };
 
+  // Get shipping method display name
+  const getShippingMethodName = () => {
+    if (order.shippingMethodName) {
+      return order.shippingMethodName;
+    }
+    if (
+      order.shippingMethod === "ultra-fast" ||
+      order.shippingMethod === "ultra-fast"
+    ) {
+      return "Ultra Fast Shipping";
+    }
+    return "Basic Shipping";
+  };
+
+  // Get shipping delivery text
+  const getShippingDelivery = () => {
+    if (order.shippingDelivery) {
+      return order.shippingDelivery;
+    }
+    if (order.shippingMethod === "ultra-fast") {
+      return "1-2 business days";
+    }
+    return "3-7 business days";
+  };
+
   return (
     <>
       <SEO
@@ -280,6 +305,50 @@ const OrderDetail = () => {
                 <p className="text-text-light text-sm">
                   Phone: {order.shippingAddress?.phone}
                 </p>
+                {order.pincode && (
+                  <p className="text-xs text-text-light mt-2">
+                    <span className="font-medium">Pincode:</span>{" "}
+                    {order.pincode}
+                  </p>
+                )}
+              </div>
+
+              {/* ✅ Shipping Method - Added */}
+              <div className="bg-white rounded-xl border border-gray-100 p-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <TruckIcon className="w-5 h-5 text-primary" />
+                  Shipping Method
+                </h2>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-text-light">Method</span>
+                    <span className="font-medium text-text">
+                      {getShippingMethodName()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-light">Delivery</span>
+                    <span className="font-medium text-text">
+                      {getShippingDelivery()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-light">Shipping Cost</span>
+                    <span className="font-medium text-text">
+                      {order.shippingCost === 0
+                        ? "FREE"
+                        : `₹${order.shippingCost?.toLocaleString()}`}
+                    </span>
+                  </div>
+                  {order.pincode && (
+                    <div className="flex justify-between">
+                      <span className="text-text-light">Pincode</span>
+                      <span className="font-medium text-text">
+                        {order.pincode}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Payment Details */}
@@ -372,7 +441,7 @@ const OrderDetail = () => {
                     <span>
                       {order.shippingCost === 0
                         ? "FREE"
-                        : `₹${order.shippingCost}`}
+                        : `₹${order.shippingCost?.toLocaleString()}`}
                     </span>
                   </div>
                   {order.discount > 0 && (

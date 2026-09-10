@@ -29,7 +29,6 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 
-// ✅ FIX: Single declaration of API_URL and FRONTEND_URL
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
@@ -57,8 +56,6 @@ const OrderDetailView = () => {
     },
     enabled: !!id,
   });
-
-  // ... rest of the component remains the same ...
 
   // Update order status mutation
   const updateStatusMutation = useMutation({
@@ -198,7 +195,8 @@ const OrderDetailView = () => {
       `*Order Details:*\\n` +
       `• Total: ₹${order?.total?.toLocaleString()}\\n` +
       `• Payment: ${order?.paymentMethod?.toUpperCase()}\\n` +
-      `• Status: ${order?.orderStatus?.toUpperCase()}\\n\\n` +
+      `• Status: ${order?.orderStatus?.toUpperCase()}\\n` +
+      `• Shipping: ${order?.shippingMethodName || "Basic Shipping"}\\n\\n` +
       `Thank you for shopping with Spexxo!`;
 
     const encodedMessage = encodeURIComponent(message);
@@ -223,7 +221,7 @@ const OrderDetailView = () => {
           onClick={() => navigate("/admin/orders")}
           className="btn-primary mt-4 text-sm"
         >
-          Back to Orders
+          Back to Orders{" "}
         </button>
       </div>
     );
@@ -238,6 +236,27 @@ const OrderDetailView = () => {
   const customerLastName = user?.lastName || order?.user?.lastName || "";
   const customerFullName =
     `${customerName} ${customerLastName}`.trim() || "N/A";
+
+  // Get shipping method
+  const getShippingMethodName = () => {
+    if (order.shippingMethodName) {
+      return order.shippingMethodName;
+    }
+    if (order.shippingMethod === "ultra-fast") {
+      return "Ultra Fast Shipping";
+    }
+    return "Basic Shipping";
+  };
+
+  const getShippingDelivery = () => {
+    if (order.shippingDelivery) {
+      return order.shippingDelivery;
+    }
+    if (order.shippingMethod === "ultra-fast") {
+      return "1-2 business days";
+    }
+    return "3-7 business days";
+  };
 
   return (
     <div>
@@ -392,6 +411,7 @@ const OrderDetailView = () => {
               </div>
             )}
           </div>
+
           {/* 2. Order Items */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -425,7 +445,6 @@ const OrderDetailView = () => {
                       <p className="font-medium text-sm text-text hover:text-primary truncate">
                         {item.name}
                       </p>
-                      {/* ✅ Show variant details */}
                       {item.variant?.name && (
                         <p className="text-xs text-primary font-medium">
                           Variant: {item.variant.name}
@@ -466,6 +485,7 @@ const OrderDetailView = () => {
               ))}
             </div>
           </div>
+
           {/* 3. Payment Details */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -581,6 +601,7 @@ const OrderDetailView = () => {
               </div>
             )}
           </div>
+
           {/* 4. Order Meta */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
@@ -622,6 +643,12 @@ const OrderDetailView = () => {
                 <div className="bg-gray-50 p-3 rounded-lg sm:col-span-2">
                   <p className="text-xs text-text-light">Notes</p>
                   <p className="font-medium text-text text-sm">{order.notes}</p>
+                </div>
+              )}
+              {order.pincode && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-text-light">Pincode</p>
+                  <p className="font-medium text-text">{order.pincode}</p>
                 </div>
               )}
             </div>
@@ -728,6 +755,42 @@ const OrderDetailView = () => {
               View Full Customer Profile
               <ChevronRightIcon className="w-4 h-4" />
             </button>
+          </div>
+
+          {/* ✅ Shipping Method - Added */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold text-text mb-4 flex items-center gap-2">
+              <TruckIcon className="w-5 h-5 text-primary" />
+              Shipping Method
+            </h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-text-light">Method</span>
+                <span className="font-medium text-text">
+                  {getShippingMethodName()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-light">Delivery</span>
+                <span className="font-medium text-text">
+                  {getShippingDelivery()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-light">Shipping Cost</span>
+                <span className="font-medium text-text">
+                  {order.shippingCost === 0
+                    ? "FREE"
+                    : `₹${order.shippingCost?.toLocaleString()}`}
+                </span>
+              </div>
+              {order.pincode && (
+                <div className="flex justify-between">
+                  <span className="text-text-light">Pincode</span>
+                  <span className="font-medium text-text">{order.pincode}</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Shipping Address */}
