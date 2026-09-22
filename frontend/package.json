@@ -17,6 +17,7 @@
     "date-fns": "^4.4.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.41.0",
+    "mammoth": "^1.12.2",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-helmet-async": "^3.0.0",

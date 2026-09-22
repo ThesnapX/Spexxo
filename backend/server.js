@@ -75,18 +75,27 @@ app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ============ RATE LIMITING ============
+const isDev = process.env.NODE_ENV !== "production";
+
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 500 : 200,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isDev ? 2000 : 500, // ✅ Dev: 2000, Prod: 500
   message: "Too many requests, please try again later.",
+  standardHeaders: true, // ✅ Show rate limit headers
+  legacyHeaders: false,
+  // ✅ Skip rate limiting entirely for localhost in development
+  skip: (req) => isDev && (req.ip === "::1" || req.ip === "127.0.0.1"),
 });
 app.use("/api/", limiter);
 
 // ✅ Products endpoint can have higher limit
 const productsLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute
+  max: isDev ? 300 : 60, // ✅ Dev: 300, Prod: 60
   message: "Too many product requests, please slow down.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => isDev && (req.ip === "::1" || req.ip === "127.0.0.1"),
 });
 app.use("/api/products", productsLimiter);
 

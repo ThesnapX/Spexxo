@@ -57,6 +57,9 @@ const Coupons = lazy(() => import("./pages/admin/Coupons"));
 const Popups = lazy(() => import("./pages/admin/Popups"));
 const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
 const Shipping = lazy(() => import("./pages/admin/Shipping"));
+const BlogDetailView = lazy(() => import("./pages/admin/BlogDetailView"));
+const BlogCategories = lazy(() => import("./pages/admin/BlogCategories"));
+const BlogTags = lazy(() => import("./pages/admin/BlogTags"));
 
 function App() {
   const { refreshCartWithLatestData } = useCart();
@@ -165,12 +168,16 @@ function App() {
           <Route path="users" element={<Users />} />
           <Route path="users/:id" element={<UserDetailView />} />
           <Route path="blogs" element={<Blogs />} />
+          <Route path="blogs/view/:id" element={<BlogDetailView />} />
+          <Route path="blog-categories" element={<BlogCategories />} />
+          <Route path="blog-tags" element={<BlogTags />} />
           <Route path="blogs/add" element={<AddBlog />} />
           <Route path="blogs/edit/:id" element={<EditBlog />} />
           <Route path="coupons" element={<Coupons />} />
           <Route path="popups" element={<Popups />} />
           <Route path="email-marketing" element={<EmailMarketing />} />
           <Route path="shipping" element={<Shipping />} />
+          <Route path="blogs/view/:id" element={<BlogDetailView />} />
         </Route>
 
         {/* 404 */}

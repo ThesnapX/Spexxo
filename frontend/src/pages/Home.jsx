@@ -8,6 +8,7 @@ import ProductCarousel from "../components/home/ProductCarousel";
 import FeaturesSection from "../components/home/FeaturesSection";
 import PromoBanners from "../components/home/PromoBanners";
 import BrandsSection from "../components/home/BrandsSection";
+import BlogSection from "../components/home/BlogSection";
 import AuthPopup from "../components/common/AuthPopup";
 
 const Home = () => {
@@ -19,13 +20,9 @@ const Home = () => {
     bestSellers: false,
   });
 
-  // ✅ Load carousels with delay to avoid 429 errors
   useEffect(() => {
     const loadCarousels = () => {
-      // Load first carousel immediately
       setCarouselsLoaded((prev) => ({ ...prev, trending: true }));
-
-      // Load others with delay
       setTimeout(
         () => setCarouselsLoaded((prev) => ({ ...prev, flash: true })),
         1500,
@@ -39,7 +36,6 @@ const Home = () => {
         4500,
       );
     };
-
     loadCarousels();
   }, []);
 
@@ -47,7 +43,7 @@ const Home = () => {
     <>
       <SEO
         title="Premium Eyeglasses, Sunglasses & Contact Lenses"
-        description="Shop the latest collection of premium eyewear at Spexxo. Free shipping, COD available, best prices on eyeglasses, sunglasses & contact lenses. Quality eyewear at affordable prices."
+        description="Shop the latest collection of premium eyewear at Spexxo. Free shipping, COD available, best prices on eyeglasses, sunglasses & contact lenses."
         ogType="website"
         canonicalUrl="https://spexxo.vercel.app/"
       />
@@ -70,7 +66,6 @@ const Home = () => {
       <FeaturesSection />
       <PromoBanners />
 
-      {/* ✅ Flash Sales - Now shows products with discounts (comparePrice exists) */}
       {carouselsLoaded.flash && (
         <ProductCarousel
           title="Flash Sales"
@@ -108,6 +103,9 @@ const Home = () => {
           onRequireAuth={() => setShowAuthPopup(true)}
         />
       )}
+
+      {/* ✅ Blog Section - only renders if there are blogs */}
+      <BlogSection />
 
       <AuthPopup
         isOpen={showAuthPopup}

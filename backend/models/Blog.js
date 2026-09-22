@@ -24,25 +24,23 @@ const blogSchema = new mongoose.Schema(
     },
     excerpt: {
       type: String,
-      maxlength: 200,
+      maxlength: 300,
     },
     featuredImage: {
       url: String,
       alt: String,
     },
     category: {
-      type: String,
-      enum: [
-        "eyeglasses",
-        "sunglasses",
-        "contact-lens",
-        "eye-care",
-        "fashion",
-        "technology",
-        "general",
-      ],
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "BlogCategory",
+      default: null,
     },
-    tags: [String],
+    tags: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "BlogTag",
+      },
+    ],
     author: {
       type: String,
       default: "Spexxo Team",
@@ -57,6 +55,13 @@ const blogSchema = new mongoose.Schema(
       metaDescription: String,
       metaKeywords: String,
       ogImage: String,
+    },
+    // ✅ NEW: SEO Score (auto-calculated on save)
+    seoScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
     },
     readTime: {
       type: Number,
@@ -80,10 +85,14 @@ const blogSchema = new mongoose.Schema(
 
 blogSchema.pre("save", function (next) {
   if (this.isModified("title")) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/[^a-zA-Z0-9]/g, "-")
-      .replace(/-+/g, "-");
+    this.slug =
+      this.title
+        .toLowerCase()
+        .replace(/[^a-zA-Z0-9]/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "") +
+      "-" +
+      Date.now().toString().slice(-6);
   }
   if (this.status === "published" && !this.publishedAt) {
     this.publishedAt = new Date();
@@ -91,7 +100,6 @@ blogSchema.pre("save", function (next) {
   next();
 });
 
-// Generate blogId before saving
 blogSchema.pre("save", async function (next) {
   if (this.isNew && !this.blogId) {
     const count = await mongoose.model("Blog").countDocuments();

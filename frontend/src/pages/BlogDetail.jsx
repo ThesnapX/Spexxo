@@ -1,18 +1,22 @@
+// frontend/src/pages/BlogDetail.jsx
+
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import SEO from "../components/common/SEO";
+import BlogArticlePreview from "../components/blog/BlogArticlePreview";
+import { migrateToBlocks } from "../utils/blogBlocks";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const BlogDetail = () => {
   const { slug } = useParams();
 
-  const { data: blog, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["blog", slug],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/blogs/${slug}`);
-      return data.blog;
+      return data;
     },
   });
 
@@ -20,11 +24,15 @@ const BlogDetail = () => {
     return (
       <div className="pt-28 pb-16">
         <div className="container-custom text-center py-12">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
         </div>
       </div>
     );
   }
+
+  const blog = data?.blog;
+  const relatedBlogs = data?.relatedBlogs || [];
+  const sidebarProducts = data?.sidebarProducts || [];
 
   if (!blog) {
     return (
@@ -42,65 +50,31 @@ const BlogDetail = () => {
     );
   }
 
+  const blocks = migrateToBlocks(blog.content);
+
   return (
     <>
       <SEO
-        title={blog.title}
+        title={blog.seo?.metaTitle || blog.title}
         description={
+          blog.seo?.metaDescription ||
           blog.excerpt ||
-          blog.content?.substring(0, 160) ||
-          `Read ${blog.title} on Spexxo blog.`
+          (blog.content || "").replace(/<[^>]*>/g, "").substring(0, 160)
         }
-        ogImage={blog.featuredImage?.url}
+        keywords={blog.seo?.metaKeywords}
+        ogImage={blog.seo?.ogImage || blog.featuredImage?.url}
         ogType="article"
         canonicalUrl={`https://spexxo.vercel.app/blog/${blog.slug}`}
         blog={blog}
       />
-      <div className="pt-28 pb-16">
-        <div className="container-custom max-w-3xl">
-          <div className="mb-8">
-            <span className="text-xs text-primary font-medium uppercase">
-              {blog.category}
-            </span>
-            <h1 className="text-3xl md:text-4xl font-bold text-text mt-2 mb-4">
-              {blog.title}
-            </h1>
-            <div className="flex items-center gap-4 text-sm text-text-light">
-              <span>{blog.author}</span>
-              <span>•</span>
-              <span>
-                {new Date(
-                  blog.publishedAt || blog.createdAt,
-                ).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </span>
-              <span>•</span>
-              <span>{blog.readTime || "5"} min read</span>
-            </div>
-          </div>
 
-          {blog.featuredImage?.url && (
-            <img
-              src={blog.featuredImage.url}
-              alt={blog.title}
-              className="w-full h-auto rounded-2xl mb-8"
-            />
-          )}
-
-          <div
-            className="prose max-w-none text-text-light leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: blog.content }}
-          />
-
-          <div className="mt-12 pt-8 border-t">
-            <Link to="/blog" className="text-primary hover:underline">
-              ← Back to Blog
-            </Link>
-          </div>
-        </div>
+      <div className="pt-24 md:pt-28">
+        <BlogArticlePreview
+          blog={blog}
+          blocks={blocks}
+          relatedBlogs={relatedBlogs}
+          sidebarProducts={sidebarProducts}
+        />
       </div>
     </>
   );
