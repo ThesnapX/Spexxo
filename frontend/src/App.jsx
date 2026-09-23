@@ -32,6 +32,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Refund = lazy(() => import("./pages/Refund"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+import { useMetaPageView } from "./utils/useMetaPixel";
 
 // Admin Pages
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -64,6 +65,7 @@ const BlogCategories = lazy(() => import("./pages/admin/BlogCategories"));
 const BlogTags = lazy(() => import("./pages/admin/BlogTags"));
 
 function App() {
+  useMetaPageView();
   const { refreshCartWithLatestData } = useCart();
 
   useEffect(() => {

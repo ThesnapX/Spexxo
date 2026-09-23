@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useAuth } from "./AuthContext";
+import { trackAddToCart } from "../utils/metaPixel";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -253,6 +254,9 @@ export const CartProvider = ({ children }) => {
         // Refresh cart from backend
         await refreshCartWithLatestData();
         toast.success("Added to cart! 🛒");
+        if (product) {
+          trackAddToCart(product, quantity);
+        }
         setIsAddingToCart(false);
         return data;
       } catch (error) {

@@ -20,6 +20,8 @@ import {
   TruckIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
+import { trackInitiateCheckout } from "../utils/metaPixel";
+import { trackPurchase } from "../utils/metaPixel";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
@@ -86,7 +88,11 @@ const Checkout = () => {
   const hasDeactivatedProducts = cart.items.some(
     (item) => item.product?.isActive === false,
   );
-
+  useEffect(() => {
+    if (cart?.items?.length > 0) {
+      trackInitiateCheckout(cart);
+    }
+  }, []);
   // ✅ Check for Buy Now on mount
   useEffect(() => {
     const buyNowData = sessionStorage.getItem("buyNowItem");

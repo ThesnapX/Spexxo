@@ -36,6 +36,7 @@ import shippingRoutes from "./routes/shippingRoutes.js";
 import subscriberRoutes from "./routes/subscriberRoutes.js";
 import { startCronJobs } from "./utils/cronJobs.js";
 import adminCronRoutes from "./routes/adminCronRoutes.js";
+import metaRoutes from "./routes/metaRoutes.js";
 
 dotenv.config();
 
@@ -128,6 +129,7 @@ app.use("/api/pincode", pincodeRoutes);
 app.use("/api/shipping", shippingRoutes);
 app.use("/api/subscribers", subscriberRoutes);
 app.use("/api/admin/cron", adminCronRoutes);
+app.use("/api/meta", metaRoutes);
 
 console.log("✅ All routes registered");
 

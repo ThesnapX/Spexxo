@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
+import { trackViewContent } from "../utils/metaPixel";
+
 import {
   StarIcon,
   HeartIcon,
@@ -66,7 +68,11 @@ const ProductDetail = () => {
 
   const product = data?.product;
   const isDeactivated = product?.isActive === false;
-
+  useEffect(() => {
+    if (product && product._id) {
+      trackViewContent(product);
+    }
+  }, [product?._id]);
   // Fetch colors for display
   const { data: colorsData } = useQuery({
     queryKey: ["colors"],
