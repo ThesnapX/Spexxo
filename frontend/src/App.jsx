@@ -48,8 +48,10 @@ const Shapes = lazy(() => import("./pages/admin/Shapes"));
 const Colors = lazy(() => import("./pages/admin/Colors"));
 const LensTypes = lazy(() => import("./pages/admin/LensTypes"));
 const FrameMaterials = lazy(() => import("./pages/admin/FrameMaterials"));
-const Users = lazy(() => import("./pages/admin/Users"));
+const UserInspection = lazy(() => import("./pages/admin/UserInspection"));
 const UserDetailView = lazy(() => import("./pages/admin/UserDetailView"));
+const Subscribers = lazy(() => import("./pages/admin/Subscribers"));
+const ContactForms = lazy(() => import("./pages/admin/ContactForms"));
 const Blogs = lazy(() => import("./pages/admin/Blogs"));
 const AddBlog = lazy(() => import("./pages/admin/AddBlog"));
 const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
@@ -72,10 +74,8 @@ function App() {
     };
 
     window.addEventListener("product-updated", handleProductUpdate);
-
-    return () => {
+    return () =>
       window.removeEventListener("product-updated", handleProductUpdate);
-    };
   }, [refreshCartWithLatestData]);
 
   return (
@@ -165,8 +165,13 @@ function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetailAdmin />} />
           <Route path="reviews" element={<Reviews />} />
-          <Route path="users" element={<Users />} />
+
+          {/* ✅ Users section */}
+          <Route path="user-inspection" element={<UserInspection />} />
           <Route path="users/:id" element={<UserDetailView />} />
+          <Route path="subscribers" element={<Subscribers />} />
+          <Route path="contact-forms" element={<ContactForms />} />
+
           <Route path="blogs" element={<Blogs />} />
           <Route path="blogs/view/:id" element={<BlogDetailView />} />
           <Route path="blog-categories" element={<BlogCategories />} />
@@ -177,7 +182,6 @@ function App() {
           <Route path="popups" element={<Popups />} />
           <Route path="email-marketing" element={<EmailMarketing />} />
           <Route path="shipping" element={<Shipping />} />
-          <Route path="blogs/view/:id" element={<BlogDetailView />} />
         </Route>
 
         {/* 404 */}

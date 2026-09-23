@@ -22,11 +22,16 @@ const Footer = () => {
     if (!email) return;
     setLoading(true);
     try {
-      // You can create a newsletter endpoint
-      toast.success("Subscribed to newsletter!");
+      const { data } = await axios.post(`${API_URL}/subscribers`, {
+        email,
+        source: "footer",
+      });
+      toast.success(data.message || "Subscribed to newsletter!");
       setEmail("");
     } catch (error) {
-      toast.error("Failed to subscribe");
+      toast.error(
+        error.response?.data?.message || "Failed to subscribe. Try again.",
+      );
     } finally {
       setLoading(false);
     }

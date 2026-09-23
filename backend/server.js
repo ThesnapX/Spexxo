@@ -33,6 +33,7 @@ import lensTypeRoutes from "./routes/lensTypeRoutes.js";
 import frameMaterialRoutes from "./routes/frameMaterialRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
 import shippingRoutes from "./routes/shippingRoutes.js";
+import subscriberRoutes from "./routes/subscriberRoutes.js";
 
 dotenv.config();
 
@@ -123,6 +124,7 @@ app.use("/api/lens-types", lensTypeRoutes);
 app.use("/api/frame-materials", frameMaterialRoutes);
 app.use("/api/pincode", pincodeRoutes);
 app.use("/api/shipping", shippingRoutes);
+app.use("/api/subscribers", subscriberRoutes);
 
 console.log("✅ All routes registered");
 

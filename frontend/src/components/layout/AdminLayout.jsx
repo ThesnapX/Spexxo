@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import AdminNavigation from "../common/AdminNavigation";
 import {
@@ -25,16 +27,45 @@ import {
   Squares2X2Icon,
   MegaphoneIcon,
   TruckIcon,
+  ClipboardDocumentListIcon,
+  HeartIcon,
+  InboxIcon,
+  BellIcon,
 } from "@heroicons/react/24/outline";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [productsMenuOpen, setProductsMenuOpen] = useState(false);
   const [blogsMenuOpen, setBlogsMenuOpen] = useState(false);
   const [marketingMenuOpen, setMarketingMenuOpen] = useState(false);
+  const [usersMenuOpen, setUsersMenuOpen] = useState(false);
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // ─────────────────────────────────────────
+  // Fetch unread contact form count (for badge)
+  // Only when admin is logged in
+  // ─────────────────────────────────────────
+  const { data: contactStats } = useQuery({
+    queryKey: ["admin-contact-unread-count"],
+    queryFn: async () => {
+      try {
+        const { data } = await axios.get(`${API_URL}/contact/unread-count`);
+        return data;
+      } catch {
+        return { unreadCount: 0 };
+      }
+    },
+    enabled: !!user && user.role === "admin",
+    refetchInterval: 60 * 1000, // refresh every minute
+    staleTime: 30 * 1000,
+  });
+
+  const unreadContacts = contactStats?.unreadCount || 0;
 
   const handleLogout = () => {
     logout();
@@ -55,7 +86,8 @@ const AdminLayout = () => {
       location.pathname.startsWith("/admin/brands") ||
       location.pathname.startsWith("/admin/shapes") ||
       location.pathname.startsWith("/admin/colors") ||
-      location.pathname.startsWith("/admin/lens-types")
+      location.pathname.startsWith("/admin/lens-types") ||
+      location.pathname.startsWith("/admin/frame-materials")
     );
   };
 
@@ -71,17 +103,27 @@ const AdminLayout = () => {
     );
   };
 
+  // ✅ Users dropdown active when on any users-related page
+  const isUsersActive = () => {
+    return (
+      location.pathname.startsWith("/admin/users") ||
+      location.pathname.startsWith("/admin/user-inspection") ||
+      location.pathname.startsWith("/admin/subscribers") ||
+      location.pathname.startsWith("/admin/contact-forms")
+    );
+  };
+
   useEffect(() => {
     if (isProductsActive()) setProductsMenuOpen(true);
     if (isBlogsActive()) setBlogsMenuOpen(true);
     if (isMarketingActive()) setMarketingMenuOpen(true);
+    if (isUsersActive()) setUsersMenuOpen(true);
   }, [location.pathname]);
 
   const menuItems = [
     { name: "Dashboard", icon: HomeIcon, path: "/admin" },
     { name: "Orders", icon: ShoppingCartIcon, path: "/admin/orders" },
     { name: "Reviews", icon: StarIcon, path: "/admin/reviews" },
-    { name: "Users", icon: UsersIcon, path: "/admin/users" },
   ];
 
   const activeClass = "bg-[#EBF4FC] text-[#3D96EB] font-medium";
@@ -94,8 +136,17 @@ const AdminLayout = () => {
 
   const showAdminNav = location.pathname !== "/admin";
 
+  // Small badge
+  const Badge = ({ count }) => {
+    if (!count || count <= 0) return null;
+    return (
+      <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+        {count > 99 ? "99+" : count}
+      </span>
+    );
+  };
+
   return (
-    // ✅ FIXED: Full height container with no scroll on body
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
       {/* Mobile Header */}
       <div className="lg:hidden bg-white border-b px-4 py-3 flex items-center justify-between flex-shrink-0">
@@ -112,18 +163,20 @@ const AdminLayout = () => {
         <Link to="/admin" className="text-xl font-bold">
           Spe<span className="text-[#3D96EB]">xx</span>o Admin
         </Link>
-        <div className="w-6"></div>
+        <div className="w-6 relative">
+          {unreadContacts > 0 && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+          )}
+        </div>
       </div>
 
-      {/* ✅ FIXED: Main flex container with overflow hidden */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Sidebar - Fixed */}
+        {/* Sidebar */}
         <aside
           className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r transform transition-transform duration-200 ease-in-out flex flex-col ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           } h-full`}
         >
-          {/* Logo - Fixed */}
           <div className="p-6 border-b flex-shrink-0">
             <Link to="/admin" className="text-2xl font-bold">
               Spe<span className="text-[#3D96EB]">xx</span>o
@@ -131,7 +184,6 @@ const AdminLayout = () => {
             <p className="text-sm text-gray-500 mt-1">Admin Panel</p>
           </div>
 
-          {/* Navigation - Scrollable */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {menuItems.map((item) => {
               const active = isActive(item.path);
@@ -150,7 +202,83 @@ const AdminLayout = () => {
               );
             })}
 
-            {/* Products Dropdown */}
+            {/* ✅ USERS DROPDOWN */}
+            <div>
+              <button
+                onClick={() => setUsersMenuOpen(!usersMenuOpen)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  isUsersActive() ? activeClass : inactiveClass
+                }`}
+              >
+                <UsersIcon className="w-5 h-5" />
+                <span>Users</span>
+
+                {/* ✅ Show unread badge on the parent when collapsed */}
+                {!usersMenuOpen && <Badge count={unreadContacts} />}
+
+                <ChevronDownIcon
+                  className={`w-4 h-4 transition-transform ${
+                    usersMenuOpen ? "rotate-180" : ""
+                  } ${!usersMenuOpen && unreadContacts > 0 ? "" : "ml-auto"}`}
+                />
+              </button>
+
+              {usersMenuOpen && (
+                <div className="ml-4 mt-1 space-y-1 border-l-2 border-[#EBF4FC] pl-3">
+                  {/* User Inspection (All Users + Cart + Wishlist) */}
+                  <Link
+                    to="/admin/user-inspection"
+                    onClick={closeSidebar}
+                    className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                      location.pathname === "/admin/user-inspection"
+                        ? dropdownActiveClass
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ClipboardDocumentListIcon className="w-4 h-4" />
+                      User Inspection
+                    </div>
+                  </Link>
+
+                  {/* Subscribers */}
+                  <Link
+                    to="/admin/subscribers"
+                    onClick={closeSidebar}
+                    className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                      location.pathname === "/admin/subscribers"
+                        ? dropdownActiveClass
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <BellIcon className="w-4 h-4" />
+                      Subscribers
+                    </div>
+                  </Link>
+
+                  {/* Contact Forms — with badge */}
+                  <Link
+                    to="/admin/contact-forms"
+                    onClick={closeSidebar}
+                    className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
+                      location.pathname === "/admin/contact-forms"
+                        ? dropdownActiveClass
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <InboxIcon className="w-4 h-4" />
+                      <span>Contact Forms</span>
+                      {/* ✅ Badge shows on the item when Users dropdown is expanded */}
+                      <Badge count={unreadContacts} />
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Products Dropdown (unchanged) */}
             <div>
               <button
                 onClick={() => setProductsMenuOpen(!productsMenuOpen)}
@@ -163,7 +291,9 @@ const AdminLayout = () => {
                   <span>Products</span>
                 </div>
                 <ChevronDownIcon
-                  className={`w-4 h-4 transition-transform ${productsMenuOpen ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 transition-transform ${
+                    productsMenuOpen ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {productsMenuOpen && (
@@ -290,7 +420,8 @@ const AdminLayout = () => {
               <TruckIcon className="w-5 h-5" />
               <span>Shipping</span>
             </Link>
-            {/* Marketing Dropdown */}
+
+            {/* Marketing Dropdown (unchanged) */}
             <div>
               <button
                 onClick={() => setMarketingMenuOpen(!marketingMenuOpen)}
@@ -303,7 +434,9 @@ const AdminLayout = () => {
                   <span>Marketing</span>
                 </div>
                 <ChevronDownIcon
-                  className={`w-4 h-4 transition-transform ${marketingMenuOpen ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 transition-transform ${
+                    marketingMenuOpen ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {marketingMenuOpen && (
@@ -354,7 +487,7 @@ const AdminLayout = () => {
               )}
             </div>
 
-            {/* Blogs Dropdown */}
+            {/* Blogs Dropdown (unchanged) */}
             <div>
               <button
                 onClick={() => setBlogsMenuOpen(!blogsMenuOpen)}
@@ -367,7 +500,9 @@ const AdminLayout = () => {
                   <span>Blog</span>
                 </div>
                 <ChevronDownIcon
-                  className={`w-4 h-4 transition-transform ${blogsMenuOpen ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 transition-transform ${
+                    blogsMenuOpen ? "rotate-180" : ""
+                  }`}
                 />
               </button>
               {blogsMenuOpen && (
@@ -421,7 +556,7 @@ const AdminLayout = () => {
             </div>
           </nav>
 
-          {/* User Info - Fixed at bottom */}
+          {/* User Info */}
           <div className="flex-shrink-0 p-4 border-t bg-white">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-[#3D96EB] text-white rounded-full flex items-center justify-center font-semibold flex-shrink-0">
@@ -458,7 +593,7 @@ const AdminLayout = () => {
           />
         )}
 
-        {/* ✅ Main Content - Scrollable */}
+        {/* Main Content */}
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto h-full">
           {showAdminNav && (
             <div className="mb-6 pb-4 border-b border-gray-100 flex-shrink-0">

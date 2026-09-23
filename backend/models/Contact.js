@@ -1,3 +1,5 @@
+// backend/models/Contact.js
+
 import mongoose from "mongoose";
 
 const contactSchema = new mongoose.Schema(
@@ -30,10 +32,17 @@ const contactSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    readAt: {
+      type: Date,
+      default: null,
+    },
+    readBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 const Contact = mongoose.model("Contact", contactSchema);
