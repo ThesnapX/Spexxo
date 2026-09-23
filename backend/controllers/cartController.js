@@ -2,6 +2,9 @@
 
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
+import User from "../models/User.js";
+import { cartAddedEmail } from "../utils/emailTemplates.js";
+import { sendTransactionalEmail } from "../utils/emailService.js";
 
 // @desc    Get user cart
 // @route   GET /api/cart
@@ -62,7 +65,6 @@ export const getCart = async (req, res) => {
           }
         }
 
-        // ✅ Use variant images if available, otherwise product images
         const displayImage =
           variantImages.length > 0
             ? variantImages[0]?.url || product.images?.[0]?.url || ""
@@ -93,7 +95,6 @@ export const getCart = async (req, res) => {
           variantSku: variantSku,
           variantColor: variantColor,
           variantImages: variantImages,
-          // ✅ Store the correct image for display
           image: displayImage,
         };
       })
@@ -188,7 +189,6 @@ export const addToCart = async (req, res) => {
       cart = await Cart.create({ user: req.user._id, items: [] });
     }
 
-    // Find existing item with same product and variant
     const itemIndex = cart.items.findIndex((item) => {
       const isSameProduct = item.product.toString() === productId;
       if (!variant) return isSameProduct && !item.variant;
@@ -221,6 +221,10 @@ export const addToCart = async (req, res) => {
         variant: variantData || null,
       });
     }
+
+    // ✅ Reset follow-up tracking on cart activity
+    cart.lastActivityAt = new Date();
+    cart.followUpStage = 0;
 
     await cart.save();
 
@@ -275,6 +279,31 @@ export const addToCart = async (req, res) => {
       })
       .filter((item) => item !== null);
 
+    // ✅ Send "Added to cart" email (non-blocking, deduped per product)
+    try {
+      const user = await User.findById(req.user._id).select(
+        "firstName lastName email",
+      );
+      if (user?.email && product) {
+        const tpl = cartAddedEmail({
+          user,
+          product,
+          quantity,
+        });
+        sendTransactionalEmail({
+          to: user.email,
+          subject: tpl.subject,
+          html: tpl.html,
+          type: "cart_added",
+          userId: user._id,
+          refId: product._id,
+          refType: "product",
+        }).catch(() => {});
+      }
+    } catch (emailErr) {
+      console.log("Cart email failed:", emailErr.message);
+    }
+
     res.status(200).json({
       success: true,
       cart: {
@@ -312,7 +341,6 @@ export const updateCartItem = async (req, res) => {
         .json({ success: false, message: "Item not found" });
     }
 
-    // Check stock with variant support
     const product = await Product.findById(item.product);
     if (product) {
       let stockToCheck = product.stock;
@@ -338,6 +366,11 @@ export const updateCartItem = async (req, res) => {
     }
 
     item.quantity = quantity;
+
+    // ✅ Reset follow-up tracking on cart activity
+    cart.lastActivityAt = new Date();
+    cart.followUpStage = 0;
+
     await cart.save();
 
     const populatedCart = await Cart.findById(cart._id).populate({
@@ -417,6 +450,11 @@ export const removeFromCart = async (req, res) => {
     cart.items = cart.items.filter(
       (item) => item._id.toString() !== req.params.itemId,
     );
+
+    // ✅ Update activity timestamp
+    cart.lastActivityAt = new Date();
+    cart.followUpStage = 0;
+
     await cart.save();
 
     const populatedCart = await Cart.findById(cart._id).populate({
@@ -488,6 +526,8 @@ export const clearCart = async (req, res) => {
     const cart = await Cart.findOne({ user: req.user._id });
     if (cart) {
       cart.items = [];
+      cart.lastActivityAt = new Date();
+      cart.followUpStage = 0;
       await cart.save();
     }
     res.status(200).json({

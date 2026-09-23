@@ -34,6 +34,22 @@ const cartSchema = new mongoose.Schema(
         },
       },
     ],
+
+    // ✅ Follow-up tracking for abandoned cart emails
+    followUpStage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 4,
+    },
+    lastFollowUpAt: {
+      type: Date,
+      default: null,
+    },
+    lastActivityAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,

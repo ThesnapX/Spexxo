@@ -67,6 +67,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
     defaultAddress: {
       fullName: String,
       phone: String,
@@ -94,6 +102,23 @@ const userSchema = new mongoose.Schema(
       },
     ],
     wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
+
+    // ✅ Follow-up tracking for abandoned wishlist emails
+    wishlistFollowUpStage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 4,
+    },
+    wishlistLastFollowUpAt: {
+      type: Date,
+      default: null,
+    },
+    wishlistLastActivityAt: {
+      type: Date,
+      default: Date.now,
+    },
+
     resetPasswordToken: String,
     resetPasswordExpire: Date,
     createdAt: { type: Date, default: Date.now },

@@ -34,6 +34,8 @@ import frameMaterialRoutes from "./routes/frameMaterialRoutes.js";
 import pincodeRoutes from "./routes/pincodeRoutes.js";
 import shippingRoutes from "./routes/shippingRoutes.js";
 import subscriberRoutes from "./routes/subscriberRoutes.js";
+import { startCronJobs } from "./utils/cronJobs.js";
+import adminCronRoutes from "./routes/adminCronRoutes.js";
 
 dotenv.config();
 
@@ -125,6 +127,7 @@ app.use("/api/frame-materials", frameMaterialRoutes);
 app.use("/api/pincode", pincodeRoutes);
 app.use("/api/shipping", shippingRoutes);
 app.use("/api/subscribers", subscriberRoutes);
+app.use("/api/admin/cron", adminCronRoutes);
 
 console.log("✅ All routes registered");
 
@@ -203,6 +206,7 @@ const connectDB = async () => {
 };
 
 connectDB();
+startCronJobs();
 
 mongoose.connection.on("connected", () => {
   console.log("Mongoose connected to DB");

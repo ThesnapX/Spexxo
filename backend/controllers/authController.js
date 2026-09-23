@@ -1,7 +1,11 @@
+// backend/controllers/authController.js
+
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import sendEmail from "../utils/sendEmail.js";
 import crypto from "crypto";
+import { welcomeEmail } from "../utils/emailTemplates.js";
+import { sendTransactionalEmail } from "../utils/emailService.js";
 
 // @desc    Register user
 // @route   POST /api/auth/register
@@ -63,6 +67,22 @@ export const register = async (req, res) => {
 
     const user = await User.create(userData);
     const token = generateToken(user._id);
+
+    // ✅ Send welcome email (non-blocking, non-fatal)
+    if (user.email) {
+      try {
+        const tpl = welcomeEmail({ user });
+        sendTransactionalEmail({
+          to: user.email,
+          subject: tpl.subject,
+          html: tpl.html,
+          type: "welcome",
+          userId: user._id,
+        }).catch(() => {});
+      } catch (emailErr) {
+        console.log("Welcome email failed:", emailErr.message);
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -409,7 +429,6 @@ export const forgotPassword = async (req, res) => {
 // @desc    Reset password
 // @route   PUT /api/auth/reset-password/:token
 // @access  Public
-
 export const resetPassword = async (req, res) => {
   try {
     const resetPasswordToken = crypto
@@ -432,9 +451,6 @@ export const resetPassword = async (req, res) => {
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
-
-    // The token is now cleared from the database, making it one-time use
-    // Even if the same link is used again, the user won't be found with this token
 
     const token = generateToken(user._id);
     res

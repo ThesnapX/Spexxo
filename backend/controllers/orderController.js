@@ -4,7 +4,9 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
 import Coupon from "../models/Coupon.js";
-import sendEmail from "../utils/sendEmail.js";
+import User from "../models/User.js";
+import { orderPlacedEmail, orderStatusEmail } from "../utils/emailTemplates.js";
+import { sendTransactionalEmail } from "../utils/emailService.js";
 
 // @desc    Create order (Initial - Payment Pending)
 // @route   POST /api/orders
@@ -38,8 +40,6 @@ export const createOrder = async (req, res) => {
           .status(400)
           .json({ success: false, message: "Cart is empty" });
       }
-
-      // backend/controllers/orderController.js - createOrder (items creation)
 
       orderItems = [];
       for (const item of cart.items) {
@@ -168,6 +168,41 @@ export const createOrder = async (req, res) => {
       .populate("items.product", "name slug images sku variants")
       .populate("user", "firstName lastName email phone customerId");
 
+    // ✅ Send order-placed email (non-blocking)
+    try {
+      if (populatedOrder.user?.email) {
+        const tpl = orderPlacedEmail({
+          user: populatedOrder.user,
+          order: populatedOrder,
+        });
+        sendTransactionalEmail({
+          to: populatedOrder.user.email,
+          subject: tpl.subject,
+          html: tpl.html,
+          type: "order_placed",
+          userId: populatedOrder.user._id,
+          refId: populatedOrder._id,
+          refType: "order",
+        }).catch(() => {});
+      }
+    } catch (emailErr) {
+      console.log("Order placed email failed:", emailErr.message);
+    }
+
+    // ✅ User has converted — reset abandoned follow-up stages
+    try {
+      await User.findByIdAndUpdate(req.user._id, {
+        wishlistFollowUpStage: 0,
+        wishlistLastActivityAt: new Date(),
+      });
+      await Cart.findOneAndUpdate(
+        { user: req.user._id },
+        { followUpStage: 0, lastActivityAt: new Date() },
+      );
+    } catch (resetErr) {
+      console.log("Follow-up reset failed:", resetErr.message);
+    }
+
     res.status(201).json({
       success: true,
       order: populatedOrder,
@@ -195,7 +230,6 @@ export const cancelPendingOrder = async (req, res) => {
       });
     }
 
-    // Only allow cancellation of pending orders
     if (order.orderStatus !== "pending") {
       return res.status(400).json({
         success: false,
@@ -203,7 +237,6 @@ export const cancelPendingOrder = async (req, res) => {
       });
     }
 
-    // Check if user owns this order
     if (order.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
@@ -211,7 +244,6 @@ export const cancelPendingOrder = async (req, res) => {
       });
     }
 
-    // Delete the order - no stock to restore since stock wasn't reduced
     await Order.findByIdAndDelete(req.params.id);
 
     console.log("[ORDER] Pending order deleted:", order.orderNumber);
@@ -316,7 +348,6 @@ export const cancelOrder = async (req, res) => {
       for (const item of order.items) {
         const product = await Product.findById(item.product);
         if (product) {
-          // ✅ Validate quantity before restoring
           const quantity = Number(item.quantity);
           if (!Number.isFinite(quantity) || quantity <= 0) {
             console.error(
@@ -451,7 +482,7 @@ export const updateOrderStatus = async (req, res) => {
     const { status, note } = req.body;
     const order = await Order.findById(req.params.id).populate(
       "user",
-      "email firstName phone",
+      "email firstName lastName phone",
     );
 
     if (!order) {
@@ -474,54 +505,25 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    // Send notification
+    // ✅ Send order status update email (non-blocking)
     try {
-      const statusEmails = {
-        confirmed: "Order Confirmed",
-        processing: "Order Processing",
-        shipped: "Order Shipped",
-        delivered: "Order Delivered",
-        cancelled: "Order Cancelled",
-      };
-
       const userEmail = order.user?.email;
-      const customerName =
-        order.shippingAddress?.fullName || order.user?.firstName || "Customer";
-
-      const emailHTML = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: #0B1C39; padding: 20px; text-align: center; border-radius: 12px 12px 0 0;">
-            <h1 style="color: #fff; margin: 0;">Spe<span style="color: #3D96EB;">xx</span>o</h1>
-          </div>
-          <div style="background: #fff; padding: 30px; border: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
-            <h2 style="color: #0B1C39; margin-top: 0;">Order Status Update</h2>
-            <p>Hi <strong>${customerName}</strong>,</p>
-            <p>Your order <strong style="color: #3D96EB;">#${order.orderNumber}</strong> has been updated to:</p>
-            <div style="background: #EBF4FC; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-              <p style="font-size: 24px; font-weight: bold; color: #3D96EB; margin: 0;">
-                ${statusEmails[status] || status.toUpperCase()}
-              </p>
-            </div>
-            ${note ? `<p style="background: #f9f9f9; padding: 10px; border-radius: 8px; border-left: 4px solid #3D96EB;">📝 ${note}</p>` : ""}
-            <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 5px 0;"><strong>Order Total:</strong> ₹${order.total?.toLocaleString()}</p>
-              <p style="margin: 5px 0;"><strong>Payment:</strong> ${order.paymentMethod?.toUpperCase()}</p>
-            </div>
-            <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/account/orders/${order._id}" 
-               style="display:inline-block;padding:12px 24px;background:#3D96EA;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">
-              View Order Details
-            </a>
-            <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">Thank you for shopping with Spexxo! 👓</p>
-          </div>
-        </div>
-      `;
-
       if (userEmail) {
-        await sendEmail({
-          email: userEmail,
-          subject: `Order ${statusEmails[status] || status} - ${order.orderNumber} | Spexxo`,
-          html: emailHTML,
+        const tpl = orderStatusEmail({
+          user: order.user,
+          order,
+          status,
+          note,
         });
+        sendTransactionalEmail({
+          to: userEmail,
+          subject: tpl.subject,
+          html: tpl.html,
+          type: "order_status",
+          userId: order.user._id,
+          refId: order._id,
+          refType: "order",
+        }).catch(() => {});
       }
     } catch (notificationError) {
       console.log("Notification failed:", notificationError.message);
