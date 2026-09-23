@@ -1,4 +1,6 @@
-import { useState } from "react";
+// frontend/src/pages/admin/UserDetailView.jsx
+
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
@@ -25,13 +27,28 @@ import {
   HomeIcon,
   BriefcaseIcon,
   KeyIcon,
-  PaperAirplaneIcon,
+  HeartIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const FRONTEND_URL =
-  import.meta.env.VITE_FRONTEND_URL || "http://localhost:5173";
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+const daysPassed = (date) => {
+  if (!date) return null;
+  const diff = Date.now() - new Date(date).getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+};
+
+const formatDaysLabel = (days) => {
+  if (days == null) return "—";
+  if (days === 0) return "Today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+};
 
 const UserDetailView = () => {
   const { id } = useParams();
@@ -71,7 +88,9 @@ const UserDetailView = () => {
     isDefault: false,
   });
 
-  // Fetch user
+  // ─────────────────────────────────────────────
+  // Fetch user (now returns `cart` too)
+  // ─────────────────────────────────────────────
   const {
     data: userData,
     isLoading: userLoading,
@@ -80,12 +99,17 @@ const UserDetailView = () => {
     queryKey: ["admin-user-detail", id],
     queryFn: async () => {
       const { data } = await axios.get(`${API_URL}/users/${id}`);
-      return data.user || null;
+      return data; // { user, cart }
     },
     enabled: !!id,
   });
 
+  const user = userData?.user;
+  const cart = userData?.cart || { items: [] };
+
+  // ─────────────────────────────────────────────
   // Fetch user orders
+  // ─────────────────────────────────────────────
   const { data: ordersData } = useQuery({
     queryKey: ["admin-user-orders", id],
     queryFn: async () => {
@@ -101,7 +125,9 @@ const UserDetailView = () => {
     enabled: !!id,
   });
 
+  // ─────────────────────────────────────────────
   // Fetch user reviews
+  // ─────────────────────────────────────────────
   const { data: allReviewsData } = useQuery({
     queryKey: ["admin-all-reviews-for-user"],
     queryFn: async () => {
@@ -115,7 +141,9 @@ const UserDetailView = () => {
     enabled: !!id,
   });
 
-  // Update user mutation
+  // ─────────────────────────────────────────────
+  // Mutations
+  // ─────────────────────────────────────────────
   const updateUserMutation = useMutation({
     mutationFn: async (userData) => {
       const { data } = await axios.put(`${API_URL}/users/${id}`, userData);
@@ -133,7 +161,6 @@ const UserDetailView = () => {
     },
   });
 
-  // Update address mutation
   const updateAddressMutation = useMutation({
     mutationFn: async ({ addressId, addressData }) => {
       const { data } = await axios.put(
@@ -154,7 +181,6 @@ const UserDetailView = () => {
     },
   });
 
-  // Add address mutation
   const addAddressMutation = useMutation({
     mutationFn: async (addressData) => {
       const { data } = await axios.post(
@@ -174,7 +200,6 @@ const UserDetailView = () => {
     },
   });
 
-  // Send reset password link mutation
   const sendResetLinkMutation = useMutation({
     mutationFn: async () => {
       const { data } = await axios.post(`${API_URL}/auth/forgot-password`, {
@@ -192,20 +217,39 @@ const UserDetailView = () => {
     },
   });
 
-  const user = userData;
+  // ─────────────────────────────────────────────
+  // Derived
+  // ─────────────────────────────────────────────
   const orders = ordersData || [];
   const allReviews = allReviewsData || [];
   const reviews = allReviews.filter((review) => review.user?._id === id);
+
+  const cartItems = (cart.items || []).filter((it) => it.product);
+  const cartCount = cartItems.reduce((sum, it) => sum + (it.quantity || 0), 0);
+
+  const wishlistItems = (user?.wishlist || []).filter((p) => p && p._id);
 
   const tabs = [
     { id: "meta", label: "User Meta", icon: ClipboardDocumentListIcon },
     { id: "addresses", label: "Addresses", icon: MapPinIcon },
     { id: "orders", label: "Order History", icon: ShoppingBagIcon },
     { id: "reviews", label: "Reviews", icon: StarIcon },
+    {
+      id: "cart",
+      label: "Cart",
+      icon: ShoppingBagIcon,
+      badge: cartCount > 0 ? cartCount : null,
+    },
+    {
+      id: "wishlist",
+      label: "Wishlist",
+      icon: HeartIcon,
+      badge: wishlistItems.length > 0 ? wishlistItems.length : null,
+    },
   ];
 
-  // Initialize edit form when user data loads
-  useState(() => {
+  // Initialize edit form when user loads
+  useEffect(() => {
     if (user) {
       setEditForm({
         firstName: user.firstName || "",
@@ -219,6 +263,9 @@ const UserDetailView = () => {
     }
   }, [user]);
 
+  // ─────────────────────────────────────────────
+  // Loading / Not found
+  // ─────────────────────────────────────────────
   if (userLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -242,24 +289,18 @@ const UserDetailView = () => {
     );
   }
 
-  const handleViewOrder = (order) => {
-    setShowOrderModal(order);
-  };
-
-  const closeOrderModal = () => {
-    setShowOrderModal(null);
-  };
+  // ─────────────────────────────────────────────
+  // Handlers
+  // ─────────────────────────────────────────────
+  const handleViewOrder = (order) => setShowOrderModal(order);
+  const closeOrderModal = () => setShowOrderModal(null);
 
   const handleViewProduct = (productId) => {
-    if (productId) {
-      navigate(`/admin/products/view/${productId}`);
-    }
+    if (productId) navigate(`/admin/products/view/${productId}`);
   };
 
   const handleViewOrderDetail = (orderId) => {
-    if (orderId) {
-      navigate(`/admin/orders/${orderId}`);
-    }
+    if (orderId) navigate(`/admin/orders/${orderId}`);
   };
 
   const handleEditUser = () => {
@@ -339,7 +380,6 @@ const UserDetailView = () => {
     setEditingAddress(null);
   };
 
-  // Address type icons
   const addressIcons = {
     Home: HomeIcon,
     Work: BriefcaseIcon,
@@ -351,10 +391,93 @@ const UserDetailView = () => {
     return <Icon className="w-4 h-4" />;
   };
 
+  // Reusable product row for cart / wishlist
+  const ProductRow = ({ product, quantity, addedAt, variant, image }) => {
+    const days = daysPassed(addedAt);
+    const img =
+      image || product?.images?.[0]?.url || variant?.images?.[0]?.url || null;
+
+    return (
+      <div className="flex items-center gap-4 bg-white border border-gray-100 p-3 rounded-xl hover:border-primary/30 transition">
+        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-100">
+          {img ? (
+            <img
+              src={img}
+              alt={product?.name || "Product"}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <PhotoIcon className="w-6 h-6 text-gray-300" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <button
+            onClick={() => handleViewProduct(product?._id)}
+            className="font-medium text-sm text-text hover:text-primary hover:underline transition text-left break-words"
+          >
+            {product?.name || "Unknown Product"}
+          </button>
+          {variant?.name && (
+            <p className="text-xs text-primary font-medium mt-0.5">
+              Variant: {variant.name}
+            </p>
+          )}
+          {product?.brand?.name && (
+            <p className="text-xs text-text-light">{product.brand.name}</p>
+          )}
+          <div className="flex items-center gap-3 text-xs text-text-light mt-1 flex-wrap">
+            {quantity != null && (
+              <span className="font-medium text-text">Qty: {quantity}</span>
+            )}
+            {product?.price != null && (
+              <span>
+                ₹{(product.comparePrice || product.price)?.toLocaleString()}
+              </span>
+            )}
+            {addedAt && (
+              <span className="flex items-center gap-1">
+                <ClockIcon className="w-3 h-3" />
+                {new Date(addedAt).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 text-right">
+          {days != null ? (
+            <span
+              className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold ${
+                days === 0
+                  ? "bg-green-100 text-green-700"
+                  : days <= 7
+                    ? "bg-blue-100 text-blue-700"
+                    : days <= 30
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {formatDaysLabel(days)}
+            </span>
+          ) : (
+            <span className="text-[11px] text-text-light">—</span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════
   return (
     <div>
-      {/* Back Button */}
-
       {/* User Header */}
       <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6">
         <div className="flex items-start justify-between flex-wrap gap-4">
@@ -411,13 +534,6 @@ const UserDetailView = () => {
               <KeyIcon className="w-4 h-4" />
               {sendingResetLink ? "Sending..." : "Send Reset Link"}
             </button>
-            <Link
-              to={`/account`}
-              target="_blank"
-              className="btn-outline text-sm"
-            >
-              View as Customer
-            </Link>
           </div>
         </div>
       </div>
@@ -485,7 +601,6 @@ const UserDetailView = () => {
                     setEditForm({ ...editForm, username: e.target.value })
                   }
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
-                  placeholder="Username (optional)"
                 />
               </div>
 
@@ -513,7 +628,6 @@ const UserDetailView = () => {
                     setEditForm({ ...editForm, phone: e.target.value })
                   }
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-primary"
-                  placeholder="Phone number"
                 />
               </div>
 
@@ -579,19 +693,9 @@ const UserDetailView = () => {
             }`}
           >
             <tab.icon className="w-4 h-4" /> {tab.label}
-            {tab.id === "orders" && orders.length > 0 && (
+            {tab.badge != null && (
               <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-xs">
-                {orders.length}
-              </span>
-            )}
-            {tab.id === "reviews" && reviews.length > 0 && (
-              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-xs">
-                {reviews.length}
-              </span>
-            )}
-            {tab.id === "addresses" && user.addresses?.length > 0 && (
-              <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full text-xs">
-                {user.addresses.length}
+                {tab.badge}
               </span>
             )}
           </button>
@@ -639,7 +743,9 @@ const UserDetailView = () => {
             <div className="bg-gray-50 p-4 rounded-xl">
               <p className="text-xs text-text-light">Status</p>
               <p
-                className={`font-medium ${user.isActive !== false ? "text-green-600" : "text-red-600"}`}
+                className={`font-medium ${
+                  user.isActive !== false ? "text-green-600" : "text-red-600"
+                }`}
               >
                 {user.isActive !== false ? "Active" : "Inactive"}
               </p>
@@ -654,7 +760,7 @@ const UserDetailView = () => {
         </div>
       )}
 
-      {/* ADDRESSES TAB - NEW */}
+      {/* ADDRESSES TAB */}
       {activeTab === "addresses" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -669,7 +775,6 @@ const UserDetailView = () => {
             </button>
           </div>
 
-          {/* Add/Edit Address Form */}
           {showAddressForm && (
             <div className="bg-white rounded-2xl border border-gray-100 p-6">
               <div className="flex justify-between items-center mb-4">
@@ -693,7 +798,6 @@ const UserDetailView = () => {
             </div>
           )}
 
-          {/* Address List */}
           {user.addresses?.length === 0 && !showAddressForm ? (
             <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
               <MapPinIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -814,37 +918,6 @@ const UserDetailView = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
-                    {order.items?.slice(0, 3).map((item, i) => (
-                      <button
-                        key={i}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewProduct(item.product?._id);
-                        }}
-                        className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border text-xs flex-shrink-0 hover:border-primary hover:bg-primary/5 transition"
-                      >
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt=""
-                            className="w-6 h-6 rounded object-cover"
-                          />
-                        ) : (
-                          <PhotoIcon className="w-4 h-4 text-gray-400" />
-                        )}
-                        <span className="truncate max-w-24">{item.name}</span>
-                        <span className="text-text-light">
-                          ×{item.quantity}
-                        </span>
-                      </button>
-                    ))}
-                    {order.items?.length > 3 && (
-                      <span className="text-xs text-text-light flex items-center">
-                        +{order.items.length - 3} more
-                      </span>
-                    )}
-                  </div>
                 </div>
               ))}
             </div>
@@ -897,15 +970,6 @@ const UserDetailView = () => {
                         <span className="text-xs text-text-light">
                           {new Date(review.createdAt).toLocaleDateString()}
                         </span>
-                        {review.isHidden ? (
-                          <span className="text-xs bg-gray-300 text-gray-600 px-2 py-0.5 rounded-full">
-                            Hidden
-                          </span>
-                        ) : (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                            Visible
-                          </span>
-                        )}
                       </div>
                     </div>
                     <button
@@ -921,28 +985,6 @@ const UserDetailView = () => {
                   <p className="text-sm text-text-light mt-1">
                     {review.comment}
                   </p>
-                  {review.images?.length > 0 && (
-                    <div className="flex gap-2 mt-2">
-                      {review.images.map((img, i) => (
-                        <img
-                          key={i}
-                          src={img.url}
-                          alt="Review"
-                          className="w-12 h-12 rounded-lg object-cover border"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {review.adminReply && (
-                    <div className="mt-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                      <p className="text-xs font-semibold text-blue-700">
-                        Admin Reply
-                      </p>
-                      <p className="text-sm text-text mt-1">
-                        {review.adminReply}
-                      </p>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -950,7 +992,85 @@ const UserDetailView = () => {
         </div>
       )}
 
-      {/* Order Detail Modal */}
+      {/* ✅ CART TAB */}
+      {activeTab === "cart" && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <ShoppingBagIcon className="w-5 h-5 text-primary" />
+              Cart Items ({cartCount})
+            </h2>
+            {cart.updatedAt && (
+              <p className="text-xs text-text-light flex items-center gap-1">
+                <ClockIcon className="w-3.5 h-3.5" />
+                Last updated: {new Date(cart.updatedAt).toLocaleString("en-IN")}
+              </p>
+            )}
+          </div>
+
+          {cartItems.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <ShoppingBagIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-text-light">
+                This user's cart is currently empty
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cartItems.map((item, idx) => (
+                <ProductRow
+                  key={item._id || idx}
+                  product={item.product}
+                  quantity={item.quantity}
+                  variant={item.variant}
+                  addedAt={cart.updatedAt || cart.createdAt}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ✅ WISHLIST TAB */}
+      {activeTab === "wishlist" && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <HeartIcon className="w-5 h-5 text-red-500" />
+              Wishlist Items ({wishlistItems.length})
+            </h2>
+            {user.updatedAt && wishlistItems.length > 0 && (
+              <p className="text-xs text-text-light flex items-center gap-1">
+                <ClockIcon className="w-3.5 h-3.5" />
+                Last activity:{" "}
+                {new Date(user.updatedAt).toLocaleString("en-IN")}
+              </p>
+            )}
+          </div>
+
+          {wishlistItems.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <HeartIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-text-light">
+                This user's wishlist is currently empty
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {wishlistItems.map((product) => (
+                <ProductRow
+                  key={product._id}
+                  product={product}
+                  quantity={null}
+                  addedAt={user.updatedAt || user.createdAt}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Order Detail Modal (unchanged) */}
       {showOrderModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div
@@ -962,19 +1082,7 @@ const UserDetailView = () => {
               onClick={closeOrderModal}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <XMarkIcon className="w-6 h-6" />
             </button>
 
             <h2 className="text-xl font-bold text-text mb-2">
