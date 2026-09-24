@@ -31,7 +31,7 @@ export const CartProvider = ({ children }) => {
     }
   }, [isAuthenticated]);
 
-  // Fetch from API (logged in)
+  // ── Fetch from API ──
   const fetchCartFromAPI = async () => {
     try {
       setLoading(true);
@@ -39,7 +39,6 @@ export const CartProvider = ({ children }) => {
       const localCart = JSON.parse(
         localStorage.getItem("guestCart") || '{"items":[]}',
       );
-
       if (localCart.items.length > 0) {
         for (const item of localCart.items) {
           try {
@@ -49,7 +48,7 @@ export const CartProvider = ({ children }) => {
               variant: item.variant || null,
             });
           } catch (e) {
-            /* ignore duplicates */
+            /* ignore */
           }
         }
         localStorage.removeItem("guestCart");
@@ -66,7 +65,6 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Fetch from localStorage (guest)
   const fetchCartFromLocal = () => {
     try {
       const localCart = JSON.parse(
@@ -78,12 +76,10 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Save to localStorage
   const saveToLocal = (cartData) => {
     localStorage.setItem("guestCart", JSON.stringify(cartData));
   };
 
-  // Refresh cart with latest data
   const refreshCartWithLatestData = async () => {
     if (isAuthenticated) {
       try {
@@ -103,30 +99,23 @@ export const CartProvider = ({ children }) => {
       try {
         const currentCart = { ...cart };
         if (!currentCart.items) currentCart.items = [];
-
         const { data: allProducts } = await axios.get(
           `${API_URL}/products?limit=200&includeInactive=true`,
         );
-
         const products = allProducts.products || [];
         const productMap = {};
         products.forEach((product) => {
           productMap[product._id] = product;
         });
-
         let updated = false;
         const updatedItems = [];
-
         for (const item of currentCart.items) {
           const productId =
             typeof item.product === "object" ? item.product?._id : item.product;
           const freshProduct = productMap[productId];
-
           if (freshProduct) {
             item.product = freshProduct;
             item.image = freshProduct.images?.[0]?.url || "";
-
-            // Check stock based on variant or main product
             let stockToCheck = freshProduct.stock;
             if (item.variant) {
               const foundVariant = freshProduct.variants?.find(
@@ -137,33 +126,26 @@ export const CartProvider = ({ children }) => {
               );
               if (foundVariant) {
                 stockToCheck = foundVariant.stock || 0;
-                // Update variant price if changed
-                if (foundVariant.price) {
-                  item.price = foundVariant.price;
-                }
+                if (foundVariant.price) item.price = foundVariant.price;
               }
             }
-
             if (item.quantity > stockToCheck && stockToCheck > 0) {
               item.quantity = Math.min(item.quantity, stockToCheck);
               updated = true;
             } else if (stockToCheck === 0) {
               updated = true;
-              continue; // Remove out of stock items
+              continue;
             }
             updatedItems.push(item);
           } else {
             updated = true;
           }
         }
-
         currentCart.items = updatedItems;
         setCart(currentCart);
         saveToLocal(currentCart);
-
-        if (updated) {
+        if (updated)
           toast.warning("Some items were removed or quantities adjusted");
-        }
         return currentCart;
       } catch (error) {
         console.error("Failed to refresh guest cart:", error);
@@ -172,7 +154,9 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Add to Cart with variant support
+  // ═════════════════════════════════════════════
+  // ADD TO CART — single AddToCart tracker for both flows
+  // ═════════════════════════════════════════════
   const addToCart = async (productId, quantity = 1, variant = null) => {
     if (isAddingToCart) {
       toast.info("Please wait...");
@@ -180,162 +164,80 @@ export const CartProvider = ({ children }) => {
     }
     setIsAddingToCart(true);
 
-    if (isAuthenticated) {
-      try {
-        // Check stock
-        const { data: productData } = await axios.get(
-          `${API_URL}/products/${productId}`,
+    try {
+      const { data: productData } = await axios.get(
+        `${API_URL}/products/${productId}`,
+      );
+      const product = productData.product;
+
+      if (!product) {
+        toast.error("Product not found");
+        setIsAddingToCart(false);
+        return;
+      }
+      if (product.isActive === false) {
+        toast.error("This product is currently deactivated");
+        setIsAddingToCart(false);
+        return;
+      }
+
+      let stockToCheck = product.stock;
+      let variantPrice = null;
+      let variantName = null;
+      let variantSku = null;
+      let variantColor = null;
+
+      if (variant) {
+        const foundVariant = product.variants?.find(
+          (v) =>
+            v._id?.toString() === variant._id?.toString() ||
+            v.name === variant.name ||
+            v.sku === variant.sku,
         );
-        const product = productData.product;
-
-        if (!product) {
-          toast.error("Product not found");
+        if (foundVariant) {
+          stockToCheck = foundVariant.stock || 0;
+          variantPrice = foundVariant.price;
+          variantName = foundVariant.name;
+          variantSku = foundVariant.sku;
+          variantColor = foundVariant.color;
+        } else {
+          toast.error("Selected variant not found");
           setIsAddingToCart(false);
           return;
         }
+      }
 
-        if (product.isActive === false) {
-          toast.error("This product is currently deactivated");
-          setIsAddingToCart(false);
-          return;
-        }
+      if (stockToCheck < quantity) {
+        toast.error(`Only ${stockToCheck} items available in stock`);
+        setIsAddingToCart(false);
+        return;
+      }
 
-        let stockToCheck = product.stock;
-        let variantPrice = null;
-        let variantName = null;
-        let variantSku = null;
-        let variantColor = null;
-
-        if (variant) {
-          const foundVariant = product.variants?.find(
-            (v) =>
-              v._id?.toString() === variant._id?.toString() ||
-              v.name === variant.name ||
-              v.sku === variant.sku,
-          );
-          if (foundVariant) {
-            stockToCheck = foundVariant.stock || 0;
-            variantPrice = foundVariant.price;
-            variantName = foundVariant.name;
-            variantSku = foundVariant.sku;
-            variantColor = foundVariant.color;
-          } else {
-            toast.error("Selected variant not found");
-            setIsAddingToCart(false);
-            return;
+      const variantData = variant
+        ? {
+            _id: variant._id || null,
+            name: variantName || variant.name,
+            sku: variantSku || variant.sku || "",
+            price: variantPrice || variant.price || 0,
+            color: variantColor || variant.color || null,
+            attributes: variant.attributes || {},
           }
-        }
+        : null;
 
-        if (stockToCheck < quantity) {
-          toast.error(`Only ${stockToCheck} items available in stock`);
-          setIsAddingToCart(false);
-          return;
-        }
-
-        // Prepare variant data for storage
-        const variantData = variant
-          ? {
-              _id: variant._id || null,
-              name: variantName || variant.name,
-              sku: variantSku || variant.sku || "",
-              price: variantPrice || variant.price || 0,
-              color: variantColor || variant.color || null,
-              attributes: variant.attributes || {},
-            }
-          : null;
-
-        // Send to backend
-        const { data } = await axios.post(`${API_URL}/cart`, {
+      // ── Persist cart ──
+      if (isAuthenticated) {
+        await axios.post(`${API_URL}/cart`, {
           productId,
           quantity,
           variant: variantData,
         });
-
-        // Refresh cart from backend
         await refreshCartWithLatestData();
-        toast.success("Added to cart! 🛒");
-        if (product) {
-          trackAddToCart(product, quantity);
-        }
-        setIsAddingToCart(false);
-        return data;
-      } catch (error) {
-        await refreshCartWithLatestData();
-        toast.error(error.response?.data?.message || "Failed to add to cart");
-        setIsAddingToCart(false);
-        throw error;
-      }
-    } else {
-      // Guest cart
-      try {
+      } else {
         const currentCart = { ...cart };
         if (!currentCart.items) currentCart.items = [];
-
-        const { data: productData } = await axios.get(
-          `${API_URL}/products/${productId}`,
-        );
-        const product = productData.product;
-
-        if (!product) {
-          toast.error("Product not found");
-          setIsAddingToCart(false);
-          return;
-        }
-
-        if (product.isActive === false) {
-          toast.error("This product is currently deactivated");
-          setIsAddingToCart(false);
-          return;
-        }
-
-        let stockToCheck = product.stock;
-        let variantPrice = null;
-        let variantName = null;
-        let variantSku = null;
-        let variantColor = null;
-
-        if (variant) {
-          const foundVariant = product.variants?.find(
-            (v) =>
-              v._id?.toString() === variant._id?.toString() ||
-              v.name === variant.name ||
-              v.sku === variant.sku,
-          );
-          if (foundVariant) {
-            stockToCheck = foundVariant.stock || 0;
-            variantPrice = foundVariant.price;
-            variantName = foundVariant.name;
-            variantSku = foundVariant.sku;
-            variantColor = foundVariant.color;
-          } else {
-            toast.error("Selected variant not found");
-            setIsAddingToCart(false);
-            return;
-          }
-        }
-
-        if (stockToCheck < quantity) {
-          toast.error(`Only ${stockToCheck} items available in stock`);
-          setIsAddingToCart(false);
-          return;
-        }
-
-        // Prepare variant data for storage
-        const variantData = variant
-          ? {
-              _id: variant._id || null,
-              name: variantName || variant.name,
-              sku: variantSku || variant.sku || "",
-              price: variantPrice || variant.price || 0,
-              color: variantColor || variant.color || null,
-              attributes: variant.attributes || {},
-            }
-          : null;
-
         const variantKey = variantData
           ? JSON.stringify(variantData)
           : "default";
-
         const existingIndex = currentCart.items.findIndex((item) => {
           const itemVariantKey = item.variant
             ? JSON.stringify(item.variant)
@@ -370,33 +272,34 @@ export const CartProvider = ({ children }) => {
             price: variantPrice || product.comparePrice || product.price || 0,
           });
         }
-
         setCart(currentCart);
         saveToLocal(currentCart);
-        toast.success("Added to cart! 🛒");
-        setIsAddingToCart(false);
-        return { success: true, cart: currentCart };
-      } catch (error) {
-        console.error("Guest add to cart error:", error);
-        toast.error("Failed to add to cart");
-        setIsAddingToCart(false);
-        return { success: false };
       }
+
+      // ── Fire AddToCart (once, on success, with variant price) ──
+      trackAddToCart(product, quantity, variantData).catch(() => {});
+
+      toast.success("Added to cart! 🛒");
+      setIsAddingToCart(false);
+    } catch (error) {
+      if (isAuthenticated) {
+        await refreshCartWithLatestData();
+      }
+      toast.error(error.response?.data?.message || "Failed to add to cart");
+      setIsAddingToCart(false);
     }
   };
 
-  // Update quantity
+  // ── Update quantity ──
   const updateQuantity = async (itemId, quantity) => {
     if (quantity < 1) {
       toast.error("Quantity must be at least 1");
       return;
     }
-
     if (isAuthenticated) {
       try {
         const { data: cartData } = await axios.get(`${API_URL}/cart`);
         const item = cartData.cart?.items?.find((i) => i._id === itemId);
-
         if (item) {
           let stockToCheck = item.product?.stock || 0;
           if (item.variant && item.product?.variants) {
@@ -406,16 +309,13 @@ export const CartProvider = ({ children }) => {
                 v.name === item.variant?.name ||
                 v.sku === item.variant?.sku,
             );
-            if (foundVariant) {
-              stockToCheck = foundVariant.stock || 0;
-            }
+            if (foundVariant) stockToCheck = foundVariant.stock || 0;
           }
           if (quantity > stockToCheck) {
             toast.error(`Only ${stockToCheck} items available in stock`);
             return;
           }
         }
-
         await axios.put(`${API_URL}/cart/${itemId}`, { quantity });
         await refreshCartWithLatestData();
         return;
@@ -429,7 +329,6 @@ export const CartProvider = ({ children }) => {
         (item) => item._id === itemId,
       );
       if (itemIndex === -1 || itemIndex === undefined) return;
-
       const item = currentCart.items[itemIndex];
       let stockToCheck = item.product?.stock || 0;
       if (item.variant && item.product?.variants) {
@@ -439,23 +338,18 @@ export const CartProvider = ({ children }) => {
             v.name === item.variant?.name ||
             v.sku === item.variant?.sku,
         );
-        if (foundVariant) {
-          stockToCheck = foundVariant.stock || 0;
-        }
+        if (foundVariant) stockToCheck = foundVariant.stock || 0;
       }
-
       if (quantity > stockToCheck) {
         toast.error(`Only ${stockToCheck} items available in stock`);
         return;
       }
-
       item.quantity = quantity;
       setCart(currentCart);
       saveToLocal(currentCart);
     }
   };
 
-  // Remove from cart
   const removeFromCart = async (itemId) => {
     if (isAuthenticated) {
       try {
@@ -477,7 +371,6 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Clear cart
   const clearCart = async () => {
     if (isAuthenticated) {
       try {
@@ -493,16 +386,9 @@ export const CartProvider = ({ children }) => {
     setAppliedCoupon(null);
   };
 
-  // Coupon functions
-  const applyCoupon = (couponData) => {
-    setAppliedCoupon(couponData);
-  };
+  const applyCoupon = (couponData) => setAppliedCoupon(couponData);
+  const removeCoupon = () => setAppliedCoupon(null);
 
-  const removeCoupon = () => {
-    setAppliedCoupon(null);
-  };
-
-  // Remove deactivated items
   const removeDeactivatedItems = async () => {
     if (isAuthenticated) {
       try {
@@ -511,11 +397,9 @@ export const CartProvider = ({ children }) => {
           data.cart?.items?.filter(
             (item) => item.product?.isActive === false,
           ) || [];
-
         for (const item of deactivatedItems) {
           await axios.delete(`${API_URL}/cart/${item._id}`);
         }
-
         await refreshCartWithLatestData();
         return { success: true };
       } catch (error) {
@@ -533,7 +417,6 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Refresh cart
   const refreshCart = async () => {
     if (isAuthenticated) {
       try {
@@ -550,20 +433,15 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Calculate totals
   const cartItems = cart?.items || [];
-
   const activeItems = cartItems.filter(
     (item) => item.product?.isActive !== false && item.product !== null,
   );
-
   const cartCount = activeItems.reduce(
     (sum, item) => sum + (item.quantity || 0),
     0,
   );
-
   const activeCartCount = cartCount;
-
   const cartTotal = activeItems.reduce((sum, item) => {
     const price =
       item.price || item.product?.comparePrice || item.product?.price || 0;

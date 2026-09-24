@@ -156,6 +156,14 @@ const orderSchema = new mongoose.Schema(
     codAmount: {
       type: Number,
     },
+    purchaseEventId: {
+      type: String,
+      default: null,
+    },
+    purchaseTrackedAt: {
+      type: Date,
+      default: null,
+    },
     codAdvance: { type: Number, default: 0 },
     amountToPay: { type: Number },
     remainingCOD: { type: Number },

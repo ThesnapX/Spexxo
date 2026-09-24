@@ -7,10 +7,77 @@ import Coupon from "../models/Coupon.js";
 import User from "../models/User.js";
 import { orderPlacedEmail, orderStatusEmail } from "../utils/emailTemplates.js";
 import { sendTransactionalEmail } from "../utils/emailService.js";
+import { sendMetaEvent } from "../utils/metaCapi.js";
 
-// @desc    Create order (Initial - Payment Pending)
-// @route   POST /api/orders
-// @access  Private
+// ─────────────────────────────────────────────
+// Meta Purchase helper (for zero-value / COD-no-advance)
+// ─────────────────────────────────────────────
+const firePurchaseEvent = async (order, req) => {
+  try {
+    if (!order) return;
+    if (!order.purchaseEventId) {
+      order.purchaseEventId = `purchase_${order._id}_${Date.now()}`;
+      order.purchaseTrackedAt = new Date();
+      await order.save();
+    }
+    const eventId = order.purchaseEventId;
+
+    const contents = (order.items || []).map((it) => ({
+      id: String(it.product?._id || it.product),
+      quantity: Number(it.quantity || 1),
+      item_price: Number(it.price || 0),
+    }));
+
+    const userData = {
+      email: order.user?.email,
+      phone: order.user?.phone || order.shippingAddress?.phone,
+      firstName: order.user?.firstName,
+      lastName: order.user?.lastName,
+      city: order.shippingAddress?.city,
+      state: order.shippingAddress?.state,
+      zip: order.shippingAddress?.pincode,
+      country: "IN",
+      externalId: order.user?._id?.toString(),
+      fbc: req?.cookies?._fbc || req?.body?.fbc || null,
+      fbp: req?.cookies?._fbp || req?.body?.fbp || null,
+      clientIpAddress:
+        req?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req?.socket?.remoteAddress ||
+        null,
+      clientUserAgent: req?.headers?.["user-agent"] || null,
+    };
+
+    const customData = {
+      value: Number(order.total || 0),
+      currency: "INR",
+      content_ids: contents.map((c) => c.id),
+      content_type: "product",
+      contents,
+      num_items: contents.reduce((s, c) => s + c.quantity, 0),
+      order_id: order.orderNumber || String(order._id),
+    };
+
+    console.log(
+      `[CAPI] Firing Purchase (instant-confirm) | order=${order.orderNumber} | eventId=${eventId}`,
+    );
+
+    await sendMetaEvent({
+      eventName: "Purchase",
+      eventId,
+      userData,
+      customData,
+      eventSourceUrl: process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/account/orders/${order._id}`
+        : undefined,
+    });
+  } catch (err) {
+    console.error("[CAPI] Purchase fire error (non-fatal):", err.message);
+  }
+};
+
+// @desc   Create order (pending, or instantly confirmed for zero/COD-no-advance)
+// @route  POST /api/orders
+// @access Private
 export const createOrder = async (req, res) => {
   try {
     const {
@@ -23,10 +90,6 @@ export const createOrder = async (req, res) => {
       items,
     } = req.body;
 
-    console.log("[ORDER] Creating order for user:", req.user._id);
-    console.log("[ORDER] Payment method:", paymentMethod);
-    console.log("[ORDER] Items count:", items?.length || 0);
-
     let orderItems = items;
     let subtotal = 0;
 
@@ -34,13 +97,11 @@ export const createOrder = async (req, res) => {
       const cart = await Cart.findOne({ user: req.user._id }).populate(
         "items.product",
       );
-
       if (!cart || !cart.items || cart.items.length === 0) {
         return res
           .status(400)
           .json({ success: false, message: "Cart is empty" });
       }
-
       orderItems = [];
       for (const item of cart.items) {
         const product = item.product;
@@ -48,37 +109,26 @@ export const createOrder = async (req, res) => {
         const quantity = item.quantity;
         const itemTotal = price * quantity;
         subtotal += itemTotal;
-
-        // ✅ Get variant image if available
         let variantImage = "";
         let variantData = item.variant || null;
-
-        if (
-          variantData &&
-          variantData.images &&
-          variantData.images.length > 0
-        ) {
+        if (variantData?.images?.length) {
           variantImage = variantData.images[0]?.url || "";
         }
-        if (!variantImage && variantData && variantData.image) {
+        if (!variantImage && variantData?.image) {
           variantImage = variantData.image;
         }
-        if (!variantImage) {
-          variantImage = product.images?.[0]?.url || "";
-        }
-
+        if (!variantImage) variantImage = product.images?.[0]?.url || "";
         orderItems.push({
           product: product._id,
           name: product.name,
           image: variantImage,
-          price: price,
-          quantity: quantity,
+          price,
+          quantity,
           subtotal: itemTotal,
           variant: variantData,
         });
       }
     } else {
-      // ✅ Validate each item has required fields
       for (const item of orderItems) {
         if (!item.product) {
           return res.status(400).json({
@@ -111,27 +161,26 @@ export const createOrder = async (req, res) => {
         startDate: { $lte: new Date() },
         endDate: { $gte: new Date() },
       });
-
       if (coupon) {
         if (coupon.discountType === "percentage") {
           discount = (subtotal * coupon.discountValue) / 100;
-          if (coupon.maxDiscount) {
+          if (coupon.maxDiscount)
             discount = Math.min(discount, coupon.maxDiscount);
-          }
         } else {
           discount = Math.min(coupon.discountValue, subtotal);
         }
-        couponData = {
-          code: coupon.code,
-          discount: discount,
-        };
+        couponData = { code: coupon.code, discount: discount };
       }
     }
 
     const shippingCost = subtotal >= 999 ? 0 : 99;
     const total = Math.max(0, subtotal - discount + shippingCost);
 
-    // ✅ Create order with PENDING status - STOCK NOT REDUCED YET
+    // Determine if this order is instantly confirmed (no Razorpay step)
+    const isZeroValue = total === 0;
+    const isCodNoAdvance = isCOD === true && !codAdvance && total > 0;
+    const instantConfirm = isZeroValue || isCodNoAdvance;
+
     const order = await Order.create({
       user: req.user._id,
       items: orderItems.map((item) => ({
@@ -140,8 +189,8 @@ export const createOrder = async (req, res) => {
       })),
       shippingAddress: shippingAddress,
       paymentMethod: paymentMethod || "online",
-      paymentStatus: "pending",
-      orderStatus: "pending",
+      paymentStatus: instantConfirm ? "paid" : "pending",
+      orderStatus: instantConfirm ? "confirmed" : "pending",
       subtotal: subtotal,
       shippingCost: shippingCost,
       discount: discount,
@@ -152,23 +201,27 @@ export const createOrder = async (req, res) => {
       remainingCOD: remainingCOD || 0,
       statusHistory: [
         {
-          status: "pending",
-          note: "Order created, awaiting payment",
+          status: instantConfirm ? "confirmed" : "pending",
+          note: instantConfirm
+            ? isZeroValue
+              ? "Free order — auto-confirmed"
+              : "COD order (no advance) — auto-confirmed"
+            : "Order created, awaiting payment",
           date: new Date(),
         },
       ],
     });
 
-    console.log(
-      "[ORDER] Order created with pending status:",
-      order.orderNumber,
-    );
-
     const populatedOrder = await Order.findById(order._id)
       .populate("items.product", "name slug images sku variants")
       .populate("user", "firstName lastName email phone customerId");
 
-    // ✅ Send order-placed email (non-blocking)
+    // Fire Purchase for instantly-confirmed orders
+    if (instantConfirm) {
+      await firePurchaseEvent(populatedOrder, req);
+    }
+
+    // Send order-placed email (non-blocking)
     try {
       if (populatedOrder.user?.email) {
         const tpl = orderPlacedEmail({
@@ -189,7 +242,7 @@ export const createOrder = async (req, res) => {
       console.log("Order placed email failed:", emailErr.message);
     }
 
-    // ✅ User has converted — reset abandoned follow-up stages
+    // Reset follow-up stages
     try {
       await User.findByIdAndUpdate(req.user._id, {
         wishlistFollowUpStage: 0,
@@ -206,7 +259,9 @@ export const createOrder = async (req, res) => {
     res.status(201).json({
       success: true,
       order: populatedOrder,
-      message: "Order created, awaiting payment",
+      message: instantConfirm
+        ? "Order confirmed"
+        : "Order created, awaiting payment",
     });
   } catch (error) {
     console.error("[ORDER] Create order error:", error);
@@ -217,53 +272,39 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// @desc    Cancel pending order (if payment fails or user cancels)
-// @route   DELETE /api/orders/:id/cancel-pending
-// @access  Private
+// ─────────────────────────────────────────────
+// All other order controllers unchanged
+// ─────────────────────────────────────────────
 export const cancelPendingOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    if (order.orderStatus !== "pending") {
-      return res.status(400).json({
-        success: false,
-        message: "Only pending orders can be cancelled",
-      });
-    }
-
-    if (order.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to cancel this order",
-      });
-    }
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    if (order.orderStatus !== "pending")
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Only pending orders can be cancelled",
+        });
+    if (order.user.toString() !== req.user._id.toString())
+      return res
+        .status(403)
+        .json({ success: false, message: "Not authorized" });
 
     await Order.findByIdAndDelete(req.params.id);
-
-    console.log("[ORDER] Pending order deleted:", order.orderNumber);
-
-    res.status(200).json({
-      success: true,
-      message: "Order cancelled successfully",
-    });
+    res
+      .status(200)
+      .json({ success: true, message: "Order cancelled successfully" });
   } catch (error) {
-    console.error("[ORDER] Cancel pending order error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message || "Failed to cancel order",
-    });
+    res
+      .status(400)
+      .json({ success: false, message: error.message || "Failed to cancel" });
   }
 };
 
-// @desc    Get user orders
-// @route   GET /api/orders/my-orders
-// @access  Private
 export const getOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id })
@@ -276,9 +317,6 @@ export const getOrders = async (req, res) => {
   }
 };
 
-// @desc    Get single order
-// @route   GET /api/orders/:id
-// @access  Private
 export const getOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -287,13 +325,10 @@ export const getOrder = async (req, res) => {
         "user",
         "firstName lastName email phone customerId username role createdAt",
       );
-
-    if (!order) {
+    if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    }
-
     if (
       order.user._id.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
@@ -308,18 +343,13 @@ export const getOrder = async (req, res) => {
   }
 };
 
-// @desc    Cancel order (user or admin)
-// @route   PUT /api/orders/:id/cancel
-// @access  Private
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (!order) {
+    if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    }
-
     if (
       order.user.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
@@ -328,63 +358,45 @@ export const cancelOrder = async (req, res) => {
         .status(403)
         .json({ success: false, message: "Not authorized" });
     }
-
     if (!["pending", "confirmed"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: "Only pending or confirmed orders can be cancelled",
       });
     }
-
     if (order.orderStatus === "cancelled") {
-      return res.status(400).json({
-        success: false,
-        message: "Order is already cancelled",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Order is already cancelled" });
     }
 
-    // ✅ Restore stock for all items (only if order was confirmed)
     if (order.orderStatus === "confirmed") {
       for (const item of order.items) {
         const product = await Product.findById(item.product);
-        if (product) {
-          const quantity = Number(item.quantity);
-          if (!Number.isFinite(quantity) || quantity <= 0) {
-            console.error(
-              `[ORDER] Invalid quantity for stock restoration: ${item.quantity}`,
-            );
-            continue;
+        if (!product) continue;
+        const quantity = Number(item.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) continue;
+        if (item.variant && product.variants?.length > 0) {
+          const variantIndex = product.variants.findIndex(
+            (v) =>
+              v._id?.toString() === item.variant._id?.toString() ||
+              v.name === item.variant.name ||
+              v.sku === item.variant.sku,
+          );
+          if (variantIndex !== -1) {
+            product.variants[variantIndex].stock += quantity;
           }
-
-          if (item.variant && product.variants && product.variants.length > 0) {
-            const variantIndex = product.variants.findIndex(
-              (v) =>
-                v._id?.toString() === item.variant._id?.toString() ||
-                v.name === item.variant.name ||
-                v.sku === item.variant.sku,
-            );
-
-            if (variantIndex !== -1) {
-              product.variants[variantIndex].stock += quantity;
-              console.log(
-                `[ORDER] Restored stock for variant ${product.variants[variantIndex].name}`,
-              );
-            }
-          } else {
-            product.stock += quantity;
-            console.log(`[ORDER] Restored stock for ${product.name}`);
-          }
-
-          if (product.productType === "variable") {
-            let totalStock = 0;
-            product.variants.forEach((v) => {
-              totalStock += v.stock || 0;
-            });
-            product.stock = totalStock;
-          }
-
-          await product.save();
+        } else {
+          product.stock += quantity;
         }
+        if (product.productType === "variable") {
+          let totalStock = 0;
+          product.variants.forEach((v) => {
+            totalStock += v.stock || 0;
+          });
+          product.stock = totalStock;
+        }
+        await product.save();
       }
     }
 
@@ -397,7 +409,6 @@ export const cancelOrder = async (req, res) => {
 
     let refundAmount = 0;
     let refundNote = "";
-
     if (order.codAdvance > 0 && order.paymentStatus === "paid") {
       refundAmount = order.codAdvance;
       refundNote = `Order cancelled. Refund of ₹${refundAmount} (advance) is pending.`;
@@ -424,7 +435,6 @@ export const cancelOrder = async (req, res) => {
       note: refundNote,
       date: new Date(),
     });
-
     await order.save();
 
     res.status(200).json({
@@ -439,16 +449,12 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
-// @desc    Get all orders (Admin)
-// @route   GET /api/orders/admin/all
-// @access  Private/Admin
 export const getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
     const query = {};
     if (status) query.orderStatus = status;
     const skip = (Number(page) - 1) * Number(limit);
-
     const [orders, total] = await Promise.all([
       Order.find(query)
         .populate("user", "firstName lastName email phone customerId")
@@ -458,7 +464,6 @@ export const getAllOrders = async (req, res) => {
         .limit(Number(limit)),
       Order.countDocuments(query),
     ]);
-
     res.status(200).json({
       success: true,
       orders,
@@ -474,9 +479,6 @@ export const getAllOrders = async (req, res) => {
   }
 };
 
-// @desc    Update order status (Admin)
-// @route   PUT /api/orders/:id/status
-// @access  Private/Admin
 export const updateOrderStatus = async (req, res) => {
   try {
     const { status, note } = req.body;
@@ -484,13 +486,10 @@ export const updateOrderStatus = async (req, res) => {
       "user",
       "email firstName lastName phone",
     );
-
-    if (!order) {
+    if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    }
-
     const oldStatus = order.orderStatus;
     order.orderStatus = status;
     order.statusHistory.push({
@@ -498,14 +497,11 @@ export const updateOrderStatus = async (req, res) => {
       note: note || `Order status changed from ${oldStatus} to ${status}`,
       date: new Date(),
     });
-
     if (status === "delivered" && order.isCOD) {
       order.paymentStatus = "paid";
     }
-
     await order.save();
 
-    // ✅ Send order status update email (non-blocking)
     try {
       const userEmail = order.user?.email;
       if (userEmail) {
@@ -539,9 +535,6 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
-// @desc    Update order (Admin)
-// @route   PUT /api/orders/:id
-// @access  Private/Admin
 export const updateOrder = async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(req.params.id, req.body, {
@@ -550,12 +543,10 @@ export const updateOrder = async (req, res) => {
     })
       .populate("user", "firstName lastName email phone customerId")
       .populate("items.product", "name slug images sku variants");
-
-    if (!order) {
+    if (!order)
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    }
     res.status(200).json({ success: true, order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });

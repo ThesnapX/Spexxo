@@ -13,6 +13,9 @@ import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import "./index.css";
 
+// ✅ Capture fbclid → _fbc immediately on boot (before any routing)
+captureFbclid();
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

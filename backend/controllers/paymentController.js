@@ -5,6 +5,7 @@ import crypto from "crypto";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
+import { sendMetaEvent } from "../utils/metaCapi.js";
 
 // Initialize Razorpay
 let razorpay;
@@ -21,15 +22,14 @@ try {
   console.error("❌ Failed to initialize Razorpay:", error.message);
 }
 
-// ✅ Helper function to safely get stock value
+// ─────────────────────────────────────────────
+// Safe stock helpers
+// ─────────────────────────────────────────────
 const getSafeStock = (value) => {
-  if (value === undefined || value === null || isNaN(value)) {
-    return 0;
-  }
+  if (value === undefined || value === null || isNaN(value)) return 0;
   return Number(value);
 };
 
-// ✅ Helper function to validate quantity
 const validateQuantity = (quantity, productName) => {
   const qty = Number(quantity);
   if (!Number.isFinite(qty) || qty <= 0) {
@@ -40,45 +40,116 @@ const validateQuantity = (quantity, productName) => {
   return qty;
 };
 
-// ✅ Helper function to confirm order and reduce stock
-const confirmOrderAndReduceStock = async (orderId, paymentId) => {
+// ─────────────────────────────────────────────
+// Meta Purchase — fired once per order, idempotent
+// ─────────────────────────────────────────────
+/**
+ * Fire Meta Purchase for a paid order (browser + CAPI dedup via purchaseEventId).
+ * Must be called AFTER order is confirmed & saved.
+ * Never throws — tracking must not block payment flow.
+ */
+const firePurchaseEvent = async (order, req) => {
+  try {
+    if (!order) return;
+
+    // Stable idempotent event id, persisted on the order
+    if (!order.purchaseEventId) {
+      order.purchaseEventId = `purchase_${order._id}_${Date.now()}`;
+      order.purchaseTrackedAt = new Date();
+      await order.save();
+    }
+
+    // Skip if we've already sent the Purchase event in this session
+    // (idempotency is enforced by the order itself via purchaseEventId)
+    const eventId = order.purchaseEventId;
+
+    const contents = (order.items || []).map((it) => ({
+      id: String(it.product?._id || it.product),
+      quantity: Number(it.quantity || 1),
+      item_price: Number(it.price || 0),
+    }));
+
+    const content_ids = contents.map((c) => c.id);
+    const num_items = contents.reduce((s, c) => s + c.quantity, 0);
+
+    // user_data — prefer order user, then request user
+    const userData = {
+      email: order.user?.email,
+      phone: order.user?.phone || order.shippingAddress?.phone,
+      firstName: order.user?.firstName,
+      lastName: order.user?.lastName,
+      city: order.shippingAddress?.city,
+      state: order.shippingAddress?.state,
+      zip: order.shippingAddress?.pincode,
+      country: "IN",
+      externalId: order.user?._id?.toString(),
+      // Attribution (from request cookies/body — Meta will attribute)
+      fbc: req?.cookies?._fbc || req?.body?.fbc || null,
+      fbp: req?.cookies?._fbp || req?.body?.fbp || null,
+      clientIpAddress:
+        req?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req?.socket?.remoteAddress ||
+        null,
+      clientUserAgent: req?.headers?.["user-agent"] || null,
+    };
+
+    const customData = {
+      value: Number(order.total || 0),
+      currency: "INR",
+      content_ids,
+      content_type: "product",
+      contents,
+      num_items,
+      order_id: order.orderNumber || String(order._id),
+    };
+
+    console.log(
+      `[CAPI] Firing Purchase | order=${order.orderNumber} | eventId=${eventId}`,
+    );
+
+    await sendMetaEvent({
+      eventName: "Purchase",
+      eventId,
+      userData,
+      customData,
+      eventSourceUrl: process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/account/orders/${order._id}`
+        : undefined,
+    });
+  } catch (err) {
+    // Never let tracking break the payment flow
+    console.error("[CAPI] Purchase fire error (non-fatal):", err.message);
+  }
+};
+
+// ─────────────────────────────────────────────
+// Confirm order and reduce stock
+// ─────────────────────────────────────────────
+const confirmOrderAndReduceStock = async (orderId, paymentId, req) => {
   console.log("[PAYMENT] Confirming order and reducing stock:", orderId);
 
   const order = await Order.findById(orderId);
-  if (!order) {
-    throw new Error("Order not found");
-  }
+  if (!order) throw new Error("Order not found");
 
   if (order.orderStatus === "confirmed") {
-    console.log("[PAYMENT] Order already confirmed");
+    console.log("[PAYMENT] Order already confirmed — Purchase may have fired");
+    // Still attempt Purchase (idempotent — same eventId)
+    await firePurchaseEvent(
+      await Order.findById(orderId)
+        .populate("user", "firstName lastName email phone")
+        .populate("items.product", "name slug images sku"),
+      req,
+    );
     return order;
   }
 
-  // ✅ Debug: Log order items to verify quantity is present
-  console.log("[ORDER ITEM DEBUG]", JSON.stringify(order.items, null, 2));
-
-  // Step 1: Reduce stock for all items
+  // Step 1: reduce stock
   for (const item of order.items) {
     const product = await Product.findById(item.product);
-    if (!product) {
-      console.error(`[PAYMENT] Product not found: ${item.product}`);
-      continue;
-    }
+    if (!product) continue;
 
-    // ✅ Validate quantity
     const quantity = validateQuantity(item.quantity, product.name);
 
-    console.log(`[STOCK DEBUG]`, {
-      orderId: order._id,
-      productId: product._id,
-      productName: product.name,
-      rawQuantity: item.quantity,
-      quantityType: typeof item.quantity,
-      validatedQuantity: quantity,
-      currentProductStock: product.stock,
-    });
-
-    // ✅ Check if product has variants
     if (item.variant && product.variants && product.variants.length > 0) {
       const variantIndex = product.variants.findIndex(
         (v) =>
@@ -86,66 +157,38 @@ const confirmOrderAndReduceStock = async (orderId, paymentId) => {
           v.name === item.variant.name ||
           v.sku === item.variant.sku,
       );
+      if (variantIndex === -1) continue;
 
-      if (variantIndex === -1) {
-        console.error(`[PAYMENT] Variant not found: ${item.variant.name}`);
-        continue;
-      }
-
-      // ✅ Get current stock safely
       const currentVariantStock = getSafeStock(
         product.variants[variantIndex].stock,
       );
-
-      console.log(`[PAYMENT] Variant stock before: ${currentVariantStock}`);
-
       if (currentVariantStock < quantity) {
         throw new Error(
-          `Not enough stock for variant ${product.variants[variantIndex].name}. Available: ${currentVariantStock}, Requested: ${quantity}`,
+          `Not enough stock for variant ${product.variants[variantIndex].name}.`,
         );
       }
-
-      // ✅ Update variant stock using validated quantity
       product.variants[variantIndex].stock = currentVariantStock - quantity;
-      console.log(
-        `[PAYMENT] Variant stock after: ${product.variants[variantIndex].stock}`,
-      );
 
-      // ✅ Update main stock for variable products
       if (product.productType === "variable") {
         let totalStock = 0;
         product.variants.forEach((v) => {
           totalStock += getSafeStock(v.stock);
         });
         product.stock = totalStock;
-        console.log(
-          `[PAYMENT] Updated main stock from variants: ${product.stock}`,
-        );
       }
-
       product.markModified("variants");
       await product.save();
     } else {
-      // ✅ Simple product - get current stock safely
       const currentStock = getSafeStock(product.stock);
-
-      console.log(`[PAYMENT] Simple product stock before: ${currentStock}`);
-
       if (currentStock < quantity) {
-        throw new Error(
-          `Not enough stock for ${product.name}. Available: ${currentStock}, Requested: ${quantity}`,
-        );
+        throw new Error(`Not enough stock for ${product.name}.`);
       }
-
-      // ✅ Update stock using validated quantity
       product.stock = currentStock - quantity;
-      console.log(`[PAYMENT] Simple product stock after: ${product.stock}`);
-
       await product.save();
     }
   }
 
-  // Step 2: Update order status
+  // Step 2: confirm order
   order.paymentStatus = "paid";
   order.orderStatus = "confirmed";
   order.statusHistory.push({
@@ -153,43 +196,37 @@ const confirmOrderAndReduceStock = async (orderId, paymentId) => {
     note: `Payment verified. Payment ID: ${paymentId}`,
     date: new Date(),
   });
-
   await order.save();
 
-  // Step 3: Clear cart
+  // Step 3: clear cart
   await Cart.findOneAndUpdate(
     { user: order.user },
     { items: [] },
     { new: true },
   );
 
-  console.log(
-    "[PAYMENT] Order confirmed and stock reduced:",
-    order.orderNumber,
-  );
-
-  // Step 4: Get populated order
+  // Step 4: reload populated order for Purchase tracking
   const populatedOrder = await Order.findById(order._id)
     .populate("items.product", "name slug images sku variants")
     .populate("user", "firstName lastName email phone customerId");
 
+  // Step 5: fire Purchase (idempotent, non-blocking — but awaited here
+  //         so the eventId is guaranteed persisted before response)
+  await firePurchaseEvent(populatedOrder, req);
+
   return populatedOrder;
 };
 
-// @desc    Create Razorpay order
-// @route   POST /api/payment/create-order
-// @access  Private
+// ─────────────────────────────────────────────
+// Create Razorpay order
+// ─────────────────────────────────────────────
 export const createRazorpayOrder = async (req, res) => {
   try {
     const { orderId } = req.body;
-
-    console.log("[PAYMENT] Creating Razorpay order for orderId:", orderId);
-
     if (!orderId) {
-      return res.status(400).json({
-        success: false,
-        message: "Order ID is required",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Order ID is required" });
     }
 
     const order = await Order.findById(orderId).populate(
@@ -198,38 +235,21 @@ export const createRazorpayOrder = async (req, res) => {
     );
 
     if (!order) {
-      console.log("[PAYMENT] Order not found:", orderId);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
-
-    console.log("[PAYMENT] Order found:", order.orderNumber);
-    console.log("[PAYMENT] Order total:", order.total);
-    console.log("[PAYMENT] Order isCOD:", order.isCOD);
-    console.log("[PAYMENT] Order codAdvance:", order.codAdvance);
 
     if (order.paymentStatus === "paid") {
-      return res.status(400).json({
-        success: false,
-        message: "Order already paid",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Order already paid" });
     }
 
-    // ✅ FIXED: Determine the amount to charge
-    // For COD orders with advance, charge ONLY the advance amount
-    // For online orders, charge the full amount
     let amountToCharge = order.total;
-
     if (order.isCOD && order.codAdvance > 0) {
-      // COD with advance - charge only the advance amount
       amountToCharge = order.codAdvance;
-      console.log(
-        `[PAYMENT] COD advance payment: Charging ₹${amountToCharge} (10% of ${order.total})`,
-      );
     } else if (order.isCOD && !order.codAdvance) {
-      // COD without advance - no Razorpay payment needed
       return res.status(400).json({
         success: false,
         message: "COD without advance does not require payment",
@@ -237,28 +257,21 @@ export const createRazorpayOrder = async (req, res) => {
     }
 
     if (amountToCharge <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment amount is zero. No payment required.",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Payment amount is zero." });
     }
 
     if (!razorpay) {
-      console.error("[PAYMENT] Razorpay not initialized");
       return res.status(500).json({
         success: false,
-        message: "Payment gateway not configured. Please check API keys.",
+        message: "Payment gateway not configured.",
       });
     }
 
     const productNames = order.items.map((item) => item.name).join(", ");
     const amountInPaise = Math.round(amountToCharge * 100);
     const receipt = order.orderNumber || `ORD-${Date.now()}`;
-
-    console.log(
-      "[PAYMENT] Creating Razorpay order with amount:",
-      amountInPaise,
-    );
 
     const razorpayOrder = await razorpay.orders.create({
       amount: amountInPaise,
@@ -268,18 +281,13 @@ export const createRazorpayOrder = async (req, res) => {
         orderId: order._id.toString(),
         orderNumber: order.orderNumber,
         customerName:
-          `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim() ||
-          "Customer",
+          `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim(),
         customerEmail: order.user?.email || "",
         customerPhone: order.user?.phone || "",
         products: productNames || "Spexxo Eyewear",
         paymentType: order.isCOD ? "COD Advance" : "Full Payment",
-        advanceAmount: order.codAdvance || 0,
-        totalAmount: order.total || 0,
       },
     });
-
-    console.log("[PAYMENT] Razorpay order created:", razorpayOrder.id);
 
     order.paymentDetails = {
       transactionId: razorpayOrder.id,
@@ -296,9 +304,7 @@ export const createRazorpayOrder = async (req, res) => {
       orderNumber: order.orderNumber,
       key: process.env.RAZORPAY_KEY_ID,
       prefill: {
-        name:
-          `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim() ||
-          "Customer",
+        name: `${order.user?.firstName || ""} ${order.user?.lastName || ""}`.trim(),
         email: order.user?.email || "",
         contact: order.user?.phone || "",
       },
@@ -310,34 +316,17 @@ export const createRazorpayOrder = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("[PAYMENT] Razorpay order creation error:", error);
-
-    if (error.statusCode === 400) {
-      return res.status(400).json({
-        success: false,
-        message: error.error?.description || "Invalid payment request",
-        details: error.error,
-      });
-    }
-
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid Razorpay API keys. Please check your configuration.",
-      });
-    }
-
+    console.error("[PAYMENT] Razorpay order creation error:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Payment initiation failed",
-      details: error.error || null,
     });
   }
 };
 
-// @desc    Verify Razorpay payment
-// @route   POST /api/payment/verify
-// @access  Private
+// ─────────────────────────────────────────────
+// Verify Razorpay payment
+// ─────────────────────────────────────────────
 export const verifyRazorpayPayment = async (req, res) => {
   try {
     const {
@@ -347,46 +336,28 @@ export const verifyRazorpayPayment = async (req, res) => {
       orderId,
     } = req.body;
 
-    console.log("[PAYMENT] Verifying payment for order:", orderId);
-    console.log("[PAYMENT] razorpay_order_id:", razorpay_order_id);
-    console.log("[PAYMENT] razorpay_payment_id:", razorpay_payment_id);
-    console.log("[PAYMENT] razorpay_signature:", razorpay_signature);
-
-    // Verify signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    console.log("[PAYMENT] Expected signature:", expectedSignature);
-
-    const isAuthentic = expectedSignature === razorpay_signature;
-
-    if (!isAuthentic) {
-      console.error(
-        "[PAYMENT] Invalid signature - Payment verification failed",
-      );
+    if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({
         success: false,
         message: "Payment verification failed - Invalid signature",
-        debug: {
-          expected: expectedSignature,
-          received: razorpay_signature,
-        },
       });
     }
 
     const order = await Order.findById(orderId);
     if (!order) {
-      console.error("[PAYMENT] Order not found:", orderId);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     if (order.paymentStatus === "paid") {
+      // Idempotent — Purchase already fired when first confirmed
       return res.status(200).json({
         success: true,
         message: "Order already paid",
@@ -394,12 +365,10 @@ export const verifyRazorpayPayment = async (req, res) => {
       });
     }
 
-    console.log("[PAYMENT] Payment verified, confirming order...");
-
-    // ✅ Confirm order and reduce stock
     const populatedOrder = await confirmOrderAndReduceStock(
       orderId,
       razorpay_payment_id,
+      req,
     );
 
     res.status(200).json({
@@ -408,18 +377,17 @@ export const verifyRazorpayPayment = async (req, res) => {
       order: populatedOrder,
     });
   } catch (error) {
-    console.error("[PAYMENT] Payment verification error:", error);
+    console.error("[PAYMENT] Payment verification error:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Payment verification failed",
-      error: error.toString(),
     });
   }
 };
 
-// @desc    Get Razorpay API key
-// @route   GET /api/payment/key
-// @access  Public
+// ─────────────────────────────────────────────
+// Get Razorpay key
+// ─────────────────────────────────────────────
 export const getRazorpayKey = async (req, res) => {
   res.status(200).json({
     success: true,
@@ -427,9 +395,9 @@ export const getRazorpayKey = async (req, res) => {
   });
 };
 
-// @desc    Verify COD advance payment
-// @route   POST /api/payment/verify-cod-advance
-// @access  Private
+// ─────────────────────────────────────────────
+// Verify COD advance payment
+// ─────────────────────────────────────────────
 export const verifyCODAdvance = async (req, res) => {
   try {
     const {
@@ -440,57 +408,31 @@ export const verifyCODAdvance = async (req, res) => {
       isCODAdvance,
     } = req.body;
 
-    console.log("[PAYMENT] verifyCODAdvance called");
-    console.log("[PAYMENT] razorpay_order_id:", razorpay_order_id);
-    console.log("[PAYMENT] razorpay_payment_id:", razorpay_payment_id);
-    console.log("[PAYMENT] razorpay_signature:", razorpay_signature);
-    console.log("[PAYMENT] orderId:", orderId);
-    console.log("[PAYMENT] isCODAdvance:", isCODAdvance);
-
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      console.error("[PAYMENT] Missing required fields");
       return res.status(400).json({
         success: false,
         message: "Missing required payment verification fields",
-        received: {
-          razorpay_order_id: !!razorpay_order_id,
-          razorpay_payment_id: !!razorpay_payment_id,
-          razorpay_signature: !!razorpay_signature,
-        },
       });
     }
 
-    // Verify signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    console.log("[PAYMENT] Expected signature:", expectedSignature);
-    console.log("[PAYMENT] Received signature:", razorpay_signature);
-
-    const isAuthentic = expectedSignature === razorpay_signature;
-
-    if (!isAuthentic) {
-      console.error("[PAYMENT] Invalid signature for COD advance");
+    if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({
         success: false,
         message: "Payment verification failed - Invalid signature",
-        debug: {
-          expected: expectedSignature,
-          received: razorpay_signature,
-        },
       });
     }
 
     const order = await Order.findById(orderId);
     if (!order) {
-      console.error("[PAYMENT] Order not found:", orderId);
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     if (order.paymentStatus === "paid") {
@@ -508,25 +450,17 @@ export const verifyCODAdvance = async (req, res) => {
       });
     }
 
-    console.log("[PAYMENT] COD advance verified, confirming order...");
-
-    // ✅ Confirm order and reduce stock
     const populatedOrder = await confirmOrderAndReduceStock(
       orderId,
       razorpay_payment_id,
+      req,
     );
 
-    // ✅ Store COD advance details
     populatedOrder.codAdvance =
       populatedOrder.codAdvance || Math.round(populatedOrder.total * 0.1);
     populatedOrder.remainingCOD =
       populatedOrder.total - populatedOrder.codAdvance;
     await populatedOrder.save();
-
-    console.log(
-      "[PAYMENT] COD advance order confirmed:",
-      populatedOrder.orderNumber,
-    );
 
     res.status(200).json({
       success: true,
@@ -534,11 +468,10 @@ export const verifyCODAdvance = async (req, res) => {
       order: populatedOrder,
     });
   } catch (error) {
-    console.error("[PAYMENT] COD advance verification error:", error);
+    console.error("[PAYMENT] COD advance verification error:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Payment verification failed",
-      error: error.toString(),
     });
   }
 };

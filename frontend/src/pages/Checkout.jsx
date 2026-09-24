@@ -1,6 +1,6 @@
 // frontend/src/pages/Checkout.jsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -20,8 +20,7 @@ import {
   TruckIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import { trackInitiateCheckout } from "../utils/metaPixel";
-import { trackPurchase } from "../utils/metaPixel";
+import { trackInitiateCheckout, trackPurchase } from "../utils/metaPixel";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
@@ -88,12 +87,10 @@ const Checkout = () => {
   const hasDeactivatedProducts = cart.items.some(
     (item) => item.product?.isActive === false,
   );
-  useEffect(() => {
-    if (cart?.items?.length > 0) {
-      trackInitiateCheckout(cart);
-    }
-  }, []);
-  // ✅ Check for Buy Now on mount
+
+  // ─────────────────────────────────────────────
+  // Buy Now session bootstrap (runs once)
+  // ─────────────────────────────────────────────
   useEffect(() => {
     const buyNowData = sessionStorage.getItem("buyNowItem");
     if (buyNowData) {
@@ -110,6 +107,68 @@ const Checkout = () => {
       }
     }
   }, []);
+
+  // ─────────────────────────────────────────────
+  // InitiateCheckout — fires exactly once per checkout session
+  // Waits until the correct data source is ready.
+  // Dedup via sessionStorage key tied to the checkout signature.
+  // ─────────────────────────────────────────────
+  const initiateCheckoutFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (initiateCheckoutFiredRef.current) return;
+
+    // Resolve the checkout shape
+    let items = [];
+    let value = 0;
+    let numItems = 0;
+    let sessionKey = "";
+
+    if (isBuyNow && buyNowItems.length > 0) {
+      items = buyNowItems.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        price: it.price,
+      }));
+      value = buyNowCartTotal;
+      numItems = items.reduce((s, it) => s + (it.quantity || 1), 0);
+      sessionKey = `ic_buynow_${items[0].productId}_${items[0].quantity}`;
+    } else if (cart?.items?.length > 0) {
+      // Wait for cart to actually settle (loading false)
+      if (loading) return;
+      const activeItems = cart.items.filter(
+        (it) => it.product && it.product.isActive !== false,
+      );
+      if (activeItems.length === 0) return;
+      items = activeItems.map((it) => ({
+        productId: it.product._id,
+        quantity: it.quantity,
+        price: it.price || it.product.comparePrice || it.product.price || 0,
+      }));
+      value = cartTotal;
+      numItems = items.reduce((s, it) => s + (it.quantity || 1), 0);
+      sessionKey = `ic_cart_${items
+        .map((i) => `${i.productId}x${i.quantity}`)
+        .sort()
+        .join("_")}`;
+    } else {
+      return; // nothing to track yet
+    }
+
+    if (items.length === 0 || value <= 0) return;
+
+    // Dedup within the same browser session for the same shape
+    const alreadyFired = sessionStorage.getItem(sessionKey);
+    if (alreadyFired) {
+      initiateCheckoutFiredRef.current = true;
+      return;
+    }
+
+    initiateCheckoutFiredRef.current = true;
+    sessionStorage.setItem(sessionKey, "1");
+
+    trackInitiateCheckout({ items, value, numItems }).catch(() => {});
+  }, [isBuyNow, buyNowItems, buyNowCartTotal, cart, cartTotal, loading]);
 
   // ✅ Fetch shipping based on pincode
   const fetchShippingOptions = async (pincode) => {
@@ -527,6 +586,11 @@ const Checkout = () => {
         await clearCart();
       }
 
+      // ✅ Fire Purchase on confirmed zero-value order
+      if (data.order) {
+        trackPurchase(data.order, user).catch(() => {});
+      }
+
       toast.success("Order placed successfully! 🎉");
       navigate(`/account/orders/${data.order._id}`);
       return true;
@@ -745,6 +809,11 @@ const Checkout = () => {
               } else {
                 await clearCart();
               }
+              // ✅ Fire Purchase from the *server-confirmed* order
+              // The order carries a stable purchaseEventId — dedupe is guaranteed.
+              if (data.order) {
+                trackPurchase(data.order, user).catch(() => {});
+              }
 
               toast.success("Payment successful! Order placed! 🎉");
               console.log("[PAYMENT] Order verified and confirmed");
@@ -899,16 +968,15 @@ const Checkout = () => {
                 } else {
                   await clearCart();
                 }
+                // ✅ Fire Purchase on confirmed COD advance order
+                if (orderData?.order) {
+                  trackPurchase(orderData.order, user).catch(() => {});
+                }
 
                 toast.success(
                   "Order placed with 10% advance! Remaining ₹" +
                     remainingCOD.toLocaleString() +
                     " on delivery.",
-                );
-                console.log("[PAYMENT] COD advance verified and completed");
-
-                const { data: orderData } = await axios.get(
-                  `${API_URL}/orders/${createdOrder._id}`,
                 );
                 navigate(`/account/orders/${orderData.order._id}`);
               } catch (error) {
@@ -959,6 +1027,10 @@ const Checkout = () => {
             setBuyNowCartTotal(0);
           } else {
             await clearCart();
+          }
+          // ✅ Fire Purchase on confirmed COD no-advance order
+          if (data.order) {
+            trackPurchase(data.order, user).catch(() => {});
           }
 
           toast.success("Order placed successfully!");
