@@ -1,4 +1,17 @@
 // backend/utils/sitemapGenerator.js
+//
+// Deterministic sitemap generation.
+//
+// IMPORTANT:
+//   - Does NOT write into frontend/public at runtime on Vercel.
+//   - Exposes an export that returns the XML string AND a helper that
+//     writes to a local file path (used only when run manually / in local dev).
+//   - Called from server.js at startup AND from a route.
+//
+// Production strategy for Vercel:
+//   Run `node backend/utils/sitemapGenerator.js --write` locally with a
+//   production MONGODB_URI, which regenerates frontend/public/sitemap.xml.
+//   Commit the resulting file. Vercel serves frontend/public as static.
 
 import Product from "../models/Product.js";
 import Blog from "../models/Blog.js";
@@ -10,138 +23,186 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const generateSitemap = async () => {
-  // ✅ FIX: Use the correct domain
-  // For Vercel deployment, use the Vercel URL
-  // For custom domain, use the custom domain
-  const baseUrl =
-    process.env.SITEMAP_BASE_URL ||
-    process.env.FRONTEND_URL ||
-    "https://spexxo.vercel.app";
+const BASE_URL =
+  process.env.SITEMAP_BASE_URL ||
+  process.env.FRONTEND_URL ||
+  "https://spexxo.vercel.app";
 
-  console.log(`[SITEMAP] Generating sitemap for: ${baseUrl}`);
+const escapeXml = (str = "") =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
-  // Static pages
-  const staticPages = [
-    { url: "/", priority: "1.0", changefreq: "daily" },
-    { url: "/shop", priority: "0.9", changefreq: "daily" },
-    { url: "/shop/eyeglasses", priority: "0.8", changefreq: "daily" },
-    { url: "/shop/sunglasses", priority: "0.8", changefreq: "daily" },
-    { url: "/shop/contact-lens", priority: "0.8", changefreq: "daily" },
-    { url: "/blog", priority: "0.7", changefreq: "weekly" },
-    { url: "/about", priority: "0.5", changefreq: "monthly" },
-    { url: "/contact", priority: "0.5", changefreq: "monthly" },
-    { url: "/faq", priority: "0.4", changefreq: "monthly" },
-    { url: "/privacy", priority: "0.3", changefreq: "yearly" },
-    { url: "/terms", priority: "0.3", changefreq: "yearly" },
-    { url: "/shipping", priority: "0.3", changefreq: "yearly" },
-    { url: "/refund", priority: "0.3", changefreq: "yearly" },
-  ];
+// Canonical static pages (matches frontend routes exactly).
+const STATIC_PAGES = [
+  { url: "/" },
+  { url: "/shop" },
+  { url: "/shop/eyeglasses" },
+  { url: "/shop/sunglasses" },
+  { url: "/shop/contact-lens" },
+  { url: "/blog" },
+  { url: "/about" },
+  { url: "/contact" },
+  { url: "/faq" },
+  { url: "/privacy" },
+  { url: "/terms" },
+  { url: "/shipping" },
+  { url: "/refund" },
+];
 
-  // Get dynamic pages
+/**
+ * Builds the XML string.
+ */
+export const buildSitemapXml = async () => {
   let products = [];
   let blogs = [];
   let categories = [];
 
   try {
-    products = await Product.find({ isActive: true })
+    products = await Product.find({
+      isActive: true,
+      slug: { $exists: true, $ne: null, $ne: "" },
+    })
       .select("slug updatedAt")
       .lean();
-    blogs = await Blog.find({ status: "published" })
-      .select("slug updatedAt")
-      .lean();
-    categories = await Category.find({ isActive: true })
-      .select("slug updatedAt")
-      .lean();
-  } catch (error) {
-    console.error("[SITEMAP] Error fetching data:", error.message);
+  } catch (e) {
+    console.error("[SITEMAP] products fetch error:", e.message);
   }
-
-  let sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-  sitemap += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n`;
-  sitemap += `  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"\n`;
-  sitemap += `  xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">\n`;
-
-  // Static pages
-  staticPages.forEach((page) => {
-    sitemap += `  <url>\n`;
-    sitemap += `    <loc>${baseUrl}${page.url}</loc>\n`;
-    sitemap += `    <priority>${page.priority}</priority>\n`;
-    sitemap += `    <changefreq>${page.changefreq}</changefreq>\n`;
-    sitemap += `  </url>\n`;
-  });
-
-  // Product pages (limit to 1000 for performance)
-  const productLimit = 1000;
-  const productsToInclude = products.slice(0, productLimit);
-
-  productsToInclude.forEach((product) => {
-    if (!product.slug) return;
-    sitemap += `  <url>\n`;
-    sitemap += `    <loc>${baseUrl}/product/${product.slug}</loc>\n`;
-    sitemap += `    <priority>0.8</priority>\n`;
-    sitemap += `    <changefreq>weekly</changefreq>\n`;
-    if (product.updatedAt) {
-      sitemap += `    <lastmod>${new Date(product.updatedAt).toISOString()}</lastmod>\n`;
-    }
-    sitemap += `  </url>\n`;
-  });
-
-  // Blog pages
-  blogs.forEach((blog) => {
-    if (!blog.slug) return;
-    sitemap += `  <url>\n`;
-    sitemap += `    <loc>${baseUrl}/blog/${blog.slug}</loc>\n`;
-    sitemap += `    <priority>0.6</priority>\n`;
-    sitemap += `    <changefreq>monthly</changefreq>\n`;
-    if (blog.updatedAt) {
-      sitemap += `    <lastmod>${new Date(blog.updatedAt).toISOString()}</lastmod>\n`;
-    }
-    sitemap += `  </url>\n`;
-  });
-
-  // Category pages
-  categories.forEach((category) => {
-    if (!category.slug) return;
-    sitemap += `  <url>\n`;
-    sitemap += `    <loc>${baseUrl}/shop?category=${category.slug}</loc>\n`;
-    sitemap += `    <priority>0.7</priority>\n`;
-    sitemap += `    <changefreq>weekly</changefreq>\n`;
-    if (category.updatedAt) {
-      sitemap += `    <lastmod>${new Date(category.updatedAt).toISOString()}</lastmod>\n`;
-    }
-    sitemap += `  </url>\n`;
-  });
-
-  sitemap += `</urlset>`;
-
-  // Write to frontend public folder
-  const publicPath = path.join(__dirname, "../../frontend/public/sitemap.xml");
-  const fallbackPath = path.join(__dirname, "../public/sitemap.xml");
 
   try {
-    // Try to write to frontend first
-    fs.writeFileSync(publicPath, sitemap);
-    console.log(`[SITEMAP] ✅ Sitemap generated at: ${publicPath}`);
-    console.log(`[SITEMAP] 📍 Base URL: ${baseUrl}`);
-    console.log(
-      `[SITEMAP] 📊 Pages included: ${staticPages.length + productsToInclude.length + blogs.length + categories.length}`,
-    );
-  } catch (error) {
-    console.error(`[SITEMAP] Error writing to frontend folder:`, error.message);
-    // Try fallback location
-    try {
-      fs.writeFileSync(fallbackPath, sitemap);
-      console.log(
-        `[SITEMAP] ✅ Sitemap generated at fallback: ${fallbackPath}`,
-      );
-    } catch (fallbackError) {
-      console.error(
-        `[SITEMAP] ❌ Failed to write sitemap:`,
-        fallbackError.message,
-      );
-    }
+    blogs = await Blog.find({
+      status: "published",
+      slug: { $exists: true, $ne: null, $ne: "" },
+    })
+      .select("slug updatedAt")
+      .lean();
+  } catch (e) {
+    console.error("[SITEMAP] blogs fetch error:", e.message);
   }
+
+  // Only include category slugs that are actually rendered as /shop/:slug.
+  // These are the three hardcoded category routes in App.jsx.
+  const SUPPORTED_SHOP_SLUGS = new Set([
+    "eyeglasses",
+    "sunglasses",
+    "contact-lens",
+  ]);
+
+  try {
+    categories = await Category.find({
+      isActive: true,
+      slug: { $exists: true, $ne: null, $ne: "" },
+    })
+      .select("slug updatedAt")
+      .lean();
+  } catch (e) {
+    console.error("[SITEMAP] categories fetch error:", e.message);
+  }
+
+  // Build url entries
+  const urls = [];
+
+  STATIC_PAGES.forEach((p) => {
+    urls.push({
+      loc: `${BASE_URL}${p.url}`,
+      lastmod: new Date().toISOString(),
+    });
+  });
+
+  // Additional category pages that map to /shop/:slug
+  categories.forEach((cat) => {
+    if (!cat.slug) return;
+    if (!SUPPORTED_SHOP_SLUGS.has(cat.slug)) return; // avoid dead links
+    const loc = `${BASE_URL}/shop/${cat.slug}`;
+    if (urls.some((u) => u.loc === loc)) return;
+    urls.push({
+      loc,
+      lastmod: cat.updatedAt
+        ? new Date(cat.updatedAt).toISOString()
+        : new Date().toISOString(),
+    });
+  });
+
+  products.forEach((p) => {
+    urls.push({
+      loc: `${BASE_URL}/product/${p.slug}`,
+      lastmod: p.updatedAt
+        ? new Date(p.updatedAt).toISOString()
+        : new Date().toISOString(),
+    });
+  });
+
+  blogs.forEach((b) => {
+    urls.push({
+      loc: `${BASE_URL}/blog/${b.slug}`,
+      lastmod: b.updatedAt
+        ? new Date(b.updatedAt).toISOString()
+        : new Date().toISOString(),
+    });
+  });
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+
+  urls.forEach((u) => {
+    xml += `  <url>\n`;
+    xml += `    <loc>${escapeXml(u.loc)}</loc>\n`;
+    xml += `    <lastmod>${u.lastmod}</lastmod>\n`;
+    xml += `  </url>\n`;
+  });
+
+  xml += `</urlset>\n`;
+
+  return xml;
 };
 
-export default generateSitemap;
+/**
+ * Local-only helper. Writes the sitemap to frontend/public/sitemap.xml.
+ * Do NOT call this from server.js on Vercel.
+ */
+const writeSitemapToFrontendPublic = async () => {
+  const xml = await buildSitemapXml();
+  const target = path.join(
+    __dirname,
+    "..",
+    "..",
+    "frontend",
+    "public",
+    "sitemap.xml",
+  );
+  try {
+    fs.writeFileSync(target, xml, "utf-8");
+    console.log(`[SITEMAP] Written to: ${target}`);
+  } catch (e) {
+    console.error("[SITEMAP] write failed:", e.message);
+  }
+  return xml;
+};
+
+// If invoked directly: node utils/sitemapGenerator.js --write
+if (
+  process.argv[1] &&
+  process.argv[1].endsWith("sitemapGenerator.js") &&
+  process.argv.includes("--write")
+) {
+  // Lazy: only connect DB when running as script
+  (async () => {
+    const mongoose = (await import("mongoose")).default;
+    const dotenv = (await import("dotenv")).default;
+    dotenv.config();
+    try {
+      await mongoose.connect(process.env.MONGODB_URI);
+      await writeSitemapToFrontendPublic();
+      await mongoose.disconnect();
+      process.exit(0);
+    } catch (e) {
+      console.error("[SITEMAP] script error:", e.message);
+      process.exit(1);
+    }
+  })();
+}
+
+export default buildSitemapXml;

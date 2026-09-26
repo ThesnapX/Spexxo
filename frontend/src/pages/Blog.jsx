@@ -9,12 +9,16 @@ import BlogLiveSearch from "../components/common/BlogLiveSearch";
 import { ClockIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const SITE_URL = "https://spexxo.vercel.app";
 
 const Blog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const category = searchParams.get("category") || "";
   const searchTerm = searchParams.get("search") || "";
   const tag = searchParams.get("tag") || "";
+
+  // Internal-search pages should not be indexed
+  const isSearchPage = !!(searchTerm || tag);
 
   const { data, isLoading } = useQuery({
     queryKey: ["blogs", category, searchTerm, tag],
@@ -43,7 +47,6 @@ const Blog = () => {
     const params = new URLSearchParams(searchParams);
     if (slug) params.set("category", slug);
     else params.delete("category");
-    // Clear search/tag when switching category for a cleaner state
     params.delete("search");
     params.delete("tag");
     setSearchParams(params);
@@ -59,11 +62,28 @@ const Blog = () => {
   return (
     <>
       <SEO
-        title="Eye Care Blog - Tips & Guides | Spexxo"
-        description="Read the latest eye care tips, eyewear trends, and guides on choosing the perfect eyeglasses, sunglasses, and contact lenses."
+        title={
+          category
+            ? `${category.charAt(0).toUpperCase() + category.slice(1)} — Eyewear Blog`
+            : "Eye Care Blog — Tips, Guides & Eyewear Trends"
+        }
+        description={
+          category
+            ? `Read articles about ${category} on the Spexxo blog. Eye care tips, buying guides and eyewear trends.`
+            : "Eye care tips, buying guides and eyewear trends from the Spexxo team. Learn how to choose the right eyeglasses, sunglasses and contact lenses."
+        }
+        // ✅ Canonical collapses to /blog. Category-tagged browse is
+        // supplementary and shouldn't produce a new canonical URL,
+        // unless you later create dedicated /blog/category/:slug routes.
+        canonicalUrl={`${SITE_URL}/blog`}
+        noIndex={isSearchPage}
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/blog"
+        breadcrumbs={[
+          { name: "Home", item: `${SITE_URL}/` },
+          { name: "Blog", item: `${SITE_URL}/blog` },
+        ]}
       />
+
       <div className="pt-28 pb-16">
         <div className="container-custom">
           <div className="text-center mb-10">
@@ -73,12 +93,10 @@ const Blog = () => {
             </p>
           </div>
 
-          {/* ✅ Live search (replaces the old inline form) */}
           <div className="max-w-xl mx-auto mb-6">
             <BlogLiveSearch initialValue={searchTerm} />
           </div>
 
-          {/* Active search / tag banner */}
           {(searchTerm || tag) && (
             <div className="max-w-xl mx-auto mb-6 flex items-center justify-center gap-2 text-sm text-text-light">
               <span>
@@ -104,7 +122,6 @@ const Blog = () => {
             </div>
           )}
 
-          {/* Category filter */}
           {categories.length > 0 && (
             <div className="flex flex-wrap justify-center gap-2 mb-10">
               <button

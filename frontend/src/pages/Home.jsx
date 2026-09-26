@@ -42,11 +42,23 @@ const Home = () => {
   return (
     <>
       <SEO
-        title="Premium Eyeglasses, Sunglasses & Contact Lenses"
-        description="Shop the latest collection of premium eyewear at Spexxo. Free shipping, COD available, best prices on eyeglasses, sunglasses & contact lenses."
-        ogType="website"
+        title="Premium Eyeglasses, Sunglasses & Contact Lenses Online"
+        description="Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999."
         canonicalUrl="https://spexxo.vercel.app/"
+        ogType="website"
       />
+
+      {/* ✅ Crawlable H1 for SEO — visible to users and Googlebot */}
+      <section className="container-custom pt-6 pb-2 text-center">
+        <h1 className="text-2xl md:text-4xl font-bold text-text">
+          Spexxo — Premium Eyeglasses, Sunglasses & Contact Lenses
+        </h1>
+        <p className="text-text-light text-sm md:text-base mt-3 max-w-3xl mx-auto">
+          Buy premium eyewear online at Spexxo. Browse eyeglasses, sunglasses
+          and contact lenses from top brands. Prescription-ready frames, UV400
+          protection, and free shipping on orders above ₹999 across India.
+        </p>
+      </section>
 
       <HeroSlider />
       <BentoCategoryGrid />
@@ -104,7 +116,6 @@ const Home = () => {
         />
       )}
 
-      {/* ✅ Blog Section - only renders if there are blogs */}
       <BlogSection />
 
       <AuthPopup

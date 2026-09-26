@@ -24,7 +24,7 @@ import popupRoutes from "./routes/popupRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
-import generateSitemap from "./utils/sitemapGenerator.js";
+import buildSitemapXml from "./utils/sitemapGenerator.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import emailRoutes from "./routes/emailRoutes.js";
 import shapeRoutes from "./routes/shapeRoutes.js";
@@ -44,7 +44,7 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ============ CORS - SINGLE CONFIGURATION ============
+// ============ CORS ============
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173")
   .split(",")
   .map((url) => url.trim());
@@ -75,27 +75,24 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
-// Static folder for uploads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ============ RATE LIMITING ============
 const isDev = process.env.NODE_ENV !== "production";
 
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDev ? 2000 : 500, // ✅ Dev: 2000, Prod: 500
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 2000 : 500,
   message: "Too many requests, please try again later.",
-  standardHeaders: true, // ✅ Show rate limit headers
+  standardHeaders: true,
   legacyHeaders: false,
-  // ✅ Skip rate limiting entirely for localhost in development
   skip: (req) => isDev && (req.ip === "::1" || req.ip === "127.0.0.1"),
 });
 app.use("/api/", limiter);
 
-// ✅ Products endpoint can have higher limit
 const productsLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: isDev ? 300 : 60, // ✅ Dev: 300, Prod: 60
+  windowMs: 60 * 1000,
+  max: isDev ? 300 : 60,
   message: "Too many product requests, please slow down.",
   standardHeaders: true,
   legacyHeaders: false,
@@ -133,17 +130,22 @@ app.use("/api/meta", metaRoutes);
 
 console.log("✅ All routes registered");
 
-// Generate sitemap
-app.get("/api/sitemap", async (req, res) => {
+// ============ SITEMAP ============
+// Returns XML on demand. Frontend serves its own static /sitemap.xml.
+// Use this endpoint from build scripts or cron to regenerate a static file.
+app.get("/api/sitemap.xml", async (req, res) => {
   try {
-    await generateSitemap();
-    res.json({ success: true, message: "Sitemap generated" });
+    const xml = await buildSitemapXml();
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=600");
+    res.status(200).send(xml);
   } catch (error) {
+    console.error("[SITEMAP] generation error:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Health check route
+// ============ HEALTH ============
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -175,7 +177,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
 app.use((req, res) => {
   console.log("404 - Route not found:", req.method, req.url);
   res.status(404).json({
@@ -184,7 +185,7 @@ app.use((req, res) => {
   });
 });
 
-// ============ MONGODB CONNECTION ============
+// ============ DB ============
 const MONGODB_URI = process.env.MONGODB_URI;
 
 const connectDB = async () => {
@@ -197,7 +198,6 @@ const connectDB = async () => {
       retryWrites: true,
       w: "majority",
     };
-
     await mongoose.connect(MONGODB_URI, options);
     console.log("✅ MongoDB Connected Successfully");
     console.log("Database:", mongoose.connection.db.databaseName);
@@ -213,19 +213,18 @@ startCronJobs();
 mongoose.connection.on("connected", () => {
   console.log("Mongoose connected to DB");
 });
-
 mongoose.connection.on("error", (err) => {
   console.log("Mongoose connection error:", err.message);
 });
-
 mongoose.connection.on("disconnected", () => {
   console.log("Mongoose disconnected");
 });
 
-// ============ START SERVER ============
+// ============ START ============
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 API available at http://localhost:${PORT}/api`);
+  console.log(`🗺️  Sitemap XML: http://localhost:${PORT}/api/sitemap.xml`);
   console.log(`🔗 Allowed origins:`, allowedOrigins.join(", "));
 });

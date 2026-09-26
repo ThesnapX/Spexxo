@@ -1,90 +1,323 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <!-- Homepage -->
   <url>
     <loc>https://spexxo.vercel.app/</loc>
-    <priority>1.0</priority>
-    <changefreq>daily</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.884Z</lastmod>
   </url>
-  
-  <!-- Shop -->
   <url>
     <loc>https://spexxo.vercel.app/shop</loc>
-    <priority>0.9</priority>
-    <changefreq>daily</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
-  
-  <!-- Categories -->
   <url>
     <loc>https://spexxo.vercel.app/shop/eyeglasses</loc>
-    <priority>0.8</priority>
-    <changefreq>daily</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/shop/sunglasses</loc>
-    <priority>0.8</priority>
-    <changefreq>daily</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/shop/contact-lens</loc>
-    <priority>0.8</priority>
-    <changefreq>daily</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
-  
-  <!-- Blog -->
   <url>
     <loc>https://spexxo.vercel.app/blog</loc>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
-  
-  <!-- Static Pages -->
   <url>
     <loc>https://spexxo.vercel.app/about</loc>
-    <priority>0.6</priority>
-    <changefreq>monthly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/contact</loc>
-    <priority>0.6</priority>
-    <changefreq>monthly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/faq</loc>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/privacy</loc>
-    <priority>0.4</priority>
-    <changefreq>yearly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/terms</loc>
-    <priority>0.4</priority>
-    <changefreq>yearly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/shipping</loc>
-    <priority>0.4</priority>
-    <changefreq>yearly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
   </url>
   <url>
     <loc>https://spexxo.vercel.app/refund</loc>
-    <priority>0.4</priority>
-    <changefreq>yearly</changefreq>
-    <lastmod>2026-09-06</lastmod>
+    <lastmod>2026-09-26T13:26:48.885Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/alumina-classic-metal-aviator-sunglasses</loc>
+    <lastmod>2026-09-09T08:34:30.039Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/armani-a05-classic-rectangular-sunglasses</loc>
+    <lastmod>2026-09-09T08:34:12.707Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/bottega-veneta-bold-visor-shield-sunglasses</loc>
+    <lastmod>2026-09-08T19:39:41.318Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/burbbery-square-metal-sunglasses</loc>
+    <lastmod>2026-09-08T08:09:06.404Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/bvlgari-serpenti-elegance-oversized-sunglasses</loc>
+    <lastmod>2026-09-26T08:11:23.760Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/carrera-a05-sport-shield-sunglasses</loc>
+    <lastmod>2026-09-08T10:20:15.856Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/cartier-panther-prestige-rimless-geometric-sunglasses</loc>
+    <lastmod>2026-09-09T08:33:41.725Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/chrome-hearts-edgy-prestige-square-sunglasses</loc>
+    <lastmod>2026-09-26T08:46:40.516Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/chrome-hearts-gold-accent-optical-square-glasses</loc>
+    <lastmod>2026-09-09T08:22:28.954Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/chrome-hearts-gothic-cross-square-sunglasses</loc>
+    <lastmod>2026-09-09T08:30:34.085Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/david-beckham-round-acetate-sunglasses-collection</loc>
+    <lastmod>2026-08-31T14:32:03.749Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/dolce-gabbana-logo-temple-colored-lens-sunglasses</loc>
+    <lastmod>2026-09-09T08:17:35.978Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/dolce-gabbana-logo-temple-optical-clear-glasses</loc>
+    <lastmod>2026-09-08T21:22:53.394Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/dolce-gabbana-logo-temple-square-sunglasses</loc>
+    <lastmod>2026-09-08T20:29:26.205Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/evan-cara-titanium-airlite-rimless-eyeglasses</loc>
+    <lastmod>2026-08-26T19:16:05.482Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/gucci-black-web-stripe-keyhole-aviator-sunglasses</loc>
+    <lastmod>2026-08-26T19:52:25.831Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/gucci-double-g-legacy-square-sunglasses</loc>
+    <lastmod>2026-09-26T08:23:45.765Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/hermes-double-bridge-aviator-sunglasses-collection</loc>
+    <lastmod>2026-08-31T07:18:56.547Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/louis-vuitton-black-shield-monogram-sunglasses</loc>
+    <lastmod>2026-08-22T18:52:31.304Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/louis-vuitton-bold-square-sunglasses-collection</loc>
+    <lastmod>2026-08-31T11:21:17.601Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/moscot-vintage-clubmaster-browline-sunglasses</loc>
+    <lastmod>2026-09-08T19:52:26.335Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/n-f-o-metal-navigator-polarized-sunglasses</loc>
+    <lastmod>2026-09-02T19:04:38.780Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/oakley-prizm-shield-performance-sunglasses</loc>
+    <lastmod>2026-09-26T08:03:36.383Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/oakley-valve-sport-wrap-sunglasses</loc>
+    <lastmod>2026-09-08T19:59:35.707Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/philipp-plein-bold-acetate-square-sunglasses</loc>
+    <lastmod>2026-09-09T08:32:35.858Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/philipp-plein-hexagon-monogram-bold-square-sunglasses</loc>
+    <lastmod>2026-09-09T08:29:55.948Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-angular-geometric-sunglasses-collection</loc>
+    <lastmod>2026-08-26T19:19:07.489Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-black-matte-gold-accent-square-sunglasses</loc>
+    <lastmod>2026-08-22T19:07:26.467Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-double-bridge-metal-aviator-sunglasses</loc>
+    <lastmod>2026-09-09T08:30:46.604Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-geometric-tortoise-accent-sunglasses</loc>
+    <lastmod>2026-09-08T20:12:37.367Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-linea-rossa-double-bridge-aviator-sunglasses-collection</loc>
+    <lastmod>2026-09-06T10:00:07.226Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/prada-minimalist-prestige-round-sunglasses</loc>
+    <lastmod>2026-09-26T08:35:45.589Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/provo-brown-gradient-square-eyeglasses</loc>
+    <lastmod>2026-08-31T07:28:09.796Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/provo-matte-black-square-eyeglasses</loc>
+    <lastmod>2026-08-31T07:31:20.581Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-bold-wide-temple-square-eyewear-collection</loc>
+    <lastmod>2026-08-31T14:32:22.062Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-classic-square-sunglasses-collection</loc>
+    <lastmod>2026-08-23T09:45:34.510Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-matte-black-square-eyeglasses</loc>
+    <lastmod>2026-08-23T09:45:43.161Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-mega-wayfarer-bold-acetate-sunglasses</loc>
+    <lastmod>2026-09-08T20:06:15.243Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-semi-rimless-metal-navigator-eyeglasses</loc>
+    <lastmod>2026-09-02T17:42:49.345Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/ray-ban-translucent-grey-square-sunglasses-collection</loc>
+    <lastmod>2026-08-23T13:52:32.535Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/rb-0502s-beige-wayfarer-sunglasses-collection</loc>
+    <lastmod>2026-08-23T09:47:54.077Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/rb-0502s-clear-crystal-wayfarer-sunglasses</loc>
+    <lastmod>2026-08-21T19:15:06.094Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/rb-0502s-green-translucent-wayfarer-eyeglasses</loc>
+    <lastmod>2026-08-31T15:06:35.513Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/rb-0502s-translucent-wayfarer-sunglasses-collection</loc>
+    <lastmod>2026-08-21T19:24:13.011Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/rb-4001-blue-translucent-wayfarer-sunglasses</loc>
+    <lastmod>2026-08-21T19:15:41.400Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spe-9001-gold-oversized-round-eyeglasses</loc>
+    <lastmod>2026-08-22T14:47:30.639Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spe-9002-gold-and-red-round-eyeglasses</loc>
+    <lastmod>2026-08-21T14:50:14.362Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-aeroedge-gradient-aviator-sunglasses</loc>
+    <lastmod>2026-08-26T19:52:08.785Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-classic-square-sunglasses</loc>
+    <lastmod>2026-09-08T19:45:39.426Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-luxe-panther-gradient-square-sunglasses</loc>
+    <lastmod>2026-08-26T19:51:39.827Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-matte-beige-teal-square-eyeglasses</loc>
+    <lastmod>2026-09-02T19:01:51.038Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-matte-navy-gunmetal-square-combination-eyeglasses</loc>
+    <lastmod>2026-09-02T19:01:12.708Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-minimalist-rimless-rectangular-eyeglasses</loc>
+    <lastmod>2026-09-02T19:00:22.925Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-rimless-gunmetal-blue-rectangular-eyeglasses</loc>
+    <lastmod>2026-09-02T19:00:03.144Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-sculpted-clubmaster-eyeglasses-collection</loc>
+    <lastmod>2026-09-08T20:36:22.528Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-shield-performance-sports-sunglasses-multi-color-variant-pack-</loc>
+    <lastmod>2026-09-08T07:25:29.539Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-silver-emerald-green-cat-eye-metal-eyeglasses</loc>
+    <lastmod>2026-09-02T18:59:07.695Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/spexxo-silver-metal-square-eyeglasses-with-crystal-temple-accents</loc>
+    <lastmod>2026-09-02T18:59:35.021Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/the-hunored-th14406-matte-square-eyeglasses</loc>
+    <lastmod>2026-08-22T14:48:40.453Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/tom-davis-matte-teal-square-acetate-eyeglasses</loc>
+    <lastmod>2026-09-09T08:35:05.498Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/tom-ford-signature-t-logo-square-sunglasses</loc>
+    <lastmod>2026-09-09T08:12:24.575Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/twa21023-clear-square-eyeglasses</loc>
+    <lastmod>2026-08-22T14:47:06.538Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/versace-square-acetate-sunglasses</loc>
+    <lastmod>2026-09-09T08:32:17.640Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/volcano-modern-acetate-aviator-sunglasses</loc>
+    <lastmod>2026-09-02T19:03:42.729Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/z1502w-bold-flat-top-sunglasses</loc>
+    <lastmod>2026-08-26T19:52:44.924Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/product/z1940e-99l-statement-square-sunglasses</loc>
+    <lastmod>2026-08-26T19:53:17.567Z</lastmod>
+  </url>
+  <url>
+    <loc>https://spexxo.vercel.app/blog/how-to-choose-glasses-for-your-face-shape-a-complete-guide-158560</loc>
+    <lastmod>2026-09-26T12:26:10.433Z</lastmod>
   </url>
 </urlset>

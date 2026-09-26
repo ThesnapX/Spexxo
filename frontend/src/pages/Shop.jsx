@@ -22,9 +22,40 @@ import { useWishlist } from "../context/WishlistContext";
 import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const SITE_URL = "https://spexxo.vercel.app";
+
+// ============================================
+// Category SEO map — one entry per real landing page.
+// These are the only routes that produce a canonical
+// /shop/:slug URL. Query-string category variations map here.
+// ============================================
+const SHOP_SEO = {
+  eyeglasses: {
+    title: "Eyeglasses Online — Frames, Lenses & Prescription",
+    description:
+      "Browse eyeglasses at Spexxo — rectangle, round, cat-eye and more. Prescription-ready frames, premium lenses, free shipping over ₹999.",
+    canonical: `${SITE_URL}/shop/eyeglasses`,
+    h1: "Eyeglasses",
+  },
+  sunglasses: {
+    title: "Sunglasses Online — UV400 Protection & Polarized Lenses",
+    description:
+      "Shop sunglasses at Spexxo — polarized, UV400-protected, aviator, wayfarer and more. Free shipping over ₹999, COD available.",
+    canonical: `${SITE_URL}/shop/sunglasses`,
+    h1: "Sunglasses",
+  },
+  "contact-lens": {
+    title: "Contact Lenses Online — Daily, Monthly & Colored",
+    description:
+      "Buy contact lenses online at Spexxo — daily disposables, monthly lenses, colored contacts. Free shipping over ₹999.",
+    canonical: `${SITE_URL}/shop/contact-lens`,
+    h1: "Contact Lenses",
+  },
+};
 
 // ============================================
 // STABLE FILTER SECTION COMPONENT
+// (unchanged from original)
 // ============================================
 const FilterSection = ({
   searchInput,
@@ -73,7 +104,6 @@ const FilterSection = ({
         </p>
       </div>
 
-      {/* Categories with search - Only show categories that have products */}
       {filteredCategories?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Categories</h3>
@@ -98,7 +128,9 @@ const FilterSection = ({
           </div>
           <div className="space-y-1 max-h-44 overflow-y-auto">
             <label
-              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${!categoryFilter ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+              className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                !categoryFilter ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
+              }`}
             >
               <input
                 type="radio"
@@ -108,7 +140,11 @@ const FilterSection = ({
                 className="w-4 h-4 text-primary"
               />
               <span
-                className={`text-sm ${!categoryFilter ? "text-primary font-medium" : "text-text-light"}`}
+                className={`text-sm ${
+                  !categoryFilter
+                    ? "text-primary font-medium"
+                    : "text-text-light"
+                }`}
               >
                 All Categories
               </span>
@@ -116,7 +152,11 @@ const FilterSection = ({
             {filteredCategories.map((cat) => (
               <label
                 key={cat._id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${categoryFilter === cat.slug ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                  categoryFilter === cat.slug
+                    ? "bg-[#EBF4FC]"
+                    : "hover:bg-gray-50"
+                }`}
               >
                 <input
                   type="radio"
@@ -126,7 +166,11 @@ const FilterSection = ({
                   className="w-4 h-4 text-primary"
                 />
                 <span
-                  className={`text-sm ${categoryFilter === cat.slug ? "text-primary font-medium" : "text-text-light"}`}
+                  className={`text-sm ${
+                    categoryFilter === cat.slug
+                      ? "text-primary font-medium"
+                      : "text-text-light"
+                  }`}
                 >
                   {cat.name}
                 </span>
@@ -136,7 +180,6 @@ const FilterSection = ({
         </div>
       )}
 
-      {/* Gender */}
       <div>
         <h3 className="font-semibold text-text text-sm mb-2">Gender</h3>
         <div className="space-y-1 max-h-44 overflow-y-auto">
@@ -145,7 +188,9 @@ const FilterSection = ({
             return (
               <label
                 key={opt}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                  isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
+                }`}
               >
                 <input
                   type="checkbox"
@@ -154,7 +199,9 @@ const FilterSection = ({
                   className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
                 <span
-                  className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                  className={`text-sm ${
+                    isChecked ? "text-primary font-medium" : "text-text-light"
+                  }`}
                 >
                   {opt.charAt(0).toUpperCase() + opt.slice(1)}
                 </span>
@@ -164,7 +211,6 @@ const FilterSection = ({
         </div>
       </div>
 
-      {/* Price Range - With Submit Button */}
       <div>
         <h3 className="font-semibold text-text text-sm mb-2">Price Range</h3>
         <div className="flex gap-2">
@@ -203,7 +249,6 @@ const FilterSection = ({
         </p>
       </div>
 
-      {/* Brands with search - Only show brands that have products */}
       {filteredBrands?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Brands</h3>
@@ -230,7 +275,9 @@ const FilterSection = ({
               return (
                 <label
                   key={brand._id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                    isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
+                  }`}
                 >
                   <input
                     type="checkbox"
@@ -239,7 +286,9 @@ const FilterSection = ({
                     className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <span
-                    className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                    className={`text-sm ${
+                      isChecked ? "text-primary font-medium" : "text-text-light"
+                    }`}
                   >
                     {brand.name}
                   </span>
@@ -250,7 +299,6 @@ const FilterSection = ({
         </div>
       )}
 
-      {/* Frame Shape - Only show shapes that have products */}
       {frameShapeOptions?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Frame Shape</h3>
@@ -260,7 +308,9 @@ const FilterSection = ({
               return (
                 <label
                   key={shape}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                    isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
+                  }`}
                 >
                   <input
                     type="checkbox"
@@ -269,7 +319,9 @@ const FilterSection = ({
                     className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <span
-                    className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                    className={`text-sm ${
+                      isChecked ? "text-primary font-medium" : "text-text-light"
+                    }`}
                   >
                     {shape.charAt(0).toUpperCase() +
                       shape.slice(1).replace("-", " ")}
@@ -281,7 +333,6 @@ const FilterSection = ({
         </div>
       )}
 
-      {/* Lens Type - Only show lens types that have products */}
       {lensTypeOptions?.length > 0 && (
         <div>
           <h3 className="font-semibold text-text text-sm mb-2">Lens Type</h3>
@@ -291,7 +342,9 @@ const FilterSection = ({
               return (
                 <label
                   key={lens}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${
+                    isChecked ? "bg-[#EBF4FC]" : "hover:bg-gray-50"
+                  }`}
                 >
                   <input
                     type="checkbox"
@@ -300,13 +353,13 @@ const FilterSection = ({
                     className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                   />
                   <span
-                    className={`text-sm ${isChecked ? "text-primary font-medium" : "text-text-light"}`}
+                    className={`text-sm ${
+                      isChecked ? "text-primary font-medium" : "text-text-light"
+                    }`}
                   >
                     {lens
                       .split("-")
-                      .map(
-                        (word) => word.charAt(0).toUpperCase() + word.slice(1),
-                      )
+                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
                       .join(" ")}
                   </span>
                 </label>
@@ -330,6 +383,7 @@ const FilterSection = ({
 
 // ============================================
 // STABLE PRODUCT CARD COMPONENT
+// (unchanged from original)
 // ============================================
 const ProductCard = ({
   product,
@@ -346,15 +400,11 @@ const ProductCard = ({
   const hasVariantsFlag = product.variants && product.variants.length > 0;
   const variantCount = hasVariantsFlag ? product.variants.length : 0;
 
-  // ✅ Check if ALL variants are out of stock
   const allVariantsOutOfStock =
     hasVariantsFlag && product.variants.every((v) => v.stock <= 0);
-
-  // ✅ Check if ANY variant has stock
   const hasAnyVariantInStock =
     hasVariantsFlag && product.variants.some((v) => v.stock > 0);
 
-  // ✅ FIXED: Get the default variant's image
   const getProductImage = () => {
     if (hasVariantsFlag && product.variants.length > 0) {
       let defaultVariant = product.variants.find((v) => v.isDefault === true);
@@ -371,7 +421,6 @@ const ProductCard = ({
     return null;
   };
 
-  // ✅ Check if product is out of stock
   const isOutOfStock = !hasVariantsFlag
     ? product.stock === 0 ||
       product.stock === null ||
@@ -443,7 +492,6 @@ const ProductCard = ({
           </p>
         )}
         <Link to={`/product/${product.slug}`} className="block flex-shrink-0">
-          {/* ✅ Product name - FULL, not clipped */}
           <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
             {product.name}
           </h3>
@@ -517,18 +565,15 @@ const Shop = () => {
   const loadMoreRef = useRef(null);
   const productsContainerRef = useRef(null);
 
-  // Track if user is currently typing to prevent URL overwrites
   const isTypingRef = useRef({
     search: false,
     priceMin: false,
     priceMax: false,
   });
 
-  // Search states for filters
   const [categorySearch, setCategorySearch] = useState("");
   const [brandSearch, setBrandSearch] = useState("");
 
-  // LOCAL STATE for inputs - updates immediately on typing
   const [searchInput, setSearchInput] = useState(
     searchParams.get("search") || "",
   );
@@ -539,13 +584,11 @@ const Shop = () => {
     searchParams.get("maxPrice") || "",
   );
 
-  // Debounce refs
   const searchTimeout = useRef(null);
 
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
 
-  // Get current filter values from URL
   const searchQuery = searchParams.get("search") || "";
   const categoryFilter = searchParams.get("category") || "";
   const genderFilter = searchParams.get("gender")
@@ -564,7 +607,6 @@ const Shop = () => {
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
 
-  // ✅ FIXED: Set productCategory from URL path
   useEffect(() => {
     if (categorySlug) {
       const typeMap = {
@@ -576,7 +618,6 @@ const Shop = () => {
       if (mappedType) {
         const params = new URLSearchParams();
         params.set("productCategory", mappedType);
-        // Preserve other params like sort
         const currentSort = searchParams.get("sort");
         if (currentSort) params.set("sort", currentSort);
         setSearchParams(params, { replace: true });
@@ -588,13 +629,11 @@ const Shop = () => {
     }
   }, [categorySlug, searchParams]);
 
-  // Sync sortBy with URL
   useEffect(() => {
     const urlSort = searchParams.get("sort");
     if (urlSort && urlSort !== sortBy) setSortBy(urlSort);
   }, [searchParams]);
 
-  // Sync URL → local input ONLY when NOT typing
   useEffect(() => {
     if (!isTypingRef.current.search && searchQuery !== searchInput) {
       setSearchInput(searchQuery);
@@ -613,7 +652,6 @@ const Shop = () => {
     }
   }, [maxPrice]);
 
-  // Helper function to get display price with discount
   const getDisplayPrice = useCallback((product) => {
     let displayPrice = product.price || 0;
     let originalPrice = product.price || 0;
@@ -656,7 +694,6 @@ const Shop = () => {
     return { displayPrice, originalPrice, hasDiscount, discountPercent };
   }, []);
 
-  // Page title
   const getPageTitle = useCallback(() => {
     const parts = [];
 
@@ -691,7 +728,69 @@ const Shop = () => {
     return "All Products";
   }, [categoryFilter, brandFilter, productCategory, genderFilter]);
 
-  // ✅ UPDATE FILTER - Defined BEFORE any function that uses it
+  // ============================================
+  // SEO — computed per route/params
+  // ============================================
+  const seoMeta = useMemo(() => {
+    // If the route is /shop/:category, use the curated SEO entry.
+    if (categorySlug && SHOP_SEO[categorySlug]) {
+      const s = SHOP_SEO[categorySlug];
+      return {
+        title: s.title,
+        description: s.description,
+        canonical: s.canonical,
+        noIndex: false,
+        h1: s.h1,
+      };
+    }
+
+    // If the URL uses query-string filters (search, sort, price, brand...)
+    // the canonical should collapse to /shop (or /shop/:category if this is
+    // a category route). noIndex when a free-text search is active.
+    const hasFilterQuery =
+      searchQuery ||
+      brandFilter.length ||
+      frameShapeFilter.length ||
+      lensTypeFilter.length ||
+      genderFilter.length ||
+      minPrice ||
+      maxPrice ||
+      (sortBy && sortBy !== "name-asc");
+
+    // /shop/:category routes → canonical stays under /shop/:category even
+    // if filters are applied
+    if (categorySlug && SHOP_SEO[categorySlug]) {
+      const s = SHOP_SEO[categorySlug];
+      return {
+        title: s.title,
+        description: s.description,
+        canonical: s.canonical,
+        noIndex: !!searchQuery, // internal-search page → noindex
+        h1: s.h1,
+      };
+    }
+
+    // Base /shop page
+    return {
+      title: "Shop All Eyewear Online — Eyeglasses, Sunglasses & Contacts",
+      description:
+        "Browse the full Spexxo catalogue — eyeglasses, sunglasses, and contact lenses from top brands. Filter by shape, brand, price and more.",
+      canonical: `${SITE_URL}/shop`,
+      noIndex: !!searchQuery || !!hasFilterQuery,
+      h1: "Shop All Eyewear",
+    };
+  }, [
+    categorySlug,
+    searchQuery,
+    brandFilter.length,
+    frameShapeFilter.length,
+    lensTypeFilter.length,
+    genderFilter.length,
+    minPrice,
+    maxPrice,
+    sortBy,
+  ]);
+
   const updateFilter = useCallback(
     (key, value) => {
       const params = new URLSearchParams(searchParams);
@@ -705,7 +804,6 @@ const Shop = () => {
     [searchParams],
   );
 
-  // Input handlers with proper typing tracking
   const handleSearchChange = useCallback(
     (e) => {
       const value = e.target.value;
@@ -732,7 +830,6 @@ const Shop = () => {
     setPriceMaxInput(value);
   }, []);
 
-  // ✅ FIXED: PRICE SUBMIT HANDLER - Atomic update using ONE URLSearchParams
   const handlePriceSubmit = useCallback(() => {
     const min = priceMinInput.trim();
     const max = priceMaxInput.trim();
@@ -768,7 +865,6 @@ const Shop = () => {
     setBrandSearch(e.target.value);
   }, []);
 
-  // Toggle array filter
   const toggleArrayFilter = useCallback(
     (key, value) => {
       const params = new URLSearchParams(searchParams);
@@ -794,7 +890,6 @@ const Shop = () => {
     [searchParams, genderFilter, brandFilter, frameShapeFilter, lensTypeFilter],
   );
 
-  // Single value filter
   const setSingleFilter = useCallback(
     (key, value) => {
       const params = new URLSearchParams(searchParams);
@@ -808,7 +903,6 @@ const Shop = () => {
     [searchParams],
   );
 
-  // Clear all filters
   const clearAllFilters = useCallback(() => {
     const params = new URLSearchParams();
     if (productCategory) params.set("productCategory", productCategory);
@@ -822,7 +916,6 @@ const Shop = () => {
     isTypingRef.current = { search: false, priceMin: false, priceMax: false };
   }, [productCategory]);
 
-  // Remove a single filter pill
   const removeFilterPill = useCallback(
     (key, value) => {
       if (key === "category") {
@@ -850,7 +943,6 @@ const Shop = () => {
     [setSingleFilter, toggleArrayFilter, updateFilter, searchParams],
   );
 
-  // Toggle filter visibility
   const toggleFilters = useCallback(() => {
     if (window.innerWidth < 1024) {
       setMobileFilterOpen(!mobileFilterOpen);
@@ -859,7 +951,6 @@ const Shop = () => {
     }
   }, [mobileFilterOpen, filtersOpen]);
 
-  // ✅ FIXED: Build query string - properly handle productCategory
   const buildQueryString = useCallback(
     (pageParam = 1) => {
       const params = new URLSearchParams();
@@ -895,7 +986,6 @@ const Shop = () => {
     ],
   );
 
-  // Infinite query
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
       queryKey: ["products", buildQueryString()],
@@ -919,7 +1009,6 @@ const Shop = () => {
       retry: 1,
     });
 
-  // Fetch categories and brands
   const { data: allCategoriesData } = useQuery({
     queryKey: ["categories"],
     queryFn: async () => {
@@ -936,7 +1025,6 @@ const Shop = () => {
     },
   });
 
-  // ✅ Fetch all products to determine which attributes have products
   const { data: allProductsData } = useQuery({
     queryKey: ["all-products-for-filters"],
     queryFn: async () => {
@@ -946,7 +1034,6 @@ const Shop = () => {
     staleTime: 10 * 60 * 1000,
   });
 
-  // ✅ Filter categories - only show categories that have products
   const categoriesData = useMemo(() => {
     if (!allCategoriesData || !allProductsData) return [];
 
@@ -970,7 +1057,6 @@ const Shop = () => {
     return allCategoriesData.filter((cat) => productCategoryIds.has(cat._id));
   }, [allCategoriesData, allProductsData]);
 
-  // ✅ Filter brands - only show brands that have products
   const brandsData = useMemo(() => {
     if (!allBrandsData || !allProductsData) return [];
 
@@ -988,7 +1074,6 @@ const Shop = () => {
     return allBrandsData.filter((brand) => productBrandIds.has(brand._id));
   }, [allBrandsData, allProductsData]);
 
-  // ✅ Filter frame shapes - only show shapes that have products
   const frameShapeOptions = useMemo(() => {
     if (!allProductsData) return [];
     const allShapes = [
@@ -1015,7 +1100,6 @@ const Shop = () => {
     return allShapes.filter((shape) => productShapes.has(shape));
   }, [allProductsData]);
 
-  // ✅ Filter lens types - only show lens types that have products
   const lensTypeOptions = useMemo(() => {
     if (!allProductsData) return [];
     const allLensTypes = [
@@ -1041,7 +1125,6 @@ const Shop = () => {
     return allLensTypes.filter((lens) => productLensTypes.has(lens));
   }, [allProductsData]);
 
-  // Filter categories by search
   const filteredCategories = useMemo(() => {
     return (
       categoriesData?.filter((cat) =>
@@ -1050,7 +1133,6 @@ const Shop = () => {
     );
   }, [categoriesData, categorySearch]);
 
-  // Filter brands by search
   const filteredBrands = useMemo(() => {
     return (
       brandsData?.filter((brand) =>
@@ -1059,7 +1141,6 @@ const Shop = () => {
     );
   }, [brandsData, brandSearch]);
 
-  // Infinite scroll observer
   useEffect(() => {
     if (isLoading) return;
 
@@ -1083,14 +1164,12 @@ const Shop = () => {
     };
   }, [hasNextPage, isFetchingNextPage, isLoading, fetchNextPage]);
 
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (searchTimeout.current) clearTimeout(searchTimeout.current);
     };
   }, []);
 
-  // Flatten all products from all pages
   const allProducts =
     data?.pages?.flatMap((page) => page?.products || []) || [];
   const totalProducts = data?.pages?.[0]?.pagination?.total || 0;
@@ -1105,7 +1184,6 @@ const Shop = () => {
     minPrice ||
     maxPrice;
 
-  // ✅ FIXED: Get active filter pills - proper price display
   const filterPills = useMemo(() => {
     const pills = [];
     if (searchQuery)
@@ -1168,15 +1246,27 @@ const Shop = () => {
   return (
     <>
       <SEO
-        title={getPageTitle()}
-        description={`Browse our ${getPageTitle().toLowerCase()} collection at Spexxo. Find the perfect eyewear with premium quality and affordable prices. Shop now with COD available.`}
+        title={seoMeta.title}
+        description={seoMeta.description}
+        canonicalUrl={seoMeta.canonical}
+        noIndex={seoMeta.noIndex}
         ogType="website"
-        canonicalUrl={`https://spexxo.vercel.app/shop${window.location.search}`}
+        breadcrumbs={[
+          { name: "Home", item: `${SITE_URL}/` },
+          { name: "Shop", item: `${SITE_URL}/shop` },
+          ...(categorySlug && SHOP_SEO[categorySlug]
+            ? [
+                {
+                  name: SHOP_SEO[categorySlug].h1,
+                  item: SHOP_SEO[categorySlug].canonical,
+                },
+              ]
+            : []),
+        ]}
       />
 
       <div className="pt-16 md:pt-10 md:pb-20 h-[calc(100vh-64px)] flex flex-col">
         <div className="container-custom flex-1 flex flex-col min-h-0">
-          {/* Breadcrumb - Fixed */}
           <nav className="flex items-center gap-2 text-sm text-text-light mb-3 flex-shrink-0">
             <Link to="/" className="hover:text-primary transition">
               Home
@@ -1189,11 +1279,13 @@ const Shop = () => {
             <span className="text-text font-medium">{getPageTitle()}</span>
           </nav>
 
-          {/* Header - Fixed */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 flex-shrink-0">
             <div>
+              {/* ✅ H1 for SEO */}
               <h1 className="text-2xl md:text-3xl font-bold text-text">
-                {getPageTitle()}
+                {categorySlug && SHOP_SEO[categorySlug]
+                  ? SHOP_SEO[categorySlug].h1
+                  : getPageTitle()}
               </h1>
               <p className="text-text-light text-sm mt-1">
                 {totalProducts} products found
@@ -1232,7 +1324,6 @@ const Shop = () => {
             </div>
           </div>
 
-          {/* Filter Pills */}
           {filterPills.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4 flex-shrink-0">
               {filterPills.map((pill, index) => (
@@ -1260,9 +1351,7 @@ const Shop = () => {
             </div>
           )}
 
-          {/* Main Content - Flex 1 with overflow hidden */}
           <div className="flex gap-6 flex-1 min-h-0">
-            {/* Left Filter - Fixed position, scrollable within its container */}
             {filtersOpen && (
               <aside className="hidden lg:block w-60 flex-shrink-0 h-full">
                 <div className="h-full bg-white p-4 rounded-xl border border-gray-100 overflow-y-auto">
@@ -1299,7 +1388,6 @@ const Shop = () => {
               </aside>
             )}
 
-            {/* Right Products - Responsive grid */}
             <div
               className="flex-1 min-w-0 h-full overflow-y-auto"
               ref={productsContainerRef}
@@ -1322,7 +1410,6 @@ const Shop = () => {
                 </div>
               ) : allProducts.length > 0 ? (
                 <>
-                  {/* ✅ FIXED: Responsive grid that adapts to filter visibility */}
                   <div
                     className={`grid gap-3 md:gap-4 ${
                       filtersOpen
@@ -1383,7 +1470,6 @@ const Shop = () => {
         </div>
       </div>
 
-      {/* Mobile Filter Drawer */}
       {mobileFilterOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
@@ -1438,7 +1524,6 @@ const Shop = () => {
         </div>
       )}
 
-      {/* Auth Popup */}
       <AuthPopup
         isOpen={showAuthPopup}
         onClose={() => setShowAuthPopup(false)}

@@ -8,50 +8,27 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- ✅ Primary Meta Tags -->
+    <!--
+      IMPORTANT:
+      Do NOT include a global <link rel="canonical"> here.
+      Do NOT include og:url / twitter:url here.
+      react-helmet-async sets these per-route in <SEO />.
+    -->
+
+    <!-- Fallback title/description for the very first paint.
+         Helmet will override these per-route. -->
     <title>Spexxo - Premium Eyeglasses, Sunglasses & Contact Lenses</title>
     <meta
       name="description"
       content="Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999."
     />
-    <meta
-      name="keywords"
-      content="eyeglasses, sunglasses, contact lenses, spectacles, eyewear, buy glasses online, Spexxo"
-    />
 
-    <!-- ✅ Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://spexxo.vercel.app/" />
-    <meta property="og:title" content="Spexxo - Premium Eyewear Store" />
-    <meta
-      property="og:description"
-      content="Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999."
-    />
-    <meta
-      property="og:image"
-      content="https://spexxo.vercel.app/images/og-image.jpg"
-    />
-    <meta property="og:site_name" content="Spexxo" />
-    <meta property="og:locale" content="en_IN" />
+    <meta name="robots" content="index, follow" />
 
-    <!-- ✅ Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://spexxo.vercel.app/" />
-    <meta name="twitter:title" content="Spexxo - Premium Eyewear Store" />
-    <meta
-      name="twitter:description"
-      content="Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999."
-    />
-    <meta
-      name="twitter:image"
-      content="https://spexxo.vercel.app/images/og-image.jpg"
-    />
-
-    <!-- ✅ Preconnect to critical domains -->
+    <!-- Preconnect -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://res.cloudinary.com" />
-    <link rel="preconnect" href="https://api.spexxo.vercel.app" />
 
     <!-- Google Fonts -->
     <link
@@ -59,11 +36,11 @@
       rel="stylesheet"
     />
 
-    <!-- ✅ Favicon -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.png" />
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
 
-    <!-- ✅ Meta Pixel Code — script only in <head> -->
+    <!-- Meta Pixel -->
     <script>
       !(function (f, b, e, v, n, t, s) {
         if (f.fbq) return;
@@ -89,10 +66,9 @@
         "https://connect.facebook.net/en_US/fbevents.js",
       );
       fbq("init", "1753741932563893");
-      // fbq("track", "PageView"); // SPA route tracker fires this
     </script>
-    <!-- End Meta Pixel Code -->
-    <!-- Google tag (gtag.js) -->
+
+    <!-- Google tag -->
     <script
       async
       src="https://www.googletagmanager.com/gtag/js?id=G-S3KBQ5JP9Q"
@@ -103,12 +79,10 @@
         dataLayer.push(arguments);
       }
       gtag("js", new Date());
-
       gtag("config", "G-S3KBQ5JP9Q");
     </script>
   </head>
   <body>
-    <!-- ✅ Meta Pixel <noscript> fallback (moved out of <head> for spec compliance) -->
     <noscript>
       <img
         height="1"
@@ -118,7 +92,6 @@
         alt=""
       />
     </noscript>
-    <!-- End Meta Pixel <noscript> -->
 
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
