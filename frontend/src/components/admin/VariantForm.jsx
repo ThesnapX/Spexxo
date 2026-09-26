@@ -165,7 +165,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
         : undefined,
       bridge: formData.bridge ? parseFloat(formData.bridge) : undefined,
       isActive: formData.isActive !== false,
-      // ✅ REMOVED: isDefault field - no longer needed
     };
 
     onSave(variantData);
@@ -197,7 +196,8 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
         </button>
       </div>
 
-      <form className="space-y-4">
+      {/* ✅ Changed from <form> to <div> to avoid nested form */}
+      <div className="space-y-4">
         {/* Variant Name & SKU */}
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -468,8 +468,6 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
           </p>
         </div>
 
-        {/* ✅ REMOVED: "Set as Default Variant" checkbox - no longer needed */}
-
         {/* Flags */}
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -505,7 +503,7 @@ const VariantForm = ({ variant, onSave, onCancel, isEditing = false }) => {
             Cancel
           </button>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

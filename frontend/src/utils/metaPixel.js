@@ -39,7 +39,6 @@ export const captureFbclid = () => {
     const fbclid = url.searchParams.get("fbclid");
     if (!fbclid) return;
 
-    // Only write if no valid _fbc exists already
     const existing = readCookie("_fbc");
     if (existing && existing.startsWith("fb.")) return;
 

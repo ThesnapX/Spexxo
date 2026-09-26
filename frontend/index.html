@@ -54,8 +54,6 @@
     <link rel="preconnect" href="https://api.spexxo.vercel.app" />
 
     <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
@@ -65,7 +63,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
 
-    <!-- ✅ Meta Pixel Code — MUST be inside <head> -->
+    <!-- ✅ Meta Pixel Code — script only in <head> -->
     <script>
       !(function (f, b, e, v, n, t, s) {
         if (f.fbq) return;
@@ -91,19 +89,23 @@
         "https://connect.facebook.net/en_US/fbevents.js",
       );
       fbq("init", "1753741932563893");
-      // fbq("track", "PageView");
+      // fbq("track", "PageView"); // SPA route tracker fires this
     </script>
+    <!-- End Meta Pixel Code -->
+  </head>
+  <body>
+    <!-- ✅ Meta Pixel <noscript> fallback (moved out of <head> for spec compliance) -->
     <noscript>
       <img
         height="1"
         width="1"
         style="display: none"
         src="https://www.facebook.com/tr?id=1753741932563893&ev=PageView&noscript=1"
+        alt=""
       />
     </noscript>
-    <!-- End Meta Pixel Code -->
-  </head>
-  <body>
+    <!-- End Meta Pixel <noscript> -->
+
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

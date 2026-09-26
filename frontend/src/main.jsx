@@ -11,10 +11,20 @@ import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
+import { captureFbclid } from "./utils/metaPixel.js";
 import "./index.css";
 
-// ✅ Capture fbclid → _fbc immediately on boot (before any routing)
-captureFbclid();
+// ✅ Capture fbclid → _fbc immediately on boot
+// Wrapped so a tracking failure never breaks app boot.
+try {
+  if (typeof captureFbclid === "function") {
+    captureFbclid();
+  } else {
+    console.warn("[Meta] captureFbclid not available — skipping");
+  }
+} catch (err) {
+  console.warn("[Meta] captureFbclid failed:", err?.message);
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +38,6 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
       refetchInterval: false,
       retryOnMount: true,
-      keepPreviousData: true,
     },
   },
 });
@@ -47,7 +56,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                   gutter={8}
                   toastOptions={{
                     duration: 4000,
-                    // Reserve right-side padding for the close button
                     style: {
                       background: "#0B1C39",
                       color: "#fff",
@@ -64,10 +72,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                         color: "#fff",
                         borderLeft: "4px solid #10b981",
                       },
-                      iconTheme: {
-                        primary: "#10b981",
-                        secondary: "#fff",
-                      },
+                      iconTheme: { primary: "#10b981", secondary: "#fff" },
                     },
                     error: {
                       style: {
@@ -75,10 +80,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                         color: "#fff",
                         borderLeft: "4px solid #ef4444",
                       },
-                      iconTheme: {
-                        primary: "#ef4444",
-                        secondary: "#fff",
-                      },
+                      iconTheme: { primary: "#ef4444", secondary: "#fff" },
                     },
                     loading: {
                       style: {

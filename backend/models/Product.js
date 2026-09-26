@@ -1,6 +1,7 @@
 // backend/models/Product.js
 
 import mongoose from "mongoose";
+import { getNextSequence } from "./Counter.js";
 
 const productSchema = new mongoose.Schema(
   {
@@ -76,36 +77,16 @@ const productSchema = new mongoose.Schema(
     },
 
     // Simple Product Fields
-    frameShape: {
-      type: String,
-    },
-    frameMaterial: {
-      type: String,
-    },
-    lensType: {
-      type: String,
-    },
-    frameColor: {
-      type: String,
-    },
-    frameWidth: {
-      type: Number,
-    },
-    lensWidth: {
-      type: Number,
-    },
-    frameHeight: {
-      type: Number,
-    },
-    bridge: {
-      type: Number,
-    },
-    lensMaterial: {
-      type: String,
-    },
-    size: {
-      type: String,
-    },
+    frameShape: { type: String },
+    frameMaterial: { type: String },
+    lensType: { type: String },
+    frameColor: { type: String },
+    frameWidth: { type: Number },
+    lensWidth: { type: Number },
+    frameHeight: { type: Number },
+    bridge: { type: Number },
+    lensMaterial: { type: String },
+    size: { type: String },
     stock: {
       type: Number,
       default: 0,
@@ -115,10 +96,7 @@ const productSchema = new mongoose.Schema(
       {
         url: String,
         alt: String,
-        isMain: {
-          type: Boolean,
-          default: false,
-        },
+        isMain: { type: Boolean, default: false },
       },
     ],
     gallery: [
@@ -131,65 +109,29 @@ const productSchema = new mongoose.Schema(
     // VARIANT PRODUCT FIELDS
     variants: [
       {
-        name: {
-          type: String,
-          required: true,
-        },
-        sku: {
-          type: String,
-          sparse: true,
-        },
-        price: {
-          type: Number,
-          required: true,
-          default: 0,
-        },
-        comparePrice: {
-          type: Number,
-          default: 0,
-        },
-        stock: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
+        name: { type: String, required: true },
+        sku: { type: String, sparse: true },
+        price: { type: Number, required: true, default: 0 },
+        comparePrice: { type: Number, default: 0 },
+        stock: { type: Number, default: 0, min: 0 },
         color: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Color",
           default: null,
         },
-        frameShape: {
-          type: String,
-        },
-        frameMaterial: {
-          type: String,
-        },
-        lensType: {
-          type: String,
-        },
-        frameColor: {
-          type: String,
-        },
-        frameWidth: {
-          type: Number,
-        },
-        lensWidth: {
-          type: Number,
-        },
-        frameHeight: {
-          type: Number,
-        },
-        bridge: {
-          type: Number,
-        },
+        frameShape: { type: String },
+        frameMaterial: { type: String },
+        lensType: { type: String },
+        frameColor: { type: String },
+        frameWidth: { type: Number },
+        lensWidth: { type: Number },
+        frameHeight: { type: Number },
+        bridge: { type: Number },
         images: [
           {
             url: String,
             alt: String,
-            isMain: {
-              type: Boolean,
-              default: false,
-            },
+            isMain: { type: Boolean, default: false },
           },
         ],
         attributes: {
@@ -197,29 +139,14 @@ const productSchema = new mongoose.Schema(
           size: String,
           material: String,
         },
-        isActive: {
-          type: Boolean,
-          default: true,
-        },
-        isDefault: {
-          type: Boolean,
-          default: false,
-        },
+        isActive: { type: Boolean, default: true },
+        isDefault: { type: Boolean, default: false },
       },
     ],
 
-    isInStock: {
-      type: Boolean,
-      default: true,
-    },
-    isFeatured: {
-      type: Boolean,
-      default: false,
-    },
-    isTrending: {
-      type: Boolean,
-      default: false,
-    },
+    isInStock: { type: Boolean, default: true },
+    isFeatured: { type: Boolean, default: false },
+    isTrending: { type: Boolean, default: false },
 
     specifications: [
       {
@@ -228,14 +155,8 @@ const productSchema = new mongoose.Schema(
       },
     ],
     ratings: {
-      average: {
-        type: Number,
-        default: 0,
-      },
-      count: {
-        type: Number,
-        default: 0,
-      },
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
     },
     seo: {
       metaTitle: String,
@@ -243,14 +164,8 @@ const productSchema = new mongoose.Schema(
       metaKeywords: String,
       ogImage: String,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
+    isActive: { type: Boolean, default: true },
+    createdAt: { type: Date, default: Date.now },
   },
   {
     timestamps: true,
@@ -259,21 +174,19 @@ const productSchema = new mongoose.Schema(
   },
 );
 
-// ✅ DYNAMIC VIRTUALS - New Arrival (based on age)
+// ✅ DYNAMIC VIRTUALS
 productSchema.virtual("isNewArrival").get(function () {
   const daysSinceCreation =
     (Date.now() - new Date(this.createdAt).getTime()) / (1000 * 60 * 60 * 24);
   return daysSinceCreation <= 30;
 });
 
-// ✅ DYNAMIC VIRTUALS - Best Seller (placeholder)
 productSchema.virtual("isBestSeller").get(function () {
   return false;
 });
 
-// ✅ FIXED: Pre-save hook with proper stock handling
+// ✅ Pre-save hook for slug + stock
 productSchema.pre("save", function (next) {
-  // Create slug from name
   if (this.isModified("name")) {
     this.slug = this.name
       .toLowerCase()
@@ -281,14 +194,11 @@ productSchema.pre("save", function (next) {
       .replace(/-+/g, "-");
   }
 
-  // Set productCategory from productTypeOld for backward compatibility
   if (this.isModified("productTypeOld") && this.productTypeOld) {
     this.productCategory = this.productTypeOld;
   }
 
-  // ✅ FIXED: Handle variants and ensure stock is always a valid number
   if (this.variants && this.variants.length > 0) {
-    // ✅ Ensure each variant has a valid stock number
     this.variants.forEach((variant) => {
       if (
         variant.stock === undefined ||
@@ -297,11 +207,9 @@ productSchema.pre("save", function (next) {
       ) {
         variant.stock = 0;
       }
-      // Ensure stock is a number
       variant.stock = Number(variant.stock);
     });
 
-    // ✅ If no main images, use first variant's images
     if (
       (!this.images || this.images.length === 0) &&
       this.variants[0].images &&
@@ -314,7 +222,6 @@ productSchema.pre("save", function (next) {
       }));
     }
 
-    // ✅ RECALCULATE total stock from variants (ensure it's a valid number)
     let totalStock = 0;
     this.variants.forEach((v) => {
       const variantStock = Number(v.stock) || 0;
@@ -322,29 +229,30 @@ productSchema.pre("save", function (next) {
     });
     this.stock = totalStock;
   } else {
-    // ✅ For simple products, ensure stock is a valid number
     if (this.stock === undefined || this.stock === null || isNaN(this.stock)) {
       this.stock = 0;
     }
     this.stock = Number(this.stock);
   }
 
-  // ✅ Ensure stock is never negative (but allow 0)
-  if (this.stock < 0) {
-    this.stock = 0;
-  }
+  if (this.stock < 0) this.stock = 0;
 
   next();
 });
 
-// Generate productId before saving
+// ✅ Atomic productId generation — race-safe
 productSchema.pre("save", async function (next) {
   if (this.isNew && !this.productId) {
-    const count = await mongoose.model("Product").countDocuments();
-    const nextNumber = (count + 1).toString().padStart(6, "0");
-    this.productId = `PRD-${nextNumber}`;
+    try {
+      const seq = await getNextSequence("product");
+      this.productId = `PRD-${seq.toString().padStart(6, "0")}`;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
   }
-  next();
 });
 
 const Product = mongoose.model("Product", productSchema);
