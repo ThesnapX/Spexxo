@@ -19,9 +19,9 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
   // ── Filters (client-side, same pattern as admin Products page) ──
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
-  const [productTypeFilter, setProductTypeFilter] = useState(""); // "simple" | "variable"
-  const [stockFilter, setStockFilter] = useState(""); // "in-stock" | "out-of-stock"
-  const [statusFilter, setStatusFilter] = useState(""); // "active" | "inactive"
+  const [productTypeFilter, setProductTypeFilter] = useState("");
+  const [stockFilter, setStockFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -85,6 +85,25 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
   const brands = brandsData || [];
   const allProducts = data || [];
 
+  // ─────────────────────────────────────────────
+  // Authoritative stock — mirrors backend semantics.
+  //
+  // For variable products: sum of positive variant stocks.
+  // For simple products: product.stock.
+  //
+  // NEVER add product.stock + variants (double-count).
+  // ─────────────────────────────────────────────
+  const getTotalStock = (p) => {
+    if (p.variants && p.variants.length > 0) {
+      return p.variants.reduce((sum, v) => {
+        const s = Number(v.stock);
+        return sum + (Number.isFinite(s) && s > 0 ? s : 0);
+      }, 0);
+    }
+    const s = Number(p.stock);
+    return Number.isFinite(s) && s > 0 ? s : 0;
+  };
+
   // ── Apply all filters client-side ──
   const products = useMemo(() => {
     return allProducts.filter((p) => {
@@ -99,8 +118,7 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
         if (!matches) return false;
       }
 
-      // Category (product can have multiple categories; product.category
-      // is a comma-separated string OR the object has `categories` array)
+      // Category
       if (categoryFilter) {
         const catIds =
           Array.isArray(p.categories) && p.categories.length > 0
@@ -124,11 +142,8 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
         return false;
       }
 
-      // Stock
-      const hasVariants = p.variants && p.variants.length > 0;
-      const totalStock = hasVariants
-        ? p.variants.reduce((sum, v) => sum + (v.stock || 0), 0)
-        : p.stock || 0;
+      // Stock — use authoritative getTotalStock
+      const totalStock = getTotalStock(p);
       if (stockFilter === "in-stock" && totalStock <= 0) return false;
       if (stockFilter === "out-of-stock" && totalStock > 0) return false;
       if (stockFilter === "low-stock" && (totalStock > 3 || totalStock <= 0))
@@ -172,7 +187,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
     if (exists) {
       setSelected(selected.filter((p) => p._id !== product._id));
     } else {
-      // Store full snapshot so blog cards render identically to Shop.
       setSelected([
         ...selected,
         {
@@ -283,7 +297,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
         {showFilters && (
           <div className="px-3 py-3 border-b bg-gray-50">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-              {/* Category */}
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-text-light mb-1">
                   Category
@@ -302,7 +315,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
                 </select>
               </div>
 
-              {/* Brand */}
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-text-light mb-1">
                   Brand
@@ -321,7 +333,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
                 </select>
               </div>
 
-              {/* Product type */}
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-text-light mb-1">
                   Type
@@ -337,7 +348,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
                 </select>
               </div>
 
-              {/* Stock */}
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-text-light mb-1">
                   Stock
@@ -354,7 +364,6 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
                 </select>
               </div>
 
-              {/* Status */}
               <div>
                 <label className="block text-[10px] uppercase tracking-wider text-text-light mb-1">
                   Status
@@ -419,20 +428,17 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
               {products.map((p) => {
                 const isSelected = selected.some((s) => s._id === p._id);
                 const isDeactivated = p.isActive === false;
-                const variantCount = hasVariants ? p.variants.length : 0;
+
+                // ✅ Declare hasVariants FIRST, then dependents.
                 const hasVariants = p.variants && p.variants.length > 0;
-                const totalStock = hasVariants
-                  ? p.variants.reduce((sum, v) => {
-                      const s = Number(v.stock);
-                      return sum + (Number.isFinite(s) && s > 0 ? s : 0);
-                    }, 0)
-                  : (() => {
-                      const s = Number(p.stock);
-                      return Number.isFinite(s) && s > 0 ? s : 0;
-                    })();
+                const variantCount = hasVariants ? p.variants.length : 0;
+                const totalStock = getTotalStock(p);
+                // ✅ was undefined before — now correctly derived from variants
+                const allVariantsOutOfStock =
+                  hasVariants && p.variants.every((v) => (v.stock || 0) <= 0);
                 const outOfStock = hasVariants
                   ? allVariantsOutOfStock
-                  : (p.stock || 0) <= 0;
+                  : totalStock <= 0;
 
                 const priceInfo = getDisplayPrice(p);
 

@@ -17,6 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartSolid } from "@heroicons/react/24/solid";
 import SEO from "../components/common/SEO";
+import { SITE_URL } from "../config/siteUrl";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import toast from "react-hot-toast";
@@ -52,7 +53,6 @@ const SHOP_SEO = {
 
 // ============================================
 // STABLE FILTER SECTION COMPONENT
-// (unchanged from original)
 // ============================================
 const FilterSection = ({
   searchInput,
@@ -380,7 +380,6 @@ const FilterSection = ({
 
 // ============================================
 // STABLE PRODUCT CARD COMPONENT
-// (unchanged from original)
 // ============================================
 const ProductCard = ({
   product,
@@ -729,7 +728,6 @@ const Shop = () => {
   // SEO — computed per route/params
   // ============================================
   const seoMeta = useMemo(() => {
-    // If the route is /shop/:category, use the curated SEO entry.
     if (categorySlug && SHOP_SEO[categorySlug]) {
       const s = SHOP_SEO[categorySlug];
       return {
@@ -741,9 +739,6 @@ const Shop = () => {
       };
     }
 
-    // If the URL uses query-string filters (search, sort, price, brand...)
-    // the canonical should collapse to /shop (or /shop/:category if this is
-    // a category route). noIndex when a free-text search is active.
     const hasFilterQuery =
       searchQuery ||
       brandFilter.length ||
@@ -754,20 +749,17 @@ const Shop = () => {
       maxPrice ||
       (sortBy && sortBy !== "name-asc");
 
-    // /shop/:category routes → canonical stays under /shop/:category even
-    // if filters are applied
     if (categorySlug && SHOP_SEO[categorySlug]) {
       const s = SHOP_SEO[categorySlug];
       return {
         title: s.title,
         description: s.description,
         canonical: s.canonical,
-        noIndex: !!searchQuery, // internal-search page → noindex
+        noIndex: !!searchQuery,
         h1: s.h1,
       };
     }
 
-    // Base /shop page
     return {
       title: "Shop All Eyewear Online — Eyeglasses, Sunglasses & Contacts",
       description:
@@ -1278,7 +1270,6 @@ const Shop = () => {
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 flex-shrink-0">
             <div>
-              {/* ✅ H1 for SEO */}
               <h1 className="text-2xl md:text-3xl font-bold text-text">
                 {categorySlug && SHOP_SEO[categorySlug]
                   ? SHOP_SEO[categorySlug].h1
