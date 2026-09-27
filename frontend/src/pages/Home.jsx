@@ -48,18 +48,6 @@ const Home = () => {
         ogType="website"
       />
 
-      {/* ✅ Crawlable H1 for SEO — visible to users and Googlebot */}
-      <section className="container-custom pt-6 pb-2 text-center">
-        <h1 className="text-2xl md:text-4xl font-bold text-text">
-          Spexxo — Premium Eyeglasses, Sunglasses & Contact Lenses
-        </h1>
-        <p className="text-text-light text-sm md:text-base mt-3 max-w-3xl mx-auto">
-          Buy premium eyewear online at Spexxo. Browse eyeglasses, sunglasses
-          and contact lenses from top brands. Prescription-ready frames, UV400
-          protection, and free shipping on orders above ₹999 across India.
-        </p>
-      </section>
-
       <HeroSlider />
       <BentoCategoryGrid />
 

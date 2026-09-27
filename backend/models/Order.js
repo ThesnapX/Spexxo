@@ -1,6 +1,7 @@
 // backend/models/Order.js
 
 import mongoose from "mongoose";
+import { getNextSequence } from "./Counter.js";
 
 const orderSchema = new mongoose.Schema(
   {
@@ -175,22 +176,19 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Generate orderId and orderNumber BEFORE validation
+
 orderSchema.pre("validate", async function (next) {
   if (this.isNew) {
-    // Generate orderId
-    if (!this.orderId) {
-      const count = await mongoose.model("Order").countDocuments();
-      const nextNumber = (count + 1).toString().padStart(10, "0");
-      this.orderId = `ORD-${nextNumber}`;
-    }
-
-    // Generate orderNumber with 8 digits after ORD
-    if (!this.orderNumber) {
-      const date = new Date();
-      const year = date.getFullYear().toString();
-      const count = await mongoose.model("Order").countDocuments();
-      const nextNumber = (count + 1).toString().padStart(8, "0");
-      this.orderNumber = `ORD-${nextNumber}`;
+    try {
+      if (!this.orderId && !this.orderNumber) {
+        // Use a single counter for both so they stay consistent.
+        const seq = await getNextSequence("order");
+        const num = seq.toString().padStart(8, "0");
+        this.orderId = `ORD-${num}`;
+        this.orderNumber = `ORD-${num}`;
+      }
+    } catch (err) {
+      return next(err);
     }
   }
   next();

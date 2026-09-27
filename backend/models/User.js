@@ -2,6 +2,7 @@
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { getNextSequence } from "./Counter.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -103,7 +104,6 @@ const userSchema = new mongoose.Schema(
     ],
     wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
 
-    // ✅ Follow-up tracking for abandoned wishlist emails
     wishlistFollowUpStage: {
       type: Number,
       default: 0,
@@ -126,14 +126,23 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Generate userId before saving
+// ✅ Race-safe atomic ID generation
 userSchema.pre("save", async function (next) {
   if (this.isNew && !this.userId) {
-    const count = await mongoose.model("User").countDocuments();
-    const nextNumber = (count + 1).toString().padStart(6, "0");
-    this.userId = `USR-${nextNumber}`;
+    try {
+      const seq = await getNextSequence("user");
+      this.userId = `USR-${seq.toString().padStart(6, "0")}`;
+      // Also set customerId to match, if not already set
+      if (!this.customerId) {
+        this.customerId = this.userId;
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
   }
-  next();
 });
 
 // Hash password before saving
@@ -143,7 +152,6 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };

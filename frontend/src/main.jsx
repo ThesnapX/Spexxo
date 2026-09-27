@@ -12,10 +12,16 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { captureFbclid } from "./utils/metaPixel.js";
+import {
+  checkVersionAndReload,
+  installChunkErrorHandler,
+} from "./utils/versionCheck.js";
 import "./index.css";
 
-// ✅ Capture fbclid → _fbc immediately on boot
-// Wrapped so a tracking failure never breaks app boot.
+// ---- Version + chunk-error guards (must run before render) ----
+installChunkErrorHandler();
+checkVersionAndReload().catch(() => {});
+
 try {
   if (typeof captureFbclid === "function") {
     captureFbclid();
