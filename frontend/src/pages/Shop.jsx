@@ -725,7 +725,7 @@ const Shop = () => {
   }, [categoryFilter, brandFilter, productCategory, genderFilter]);
 
   // ============================================
-  // SEO — computed per route/params
+  // SEO
   // ============================================
   const seoMeta = useMemo(() => {
     if (categorySlug && SHOP_SEO[categorySlug]) {
@@ -748,17 +748,6 @@ const Shop = () => {
       minPrice ||
       maxPrice ||
       (sortBy && sortBy !== "name-asc");
-
-    if (categorySlug && SHOP_SEO[categorySlug]) {
-      const s = SHOP_SEO[categorySlug];
-      return {
-        title: s.title,
-        description: s.description,
-        canonical: s.canonical,
-        noIndex: !!searchQuery,
-        h1: s.h1,
-      };
-    }
 
     return {
       title: "Shop All Eyewear Online — Eyeglasses, Sunglasses & Contacts",
@@ -940,58 +929,95 @@ const Shop = () => {
     }
   }, [mobileFilterOpen, filtersOpen]);
 
-  const buildQueryString = useCallback(
-    (pageParam = 1) => {
-      const params = new URLSearchParams();
-      params.set("page", String(pageParam));
-      params.set("limit", "12");
-      if (sortBy && sortBy !== "default") {
-        params.set("sort", sortBy);
-      }
-      if (searchQuery) params.set("search", searchQuery);
-      if (categoryFilter) params.set("category", categoryFilter);
-      if (genderFilter.length > 0) params.set("gender", genderFilter.join(","));
-      if (productCategory) params.set("productCategory", productCategory);
-      if (brandFilter.length > 0) params.set("brand", brandFilter.join(","));
-      if (frameShapeFilter.length > 0)
-        params.set("frameShape", frameShapeFilter.join(","));
-      if (lensTypeFilter.length > 0)
-        params.set("lensType", lensTypeFilter.join(","));
-      if (minPrice) params.set("minPrice", minPrice);
-      if (maxPrice) params.set("maxPrice", maxPrice);
-      return params.toString();
-    },
-    [
-      sortBy,
-      searchQuery,
-      categoryFilter,
-      genderFilter,
-      productCategory,
-      brandFilter,
-      frameShapeFilter,
-      lensTypeFilter,
-      minPrice,
-      maxPrice,
-    ],
-  );
+  // ============================================
+  // STABLE QUERY STRING
+  //
+  // Memoize the query-string (without page) so the React Query key
+  // and the URL are computed from the SAME primitive string on every
+  // render. This avoids the observer being torn down and recreated on
+  // each render, which is what was triggering tanstack to call
+  // getNextPageParam during observer construction.
+  // ============================================
+  const baseQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("limit", "12");
+    if (sortBy && sortBy !== "default") {
+      params.set("sort", sortBy);
+    }
+    if (searchQuery) params.set("search", searchQuery);
+    if (categoryFilter) params.set("category", categoryFilter);
+    if (genderFilter.length > 0) params.set("gender", genderFilter.join(","));
+    if (productCategory) params.set("productCategory", productCategory);
+    if (brandFilter.length > 0) params.set("brand", brandFilter.join(","));
+    if (frameShapeFilter.length > 0)
+      params.set("frameShape", frameShapeFilter.join(","));
+    if (lensTypeFilter.length > 0)
+      params.set("lensType", lensTypeFilter.join(","));
+    if (minPrice) params.set("minPrice", minPrice);
+    if (maxPrice) params.set("maxPrice", maxPrice);
+    return params.toString();
+  }, [
+    sortBy,
+    searchQuery,
+    categoryFilter,
+    genderFilter,
+    productCategory,
+    brandFilter,
+    frameShapeFilter,
+    lensTypeFilter,
+    minPrice,
+    maxPrice,
+  ]);
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useInfiniteQuery({
-      queryKey: ["products", buildQueryString()],
+      // ✅ Stable key — computed once per filter-change, not per render.
+      queryKey: ["products", baseQueryString],
       queryFn: async ({ pageParam = 1 }) => {
-        const { data } = await axios.get(
-          `${API_URL}/products?${buildQueryString(pageParam)}`,
-        );
-        return data;
-      },
-      getNextPageParam: (lastPage) => {
-        if (
-          lastPage?.pagination &&
-          lastPage.pagination.page < lastPage.pagination.pages
-        ) {
-          return lastPage.pagination.page + 1;
+        // ✅ Always return a well-shaped object. Never `undefined`.
+        try {
+          const { data } = await axios.get(
+            `${API_URL}/products?page=${pageParam}&${baseQueryString}`,
+          );
+          return {
+            products: Array.isArray(data?.products) ? data.products : [],
+            pagination:
+              data?.pagination && typeof data.pagination === "object"
+                ? {
+                    page: Number(data.pagination.page) || pageParam,
+                    limit: Number(data.pagination.limit) || 12,
+                    total: Number(data.pagination.total) || 0,
+                    pages: Number(data.pagination.pages) || 1,
+                  }
+                : {
+                    page: pageParam,
+                    limit: 12,
+                    total: 0,
+                    pages: 1,
+                  },
+          };
+        } catch (error) {
+          // Ensure a stable error shape; React Query still surfaces the
+          // error but the observer never sees `undefined`.
+          throw error;
         }
-        return undefined;
+      },
+      getNextPageParam: (lastPage, allPages) => {
+        // Fully defensive — cannot crash on any input shape.
+        try {
+          if (!lastPage || typeof lastPage !== "object") return undefined;
+          const pagination = lastPage.pagination;
+          if (!pagination || typeof pagination !== "object") return undefined;
+          const page = Number(pagination.page);
+          const pages = Number(pagination.pages);
+          if (!Number.isFinite(page) || !Number.isFinite(pages)) {
+            return undefined;
+          }
+          if (page < pages) return page + 1;
+          return undefined;
+        } catch {
+          return undefined;
+        }
       },
       initialPageParam: 1,
       staleTime: 5 * 60 * 1000,
@@ -1159,9 +1185,22 @@ const Shop = () => {
     };
   }, []);
 
-  const allProducts =
-    data?.pages?.flatMap((page) => page?.products || []) || [];
-  const totalProducts = data?.pages?.[0]?.pagination?.total || 0;
+  // ✅ Fully defensive access to `data.pages`.
+  const allProducts = useMemo(() => {
+    const pages = data?.pages;
+    if (!Array.isArray(pages)) return [];
+    return pages.flatMap((page) =>
+      Array.isArray(page?.products) ? page.products : [],
+    );
+  }, [data]);
+
+  const totalProducts = useMemo(() => {
+    const pages = data?.pages;
+    if (!Array.isArray(pages) || pages.length === 0) return 0;
+    const first = pages[0];
+    const total = first?.pagination?.total;
+    return Number.isFinite(Number(total)) ? Number(total) : 0;
+  }, [data]);
 
   const hasActiveFilters =
     searchQuery ||
