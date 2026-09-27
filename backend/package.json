@@ -11,7 +11,8 @@
     "seed-counters": "node utils/seedCounters.js",
     "repair-counters": "node utils/repairCounters.js",
     "build": "npm install",
-    "migrate": "node utils/migrateData.js"
+    "migrate": "node utils/migrateData.js",
+    "migrate-best-seller": "node utils/migrateAddBestSeller.js"
   },
   "engines": {
     "node": ">=18.0.0"

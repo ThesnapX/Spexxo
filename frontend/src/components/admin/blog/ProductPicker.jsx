@@ -8,6 +8,7 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
 } from "@heroicons/react/24/outline";
+import { getProductPrice } from "../../../utils/productHelpers";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -217,29 +218,12 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
   };
 
   const getDisplayPrice = (product) => {
-    if (product.variants && product.variants.length > 0) {
-      const prices = product.variants.map((v) => v.price || 0);
-      const compares = product.variants
-        .map((v) => v.comparePrice || 0)
-        .filter((c) => c > 0);
-      const minPrice = Math.min(...prices);
-      const minCompare = compares.length ? Math.min(...compares) : 0;
-      if (minCompare && minCompare < minPrice) {
-        return { display: minCompare, original: minPrice, hasDiscount: true };
-      }
-      return { display: minPrice, original: minPrice, hasDiscount: false };
-    }
-    if (product.comparePrice && product.comparePrice < product.price) {
-      return {
-        display: product.comparePrice,
-        original: product.price,
-        hasDiscount: true,
-      };
-    }
+    const { displayPrice, originalPrice, hasDiscount } =
+      getProductPrice(product);
     return {
-      display: product.price || 0,
-      original: product.price || 0,
-      hasDiscount: false,
+      display: displayPrice,
+      original: originalPrice,
+      hasDiscount,
     };
   };
 

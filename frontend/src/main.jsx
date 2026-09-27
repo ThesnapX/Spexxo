@@ -114,58 +114,47 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                     >
                       {({ icon, message }) => (
                         <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                            width: "100%",
-                          }}
+                          className="custom-toast-wrapper"
+                          style={{ width: "100%" }}
                         >
-                          {icon}
                           <div
                             style={{
-                              flex: 1,
-                              minWidth: 0,
-                              wordBreak: "break-word",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              width: "100%",
                             }}
                           >
-                            {message}
-                          </div>
-                          {t.type !== "loading" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toast.dismiss(t.id);
-                              }}
-                              aria-label="Close notification"
-                              className="toast-close-btn"
+                            {icon}
+                            <div
                               style={{
-                                position: "absolute",
-                                right: "10px",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                background: "transparent",
-                                border: "none",
-                                color: "rgba(255,255,255,0.55)",
-                                width: "28px",
-                                height: "28px",
-                                borderRadius: "50%",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
+                                flex: 1,
+                                minWidth: 0,
+                                wordBreak: "break-word",
                               }}
                             >
-                              <XMarkIcon
-                                style={{
-                                  width: "16px",
-                                  height: "16px",
-                                  pointerEvents: "none",
+                              {message}
+                            </div>
+                            {t.type !== "loading" && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toast.dismiss(t.id);
                                 }}
-                              />
-                            </button>
-                          )}
+                                aria-label="Close notification"
+                                className="toast-close-btn"
+                              >
+                                <XMarkIcon
+                                  style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    pointerEvents: "none",
+                                  }}
+                                />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </ToastBar>

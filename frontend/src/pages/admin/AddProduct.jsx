@@ -56,6 +56,7 @@ const AddProduct = () => {
     stock: "10",
     isFeatured: false,
     isTrending: false,
+    isBestSeller: false,
     sku: "",
   });
 
@@ -252,12 +253,9 @@ const AddProduct = () => {
     let finalVariants = [];
 
     if (productType === "variable") {
-      // For variable products, first upload any variant images
-      // Process each variant to ensure images are uploaded
       for (const variant of variants) {
         let variantImages = variant.images || [];
 
-        // If variant has image files that need uploading, handle them
         if (variant.imageFiles && variant.imageFiles.length > 0) {
           try {
             const fd = new FormData();
@@ -304,12 +302,10 @@ const AddProduct = () => {
         });
       }
 
-      // Set product images from the first variant's images
       if (finalVariants.length > 0 && finalVariants[0].images.length > 0) {
         productImages = finalVariants[0].images;
       }
     } else {
-      // For simple products, upload images
       if (imageFiles.length > 0) {
         try {
           const fd = new FormData();
@@ -336,13 +332,14 @@ const AddProduct = () => {
           ? Number(form.discountedPrice)
           : undefined,
       stock: productType === "simple" ? Number(form.stock) : undefined,
-      images: productImages, // Now properly set from variants
+      images: productImages,
       variants: productType === "variable" ? finalVariants : undefined,
       brand: form.brand || null,
       category: form.category || null,
       productType: productType,
       productCategory: form.productCategory,
       specifications: specifications.length > 0 ? specifications : undefined,
+      isBestSeller: !!form.isBestSeller,
     };
     delete productData.discountedPrice;
 
@@ -835,7 +832,7 @@ const AddProduct = () => {
                 </button>
               </div>
 
-              {/* ✅ Default Variant Dropdown */}
+              {/* Default Variant Dropdown */}
               {variants.length > 0 && (
                 <div className="bg-white p-3 rounded-lg border border-gray-200 mb-4">
                   <label className="text-sm font-medium text-text block mb-2">
@@ -967,14 +964,15 @@ const AddProduct = () => {
               Product Flags
             </label>
             <p className="text-xs text-text-light mb-3">
-              🏷️ Flags control homepage sections: Featured=Flash Sales,
-              Trending=Customer Loved. New Arrivals and Best Sellers are
-              automatically determined based on product age and sales.
+              🏷️ Flags control homepage sections. Featured=Flash Sales,
+              Trending=Customer Loved, Best Seller=Best Sellers section. New
+              Arrivals is determined automatically from product age.
             </p>
             <div className="flex flex-wrap gap-4">
               {[
                 { k: "isFeatured", l: "⭐ Featured" },
                 { k: "isTrending", l: "🔥 Trending" },
+                { k: "isBestSeller", l: "🏆 Best Seller" },
               ].map((f) => (
                 <label
                   key={f.k}
@@ -982,7 +980,7 @@ const AddProduct = () => {
                 >
                   <input
                     type="checkbox"
-                    checked={form[f.k]}
+                    checked={!!form[f.k]}
                     onChange={(e) => handleChange(f.k, e.target.checked)}
                     className="w-4 h-4 text-[#3D96EB] rounded"
                   />

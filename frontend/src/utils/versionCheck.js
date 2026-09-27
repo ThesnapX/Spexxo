@@ -2,20 +2,22 @@
 //
 // Stale-deployment detection + chunk-load-error recovery.
 //
-// Responsibilities:
-//   1. Fetch /version.txt on boot; if the deployed version changed,
-//      hard-reload once.
-//   2. Listen for chunk-load / dynamic-import errors and reload once
-//      IF the server version differs.
-//   3. Never loop. Track the deployment ID that caused the reload in
-//      sessionStorage.
+// Design:
+//   - "Installed version" is what the user is currently running.
+//   - "Attempted recovery version" is tracked separately from the
+//     installed version, so a reload that didn't help can retry.
+//   - Bounded: at most ONE recovery attempt per browser session per
+//     target version. No infinite loops.
 //
-// IMPORTANT: This does NOT catch generic JS errors, only errors that
-// are known to indicate a stale-chunk / MIME / failed-module-load
-// condition. Genuine application errors must still surface normally.
+// Failure modes handled:
+//   - Failed dynamic imports
+//   - ChunkLoadError
+//   - "expected JS module but got text/html" (MIME)
+//   - generic module-load failure messages
 
-const VERSION_STORAGE_KEY = "spexxo_app_version";
-const RECOVERY_FLAG_KEY = "spexxo_recovery_in_progress";
+const INSTALLED_VERSION_KEY = "spexxo_app_version"; // what we believe we're running
+const ATTEMPTED_RECOVERY_KEY = "spexxo_recovery_attempted_for"; // version we already tried to reload to
+const RECOVERY_TS_KEY = "spexxo_recovery_ts"; // last reload timestamp
 
 // Patterns that unambiguously indicate a failed module/chunk load.
 const STALE_CHUNK_PATTERNS = [
@@ -26,6 +28,7 @@ const STALE_CHUNK_PATTERNS = [
   "Loading CSS chunk",
   "error loading dynamically imported module",
   "Expected a JavaScript-or-Wasm module script",
+  "ChunkLoadError",
 ];
 
 const isStaleChunkError = (msg) => {
@@ -44,7 +47,7 @@ const fetchCurrentVersion = async () => {
     if (!res.ok) return null;
     const text = await res.text();
     const trimmed = text.trim();
-    // Guard against accidentally serving index.html (which would be huge).
+    // Guard: index.html is large; a valid version file is short.
     if (!trimmed || trimmed.length > 200) return null;
     return trimmed;
   } catch {
@@ -53,43 +56,49 @@ const fetchCurrentVersion = async () => {
 };
 
 // ─────────────────────────────────────────────
-// Public API: run on app boot
+// Boot-time version check
 // ─────────────────────────────────────────────
 export const checkVersionAndReload = async () => {
-  // If we already triggered a recovery reload in this tab, do nothing —
-  // we've already handled the mismatch.
-  const recoveryFlag = sessionStorage.getItem(RECOVERY_FLAG_KEY);
+  // If a recovery is already in flight this session, do nothing at boot.
+  const attemptedFor = sessionStorage.getItem(ATTEMPTED_RECOVERY_KEY);
 
   const serverVersion = await fetchCurrentVersion();
-  if (!serverVersion) return; // network issue → do nothing
+  if (!serverVersion) return; // network issue → skip
 
-  const lastVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+  const installed = localStorage.getItem(INSTALLED_VERSION_KEY);
 
-  if (lastVersion && lastVersion !== serverVersion) {
-    // A new deployment exists. Reload ONCE.
-    if (recoveryFlag === serverVersion) {
-      // Already reloaded for this exact new version — do not loop.
-      // Accept the new version and move on.
-      localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-      sessionStorage.removeItem(RECOVERY_FLAG_KEY);
-      return;
-    }
-
-    // Record the target version BEFORE reloading so a second pass
-    // does not try again.
-    sessionStorage.setItem(RECOVERY_FLAG_KEY, serverVersion);
-    localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-    window.location.reload();
+  // First-ever visit → record and continue.
+  if (!installed) {
+    localStorage.setItem(INSTALLED_VERSION_KEY, serverVersion);
     return;
   }
 
-  // Fresh install or already current — record it.
-  localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-  sessionStorage.removeItem(RECOVERY_FLAG_KEY);
+  // Already on the latest → nothing to do.
+  if (installed === serverVersion) {
+    // Clear stale recovery bookkeeping — we are healthy.
+    sessionStorage.removeItem(ATTEMPTED_RECOVERY_KEY);
+    sessionStorage.removeItem(RECOVERY_TS_KEY);
+    return;
+  }
+
+  // Deployment mismatch detected.
+  if (attemptedFor === serverVersion) {
+    // We already tried to reload for this exact newer version and
+    // something still isn't right. Accept the newer version and stop.
+    // Do NOT loop.
+    localStorage.setItem(INSTALLED_VERSION_KEY, serverVersion);
+    return;
+  }
+
+  // Mark the attempt BEFORE reloading so a second failure cannot loop.
+  sessionStorage.setItem(ATTEMPTED_RECOVERY_KEY, serverVersion);
+  sessionStorage.setItem(RECOVERY_TS_KEY, String(Date.now()));
+  localStorage.setItem(INSTALLED_VERSION_KEY, serverVersion);
+  window.location.reload();
 };
 
 // ─────────────────────────────────────────────
-// Public API: install chunk-error handlers
+// Chunk-error handler
 // ─────────────────────────────────────────────
 export const installChunkErrorHandler = () => {
   if (typeof window === "undefined") return;
@@ -99,41 +108,42 @@ export const installChunkErrorHandler = () => {
   const handle = async (message) => {
     if (handling) return;
     if (!isStaleChunkError(message)) return;
-
     handling = true;
 
-    const serverVersion = await fetchCurrentVersion();
-    const lastVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+    try {
+      const serverVersion = await fetchCurrentVersion();
+      if (!serverVersion) {
+        handling = false;
+        return;
+      }
 
-    // Only reload if a genuinely newer deployment exists.
-    const isNewerDeployment = serverVersion && serverVersion !== lastVersion;
+      const attemptedFor = sessionStorage.getItem(ATTEMPTED_RECOVERY_KEY);
 
-    const alreadyTried = sessionStorage.getItem(RECOVERY_FLAG_KEY);
+      // If we already attempted recovery for THIS version in this
+      // session, do not loop. Fall through to a normal error.
+      if (attemptedFor === serverVersion) {
+        console.warn(
+          "[versionCheck] Recovery already attempted for this deployment.",
+        );
+        handling = false;
+        return;
+      }
 
-    if (!isNewerDeployment) {
-      // No new deployment — this is a genuine error, not staleness.
-      // Do NOT reload. Let the error propagate.
-      console.warn(
-        "[versionCheck] Chunk load failed but no new deployment detected. Not reloading.",
-      );
+      // Bound recovery attempts: at most one per 60 seconds per session.
+      const lastTs = Number(sessionStorage.getItem(RECOVERY_TS_KEY) || 0);
+      if (lastTs && Date.now() - lastTs < 60_000) {
+        handling = false;
+        return;
+      }
+
+      sessionStorage.setItem(ATTEMPTED_RECOVERY_KEY, serverVersion);
+      sessionStorage.setItem(RECOVERY_TS_KEY, String(Date.now()));
+      localStorage.setItem(INSTALLED_VERSION_KEY, serverVersion);
+      console.warn("[versionCheck] Stale chunk — reloading once.");
+      window.location.reload();
+    } catch {
       handling = false;
-      return;
     }
-
-    if (alreadyTried === serverVersion) {
-      // Already attempted recovery for this exact new version.
-      // Do not loop.
-      console.warn(
-        "[versionCheck] Recovery already attempted for this deployment.",
-      );
-      handling = false;
-      return;
-    }
-
-    sessionStorage.setItem(RECOVERY_FLAG_KEY, serverVersion);
-    localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-    console.warn("[versionCheck] Stale chunk detected — reloading once.");
-    window.location.reload();
   };
 
   window.addEventListener("error", (event) => {

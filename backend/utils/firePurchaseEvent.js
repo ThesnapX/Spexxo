@@ -3,25 +3,32 @@
 // Single source of truth for firing the Meta "Purchase" event for an order.
 //
 // Guarantees:
-//   - Exactly one Purchase per order, ever.
-//   - event_id is stable and persisted on the order (order.purchaseEventId).
-//   - A retry / refresh / duplicate verify call reuses the SAME event_id,
-//     so Meta's dedup window collapses them into one conversion.
+//   - Exactly one successful Purchase per order, ever.
+//   - event_id is deterministic and stable across retries.
+//   - A failed Meta request leaves the order in a RETRYABLE state
+//     (purchaseEventStatus = "failed"); a later call can retry with the
+//     SAME event_id.
 //   - Never throws. Tracking MUST NOT break the payment/order flow.
 //   - Uses the DB-stored order.total, never a frontend-supplied value.
 //
-// Callers:
-//   - paymentController.confirmOrderAndReduceStock (Razorpay + COD advance)
-//   - orderController.createOrder (zero-value + COD-no-advance instant confirm)
+// State machine on order:
+//   null      -> not yet attempted
+//   "pending" -> claimed by a request, meta call in flight
+//   "sent"    -> Meta confirmed success (terminal)
+//   "failed"  -> Meta rejected or network error (retryable)
 //
-// Any new flow that confirms an order MUST call this and nothing else.
+// Concurrency:
+//   The claim transition is atomic via findOneAndUpdate with a strict
+//   filter. Two concurrent callers cannot both claim.
 
 import { sendMetaEvent } from "./metaCapi.js";
 
 /**
- * @param {import("../models/Order.js").default} order  A populated Order doc.
- * @param {object} req                                  Optional Express req.
- * @returns {Promise<{fired:boolean, reason?:string, eventId?:string}>}
+ * Fire (or retry) the Meta Purchase event for an order.
+ *
+ * @param {import("../models/Order.js").default} order  Populated Order doc.
+ * @param {object|null} req                             Optional Express req.
+ * @returns {Promise<{fired:boolean, reason?:string, eventId?:string, meta?:any}>}
  */
 export const firePurchaseEvent = async (order, req = null) => {
   try {
@@ -29,39 +36,59 @@ export const firePurchaseEvent = async (order, req = null) => {
       return { fired: false, reason: "no_order" };
     }
 
-    // ── Idempotency: any confirmed order already has an event_id. ──
-    // Persisting the ID is what makes browser + CAPI + retries collapse
-    // into a single conversion. If it exists, we do NOT re-emit — we
-    // return the same ID so the caller can log it if it wants.
-    if (order.purchaseEventId) {
-      return {
-        fired: false,
-        reason: "already_tracked",
-        eventId: order.purchaseEventId,
-      };
-    }
-
-    // ── Derive event_id from the order itself. Deterministic. ──
-    // Do NOT use Date.now() here: the same order MUST produce the same
-    // event_id across retries. Order _id is a Mongo ObjectId — unique.
+    const OrderModel = order.constructor;
     const eventId = `purchase_${order._id.toString()}`;
 
-    // ── Persist FIRST so a concurrent request sees it. ──
-    // findByIdAndUpdate with a filter ensures only one writer wins.
-    const claimed = await order.constructor.findOneAndUpdate(
-      { _id: order._id, purchaseEventId: null },
-      { $set: { purchaseEventId: eventId, purchaseTrackedAt: new Date() } },
+    // ── Terminal state: already successfully sent. Do not re-send. ──
+    if (
+      order.purchaseEventStatus === "sent" &&
+      order.purchaseEventId === eventId
+    ) {
+      return { fired: false, reason: "already_sent", eventId };
+    }
+
+    // ── Atomic claim: only ONE caller transitions null|failed → pending. ──
+    // Accept claims from {null, "failed"} AND from "pending" if the last
+    // attempt is stale (> 5 minutes old) — otherwise a crashed process
+    // could wedge the event forever.
+    const STALE_MS = 5 * 60 * 1000;
+    const staleThreshold = new Date(Date.now() - STALE_MS);
+
+    const claimed = await OrderModel.findOneAndUpdate(
+      {
+        _id: order._id,
+        $or: [
+          { purchaseEventStatus: null },
+          { purchaseEventStatus: "failed" },
+          {
+            purchaseEventStatus: "pending",
+            purchaseTrackedAt: { $lt: staleThreshold },
+          },
+        ],
+      },
+      {
+        $set: {
+          purchaseEventId: eventId,
+          purchaseEventStatus: "pending",
+          purchaseTrackedAt: new Date(),
+          purchaseTrackingError: null,
+        },
+      },
       { new: true },
     );
 
     if (!claimed) {
-      // Another concurrent call already claimed it. Do not double-fire.
-      const fresh = await order.constructor
-        .findById(order._id)
-        .select("purchaseEventId");
+      // Another concurrent request already holds the claim, or the event
+      // has already been sent successfully.
+      const fresh = await OrderModel.findById(order._id).select(
+        "purchaseEventStatus purchaseEventId",
+      );
       return {
         fired: false,
-        reason: "race_already_claimed",
+        reason:
+          fresh?.purchaseEventStatus === "sent"
+            ? "already_sent"
+            : "race_already_claimed",
         eventId: fresh?.purchaseEventId || eventId,
       };
     }
@@ -86,7 +113,15 @@ export const firePurchaseEvent = async (order, req = null) => {
       .filter(Boolean);
 
     if (contents.length === 0) {
-      // Nothing valid to send. Do NOT send NaN / undefined to Meta.
+      await OrderModel.updateOne(
+        { _id: order._id },
+        {
+          $set: {
+            purchaseEventStatus: "failed",
+            purchaseTrackingError: "no_valid_contents",
+          },
+        },
+      );
       console.warn(
         `[CAPI] Purchase skipped — no valid contents for order ${claimed.orderNumber || claimed._id}`,
       );
@@ -95,6 +130,15 @@ export const firePurchaseEvent = async (order, req = null) => {
 
     const total = Number(claimed.total);
     if (!Number.isFinite(total) || total < 0) {
+      await OrderModel.updateOne(
+        { _id: order._id },
+        {
+          $set: {
+            purchaseEventStatus: "failed",
+            purchaseTrackingError: "invalid_total",
+          },
+        },
+      );
       console.warn(
         `[CAPI] Purchase skipped — invalid total for order ${claimed.orderNumber || claimed._id}`,
       );
@@ -120,8 +164,6 @@ export const firePurchaseEvent = async (order, req = null) => {
       zip: shipping.pincode || null,
       country: "IN",
       externalId: user?._id?.toString() || null,
-
-      // Attribution — from request if available, else null.
       fbc: req?.cookies?._fbc || req?.body?.fbc || null,
       fbp: req?.cookies?._fbp || req?.body?.fbp || null,
       clientIpAddress:
@@ -141,7 +183,7 @@ export const firePurchaseEvent = async (order, req = null) => {
       order_id: claimed.orderNumber || String(claimed._id),
     };
 
-    // ── Fire once. If this throws, metaCapi swallows it. ──
+    // ── Send to Meta. Result decides terminal state. ──
     console.log(
       `[CAPI] Firing Purchase | order=${claimed.orderNumber || claimed._id} | eventId=${eventId} | value=${total}`,
     );
@@ -156,14 +198,60 @@ export const firePurchaseEvent = async (order, req = null) => {
         : undefined,
     });
 
+    if (result?.success) {
+      await OrderModel.updateOne(
+        { _id: order._id },
+        {
+          $set: {
+            purchaseEventStatus: "sent",
+            purchaseTrackedAt: new Date(),
+            purchaseTrackingError: null,
+          },
+        },
+      );
+      return { fired: true, eventId, meta: result };
+    }
+
+    // ── Meta rejected or errored → mark retryable. ──
+    await OrderModel.updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          purchaseEventStatus: "failed",
+          purchaseTrackedAt: new Date(),
+          purchaseTrackingError:
+            result?.reason || result?.error?.message || "meta_rejected",
+        },
+      },
+    );
+    console.warn(
+      `[CAPI] Purchase not confirmed | order=${claimed.orderNumber || claimed._id} | reason=${result?.reason || "unknown"}`,
+    );
     return {
-      fired: true,
+      fired: false,
+      reason: result?.reason || "meta_rejected",
       eventId,
       meta: result,
     };
   } catch (err) {
     // ABSOLUTELY MUST NOT bubble up. Tracking is secondary.
     console.error("[CAPI] Purchase fire error (non-fatal):", err.message);
+    // Best-effort: leave the state retryable. If the failure happened
+    // before the claim write, the doc is still in its previous state.
+    try {
+      const OrderModel = order?.constructor;
+      if (OrderModel && order?._id) {
+        await OrderModel.updateOne(
+          { _id: order._id, purchaseEventStatus: { $ne: "sent" } },
+          {
+            $set: {
+              purchaseEventStatus: "failed",
+              purchaseTrackingError: err.message?.slice(0, 200) || "exception",
+            },
+          },
+        );
+      }
+    } catch {}
     return { fired: false, reason: "exception", error: err.message };
   }
 };

@@ -225,13 +225,12 @@ const Dashboard = () => {
   const [chartView, setChartView] = useState("revenue");
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // Get date range
   const { startDate, endDate, label } = useMemo(
     () => getDateRange(dateRange),
     [dateRange],
   );
 
-  // Fetch all data
+  // ── Orders ──
   const {
     data: ordersData,
     isLoading: ordersLoading,
@@ -246,6 +245,7 @@ const Dashboard = () => {
     staleTime: 2 * 60 * 1000,
   });
 
+  // ── Products ──
   const {
     data: productsData,
     isLoading: productsLoading,
@@ -262,6 +262,7 @@ const Dashboard = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // ── Users ──
   const {
     data: usersData,
     isLoading: usersLoading,
@@ -275,44 +276,56 @@ const Dashboard = () => {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
-    queryKey: ["admin-analytics-dashboard", dateRange],
-    queryFn: async () => {
-      const { from, to } = (() => {
-        const now = new Date();
-        const start = (() => {
-          switch (dateRange) {
-            case "today":
-              return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            case "7d":
-              return new Date(now.getTime() - 7 * 86400000);
-            case "30d":
-              return new Date(now.getTime() - 30 * 86400000);
-            case "90d":
-              return new Date(now.getTime() - 90 * 86400000);
-            case "180d":
-              return new Date(now.getTime() - 180 * 86400000);
-            case "365d":
-              return new Date(now.getTime() - 365 * 86400000);
-            default:
-              return new Date(now.getTime() - 30 * 86400000);
-          }
-        })();
-        return { from: start.toISOString(), to: now.toISOString() };
-      })();
 
+  // ── Analytics (visitors, wishlist, cart) ──
+  // Stabilize date range strings so the query key never changes needlessly.
+  const analyticsFromIso = useMemo(() => startDate.toISOString(), [startDate]);
+  const analyticsToIso = useMemo(() => endDate.toISOString(), [endDate]);
+
+  const {
+    data: analyticsData,
+    isLoading: analyticsLoading,
+    isError: analyticsError,
+    refetch: refetchAnalytics,
+  } = useQuery({
+    queryKey: ["admin-analytics-dashboard", analyticsFromIso, analyticsToIso],
+    queryFn: async () => {
       const { data } = await axios.get(
-        `${API_URL}/analytics/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        `${API_URL}/analytics/dashboard?from=${encodeURIComponent(
+          analyticsFromIso,
+        )}&to=${encodeURIComponent(analyticsToIso)}`,
       );
       return data;
     },
     staleTime: 2 * 60 * 1000,
   });
+
+  // Defensive extraction — never crash on unexpected shape.
+  const analytics = useMemo(() => {
+    const d = analyticsData?.data;
+    if (!d || typeof d !== "object") return null;
+    return {
+      totalVisitors: Number(d.totalVisitors) || 0,
+      purchasedUsers: Number(d.purchasedUsers) || 0,
+      wishlistAdds: Number(d.wishlistAdds) || 0,
+      cartAdds: Number(d.cartAdds) || 0,
+      mostWishlisted: d.mostWishlisted || null,
+      mostAddedToCart: d.mostAddedToCart || null,
+      mostAddedToCartQty: d.mostAddedToCartQty || null,
+      historicalDataAvailable: !!d.historicalDataAvailable,
+    };
+  }, [analyticsData]);
+
   const isLoading = ordersLoading || productsLoading || usersLoading;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([refetchOrders(), refetchProducts(), refetchUsers()]);
+    await Promise.all([
+      refetchOrders(),
+      refetchProducts(),
+      refetchUsers(),
+      refetchAnalytics(),
+    ]);
     setLastUpdated(new Date());
     setIsRefreshing(false);
   };
@@ -324,7 +337,6 @@ const Dashboard = () => {
   const products = useMemo(() => productsData?.products || [], [productsData]);
   const users = useMemo(() => usersData?.users || [], [usersData]);
 
-  // Filter orders by date range
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (!order.createdAt) return false;
@@ -332,7 +344,6 @@ const Dashboard = () => {
     });
   }, [orders, startDate, endDate]);
 
-  // Previous period orders for comparison
   const { prevStart, prevEnd } = useMemo(
     () => getPreviousPeriod(startDate, endDate),
     [startDate, endDate],
@@ -348,7 +359,6 @@ const Dashboard = () => {
   // KPI CALCULATIONS
   // ============================================
   const kpis = useMemo(() => {
-    // Current period
     const currentTotalRevenue = filteredOrders
       .filter(
         (o) => o.orderStatus !== "cancelled" && o.paymentStatus !== "refunded",
@@ -375,7 +385,6 @@ const Dashboard = () => {
     const currentAOV =
       currentTotalOrders > 0 ? currentTotalRevenue / currentTotalOrders : 0;
 
-    // Previous period
     const previousTotalRevenue = previousOrders
       .filter(
         (o) => o.orderStatus !== "cancelled" && o.paymentStatus !== "refunded",
@@ -392,7 +401,6 @@ const Dashboard = () => {
     const previousAOV =
       previousTotalOrders > 0 ? previousTotalRevenue / previousTotalOrders : 0;
 
-    // New vs Returning Customers
     const customerOrders = {};
     filteredOrders.forEach((order) => {
       const userId = order.user?._id || order.user;
@@ -418,7 +426,6 @@ const Dashboard = () => {
     const avgOrdersPerCustomer =
       totalCustomers > 0 ? filteredOrders.length / totalCustomers : 0;
 
-    // Percentage changes
     const revenueChange = calculatePercentageChange(
       currentTotalRevenue,
       previousTotalRevenue,
@@ -504,9 +511,6 @@ const Dashboard = () => {
     return sorted;
   }, [filteredOrders]);
 
-  // ============================================
-  // ORDER STATUS DATA
-  // ============================================
   const orderStatusData = useMemo(() => {
     const statuses = {};
     const statusColors = {
@@ -539,9 +543,6 @@ const Dashboard = () => {
     return sorted;
   }, [filteredOrders]);
 
-  // ============================================
-  // TOP PRODUCTS
-  // ============================================
   const topProducts = useMemo(() => {
     const productSales = {};
 
@@ -573,9 +574,6 @@ const Dashboard = () => {
       .slice(0, 10);
   }, [filteredOrders, products]);
 
-  // ============================================
-  // CATEGORY PERFORMANCE
-  // ============================================
   const categoryPerformance = useMemo(() => {
     const categories = {};
 
@@ -619,9 +617,6 @@ const Dashboard = () => {
       .slice(0, 10);
   }, [filteredOrders, products]);
 
-  // ============================================
-  // BRAND PERFORMANCE
-  // ============================================
   const brandPerformance = useMemo(() => {
     const brands = {};
 
@@ -648,9 +643,6 @@ const Dashboard = () => {
       .slice(0, 10);
   }, [filteredOrders, products]);
 
-  // ============================================
-  // PAYMENT METHOD BREAKDOWN
-  // ============================================
   const paymentBreakdown = useMemo(() => {
     const methods = {};
 
@@ -678,9 +670,6 @@ const Dashboard = () => {
     return Object.values(methods).sort((a, b) => b.revenue - a.revenue);
   }, [filteredOrders]);
 
-  // ============================================
-  // INVENTORY ALERTS
-  // ============================================
   const inventoryAlerts = useMemo(() => {
     const outOfStock = products.filter(
       (p) => (p.stock || 0) <= 0 && p.isActive !== false,
@@ -730,20 +719,32 @@ const Dashboard = () => {
     icon,
     subtitle = "",
     formatter = formatNumber,
+    loading = false,
+    errored = false,
   ) => (
     <div className="bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition">
       <div className="flex items-start justify-between">
         <div className="space-y-1 flex-1 min-w-0">
           <p className="text-sm font-medium text-text-light">{label}</p>
-          <p className="text-2xl md:text-3xl font-bold text-text">
-            {formatter(value)}
-          </p>
+          {loading ? (
+            <div className="h-8 w-24 bg-gray-200 rounded animate-pulse" />
+          ) : errored ? (
+            <p className="text-2xl md:text-3xl font-bold text-gray-300">—</p>
+          ) : (
+            <p className="text-2xl md:text-3xl font-bold text-text">
+              {formatter(value)}
+            </p>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
-            {change !== undefined &&
+            {!loading &&
+              !errored &&
+              change !== undefined &&
               change !== null &&
               renderChangeIndicator(change)}
             {subtitle && (
-              <span className="text-xs text-text-light">{subtitle}</span>
+              <span className="text-xs text-text-light">
+                {errored ? "Failed to load" : subtitle}
+              </span>
             )}
           </div>
         </div>
@@ -784,9 +785,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* ==========================================
-          HEADER
-          ========================================== */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text">Dashboard</h1>
@@ -823,9 +822,57 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          KPI CARDS
-          ========================================== */}
+      {/* VISITOR & ENGAGEMENT ANALYTICS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {renderKPI(
+          "Total Visitors",
+          analytics?.totalVisitors || 0,
+          null,
+          <UsersIcon className="w-5 h-5" />,
+          analyticsLoading
+            ? "Loading…"
+            : analyticsError
+              ? "Failed to load"
+              : analytics?.totalVisitors === 0
+                ? "Tracking starts after this deploy"
+                : "Unique sessions in range",
+          formatNumber,
+          analyticsLoading,
+          analyticsError,
+        )}
+        {renderKPI(
+          "Purchased Users",
+          analytics?.purchasedUsers || 0,
+          null,
+          <ShoppingCartIcon className="w-5 h-5" />,
+          analyticsError ? "Failed to load" : "Distinct confirmed buyers",
+          formatNumber,
+          analyticsLoading,
+          analyticsError,
+        )}
+        {renderKPI(
+          "Wishlist Adds",
+          analytics?.wishlistAdds || 0,
+          null,
+          <HeartIcon className="w-5 h-5" />,
+          analyticsError ? "Failed to load" : "Add-to-wishlist actions",
+          formatNumber,
+          analyticsLoading,
+          analyticsError,
+        )}
+        {renderKPI(
+          "Cart Adds",
+          analytics?.cartAdds || 0,
+          null,
+          <ShoppingBagIcon className="w-5 h-5" />,
+          analyticsError ? "Failed to load" : "Add-to-cart actions",
+          formatNumber,
+          analyticsLoading,
+          analyticsError,
+        )}
+      </div>
+
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {renderKPI(
           "Revenue",
@@ -885,9 +932,97 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* ==========================================
-          MAIN CHART
-          ========================================== */}
+      {/* MOST WISHLISTED + MOST ADDED TO CART */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-text">
+              Most Added to Wishlist
+            </h2>
+            <div className="flex items-center gap-2 text-xs text-text-light">
+              <HeartIcon className="w-3 h-3 text-red-400" />
+              <span>Top product in range</span>
+            </div>
+          </div>
+          {analyticsLoading ? (
+            <div className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+          ) : analyticsError ? (
+            <div className="h-20 flex items-center justify-center text-text-light text-sm">
+              Failed to load analytics
+            </div>
+          ) : analytics?.mostWishlisted ? (
+            <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+              {analytics.mostWishlisted.image && (
+                <img
+                  src={analytics.mostWishlisted.image}
+                  alt=""
+                  className="w-14 h-14 rounded object-cover"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {analytics.mostWishlisted.name || "—"}
+                </p>
+                <p className="text-xs text-text-light">
+                  {analytics.mostWishlisted.count} wishlist addition
+                  {analytics.mostWishlisted.count === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-20 flex items-center justify-center text-text-light text-sm">
+              No wishlist activity in this range
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-text">
+              Most Added to Cart
+            </h2>
+            <div className="flex items-center gap-2 text-xs text-text-light">
+              <ShoppingBagIcon className="w-3 h-3 text-primary" />
+              <span>By add-to-cart actions</span>
+            </div>
+          </div>
+          {analyticsLoading ? (
+            <div className="h-20 bg-gray-100 rounded-lg animate-pulse" />
+          ) : analyticsError ? (
+            <div className="h-20 flex items-center justify-center text-text-light text-sm">
+              Failed to load analytics
+            </div>
+          ) : analytics?.mostAddedToCart ? (
+            <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+              {analytics.mostAddedToCart.image && (
+                <img
+                  src={analytics.mostAddedToCart.image}
+                  alt=""
+                  className="w-14 h-14 rounded object-cover"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">
+                  {analytics.mostAddedToCart.name || "—"}
+                </p>
+                <p className="text-xs text-text-light">
+                  {analytics.mostAddedToCart.count} add-to-cart action
+                  {analytics.mostAddedToCart.count === 1 ? "" : "s"}
+                  {analytics?.mostAddedToCartQty?.quantity
+                    ? ` · ${analytics.mostAddedToCartQty.quantity} units total`
+                    : ""}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-20 flex items-center justify-center text-text-light text-sm">
+              No cart activity in this range
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* MAIN CHART */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
@@ -1014,11 +1149,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          TWO COLUMN: ORDER STATUS + PAYMENT BREAKDOWN
-          ========================================== */}
+      {/* TWO COLUMN: ORDER STATUS + PAYMENT BREAKDOWN */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Order Status */}
         <div className="bg-white rounded-xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-text mb-4">Order Status</h2>
           {orderStatusData.length === 0 ? (
@@ -1073,7 +1205,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Payment Method Breakdown */}
         <div className="bg-white rounded-xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-text mb-4">
             Payment Methods
@@ -1108,9 +1239,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          SALES BREAKDOWN
-          ========================================== */}
+      {/* SALES BREAKDOWN */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-text mb-4">
           Sales Breakdown
@@ -1152,9 +1281,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          CATEGORY + BRAND PERFORMANCE
-          ========================================== */}
+      {/* CATEGORY + BRAND PERFORMANCE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-text mb-4">
@@ -1222,9 +1349,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          CUSTOMER ANALYTICS
-          ========================================== */}
+      {/* CUSTOMER ANALYTICS */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-text mb-4">
           Customer Analytics
@@ -1272,9 +1397,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          INVENTORY ALERTS
-          ========================================== */}
+      {/* INVENTORY ALERTS */}
       <div className="bg-white rounded-xl border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-text">Inventory Alerts</h2>
@@ -1321,95 +1444,66 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ==========================================
-          TOP PRODUCTS + WISHLIST
-          ========================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Products */}
-        <div className="bg-white rounded-xl border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text">
-              Top Selling Products
-            </h2>
-            <Link
-              to="/admin/products"
-              className="text-sm text-primary hover:underline"
-            >
-              View All →
-            </Link>
-          </div>
-          {topProducts.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-text-light">
-              No product sales
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {topProducts.slice(0, 5).map((product) => (
-                <div
-                  key={product.productId}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                >
-                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
-                    {product.image ? (
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                        No img
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-text-light">
-                      {formatNumber(product.quantity)} units
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold">
-                      {formatIndianCurrency(product.revenue)}
-                    </p>
-                    <p className="text-xs text-text-light">
-                      {product.stock > 0
-                        ? `${product.stock} in stock`
-                        : "Out of stock"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* TOP PRODUCTS */}
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-text">
+            Top Selling Products
+          </h2>
+          <Link
+            to="/admin/products"
+            className="text-sm text-primary hover:underline"
+          >
+            View All →
+          </Link>
         </div>
-
-        {/* Wishlist Analytics */}
-        <div className="bg-white rounded-xl border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-text">
-              Most Added to Wishlist
-            </h2>
-            <div className="flex items-center gap-2 text-xs text-text-light">
-              <HeartIcon className="w-3 h-3 text-red-400" />
-              <span>Wishlist data available</span>
-            </div>
-          </div>
+        {topProducts.length === 0 ? (
           <div className="h-48 flex items-center justify-center text-text-light">
-            <div className="text-center">
-              <HeartIcon className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-              <p>Wishlist analytics coming soon</p>
-              <p className="text-xs mt-1">Requires backend aggregation</p>
-            </div>
+            No product sales
           </div>
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {topProducts.slice(0, 5).map((product) => (
+              <div
+                key={product.productId}
+                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+              >
+                <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+                  {product.image ? (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                      No img
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{product.name}</p>
+                  <p className="text-xs text-text-light">
+                    {formatNumber(product.quantity)} units
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold">
+                    {formatIndianCurrency(product.revenue)}
+                  </p>
+                  <p className="text-xs text-text-light">
+                    {product.stock > 0
+                      ? `${product.stock} in stock`
+                      : "Out of stock"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ==========================================
-          RECENT ORDERS
-          ========================================== */}
+      {/* RECENT ORDERS */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-text">Recent Orders</h2>
@@ -1517,9 +1611,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* ==========================================
-          RECENT USERS + RECENT PRODUCTS
-          ========================================== */}
+      {/* RECENT USERS + RECENT PRODUCTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex items-center justify-between">

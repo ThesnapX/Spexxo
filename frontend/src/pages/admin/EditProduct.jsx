@@ -60,6 +60,7 @@ const EditProduct = () => {
     stock: "10",
     isFeatured: false,
     isTrending: false,
+    isBestSeller: false,
     sku: "",
   });
 
@@ -159,10 +160,8 @@ const EditProduct = () => {
         }
       }
 
-      // Set variants from product data
       if (productData.variants && Array.isArray(productData.variants)) {
         setVariants(productData.variants);
-        // Find default variant
         const defaultVariant = productData.variants.find(
           (v) => v.isDefault === true,
         );
@@ -219,6 +218,7 @@ const EditProduct = () => {
             : "10",
         isFeatured: productData.isFeatured || false,
         isTrending: productData.isTrending || false,
+        isBestSeller: productData.isBestSeller || false,
         sku: productData.sku || "",
       });
       setExistingImages(productData.images || []);
@@ -230,7 +230,6 @@ const EditProduct = () => {
   const handleAddVariant = (variantData) => {
     const newVariants = [...variants, variantData];
     setVariants(newVariants);
-    // If this is the first variant, set it as default
     if (newVariants.length === 1) {
       setDefaultVariantId(variantData._id || variantData.id || 0);
     }
@@ -256,12 +255,10 @@ const EditProduct = () => {
     if (window.confirm("Delete this variant?")) {
       const updatedVariants = variants.filter((_, i) => i !== index);
       setVariants(updatedVariants);
-      // If we deleted the default variant, set the first one as default
       if (updatedVariants.length > 0) {
         const firstVariantId =
           updatedVariants[0]._id || updatedVariants[0].id || 0;
         setDefaultVariantId(firstVariantId);
-        // Mark the first variant as default
         updatedVariants[0].isDefault = true;
       } else {
         setDefaultVariantId(null);
@@ -279,7 +276,6 @@ const EditProduct = () => {
     setShowVariantForm(true);
   };
 
-  // ✅ Set default variant handler
   const handleSetDefaultVariant = (variantId) => {
     const updatedVariants = variants.map((v) => ({
       ...v,
@@ -301,9 +297,6 @@ const EditProduct = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-products"] });
       queryClient.invalidateQueries({ queryKey: ["admin-product-detail", id] });
-      queryClient.invalidateQueries({
-        queryKey: ["product", productData?.slug],
-      });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["mega-menu-products"] });
       queryClient.invalidateQueries({ queryKey: ["smart-related"] });
@@ -359,7 +352,6 @@ const EditProduct = () => {
         newErrors.stock = "Stock cannot be negative";
       }
     } else {
-      // Variable products - validate variants
       if (variants.length === 0) {
         newErrors.variants = "At least one variant is required";
       }
@@ -395,7 +387,6 @@ const EditProduct = () => {
     }
     setUploading(true);
 
-    // Upload new images - ONLY for simple products
     let allImages = [...existingImages];
     if (productType === "simple" && imageFiles.length > 0) {
       const fd = new FormData();
@@ -415,7 +406,6 @@ const EditProduct = () => {
       }
     }
 
-    // Build specifications
     const specs = [];
     if (form.frameWidth)
       specs.push({ name: "Frame Width", value: `${form.frameWidth} mm` });
@@ -427,7 +417,6 @@ const EditProduct = () => {
     if (form.temple)
       specs.push({ name: "Temple Length", value: `${form.temple} mm` });
 
-    // Clean variants if variable product
     let cleanedVariants = undefined;
     if (productType === "variable" && variants.length > 0) {
       cleanedVariants = variants.map((variant) => ({
@@ -471,13 +460,14 @@ const EditProduct = () => {
           ? Number(form.discountedPrice)
           : undefined,
       stock: productType === "simple" ? Number(form.stock) : undefined,
-      images: productType === "simple" ? allImages : [], // ✅ Empty images array for variant products
+      images: productType === "simple" ? allImages : [],
       variants: cleanedVariants,
       brand: form.brand || null,
       category: form.category || null,
       productType: productType,
       productCategory: form.productCategory,
       specifications: specs.length > 0 ? specs : undefined,
+      isBestSeller: !!form.isBestSeller,
     };
     delete pd.discountedPrice;
 
@@ -493,7 +483,6 @@ const EditProduct = () => {
     }`;
   };
 
-  // Loading state
   if (productLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -503,7 +492,6 @@ const EditProduct = () => {
     );
   }
 
-  // Not found state
   if (!productData) {
     return (
       <div className="text-center py-20">
@@ -518,7 +506,6 @@ const EditProduct = () => {
     );
   }
 
-  // Main render
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -907,7 +894,7 @@ const EditProduct = () => {
                 </div>
               </div>
 
-              {/* ✅ Images - Only for Simple Products */}
+              {/* Images - Only for Simple Products */}
               <div>
                 <label className="block text-sm font-medium mb-2">Images</label>
                 <div className="flex flex-wrap gap-3 mb-3">
@@ -981,7 +968,7 @@ const EditProduct = () => {
                 </button>
               </div>
 
-              {/* ✅ Default Variant Dropdown */}
+              {/* Default Variant Dropdown */}
               {variants.length > 0 && (
                 <div className="bg-white p-3 rounded-lg border border-gray-200 mb-4">
                   <label className="text-sm font-medium text-text block mb-2">
@@ -1108,14 +1095,15 @@ const EditProduct = () => {
               Product Flags
             </label>
             <p className="text-xs text-text-light mb-3">
-              🏷️ Flags control homepage sections: Featured=Flash Sales,
-              Trending=Customer Loved. New Arrivals and Best Sellers are
-              automatically determined based on product age and sales.
+              🏷️ Flags control homepage sections. Featured=Flash Sales,
+              Trending=Customer Loved, Best Seller=Best Sellers section. New
+              Arrivals is determined automatically from product age.
             </p>
             <div className="flex flex-wrap gap-4">
               {[
                 { k: "isFeatured", l: "⭐ Featured" },
                 { k: "isTrending", l: "🔥 Trending" },
+                { k: "isBestSeller", l: "🏆 Best Seller" },
               ].map((f) => (
                 <label
                   key={f.k}
@@ -1123,7 +1111,7 @@ const EditProduct = () => {
                 >
                   <input
                     type="checkbox"
-                    checked={form[f.k]}
+                    checked={!!form[f.k]}
                     onChange={(e) => handleChange(f.k, e.target.checked)}
                     className="w-4 h-4 text-[#3D96EB] rounded"
                   />

@@ -453,22 +453,30 @@ textarea {
 .product-carousel .swiper-button-prev {
   display: none !important;
 }
-
 /* ============================================ */
 /* CUSTOM TOAST WITH REAL CLOSE BUTTON           */
 /* ============================================ */
 
-/* Outer container must NOT block clicks anywhere. */
-.custom-toast-container {
+/* react-hot-toast's outer container must NOT block clicks. */
+[data-rht-toaster] {
   pointer-events: none !important;
 }
 
-/* Only the visible toast itself accepts pointer events. */
-.custom-toast-container > div {
-  pointer-events: auto !important;
+/* Any direct wrapper divs inside the toaster also must not block clicks.
+   react-hot-toast stacks toasts inside a flex container that can span
+   the full viewport width — this is the actual click-blocker. */
+[data-rht-toaster] > div {
+  pointer-events: none !important;
 }
 
+/* ToastBar's injected inner wrapper — keep transparent. */
+[data-rht-toaster] > div > div {
+  pointer-events: none !important;
+}
+
+/* The visible toast itself — this is where clicks are allowed. */
 .custom-toast-wrapper {
+  pointer-events: auto !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -481,7 +489,6 @@ textarea {
   max-width: 420px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
   position: relative;
-  pointer-events: auto;
   font-family: var(--font-poppins);
   font-size: 14px;
   line-height: 1.5;
@@ -536,7 +543,7 @@ textarea {
   transition: all 0.2s ease;
   padding: 0;
   margin: 0;
-  pointer-events: all;
+  pointer-events: auto !important;
   position: relative;
   z-index: 10;
 }
@@ -547,20 +554,6 @@ textarea {
 }
 .toast-close-btn:active {
   transform: scale(0.9);
-}
-.toast-close-btn:focus-visible {
-  outline: 2px solid #3d96ea;
-  outline-offset: 2px;
-}
-
-.close-icon {
-  font-size: 20px;
-  font-weight: 300;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
 }
 
 .custom-toast-wrapper {
@@ -578,10 +571,6 @@ textarea {
   }
 }
 
-.custom-toast-wrapper.dismissing {
-  animation: toastSlideOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
 @keyframes toastSlideOut {
   from {
     opacity: 1;
@@ -593,15 +582,7 @@ textarea {
   }
 }
 
-/* react-hot-toast injects a wrapper with inline styles.
-   Force the wrapper container to remain transparent to clicks. */
-[data-rht-toaster] {
-  pointer-events: none !important;
-}
-[data-rht-toaster] > div {
-  pointer-events: auto !important;
-}
-
+/* Mobile sizing */
 @media (max-width: 480px) {
   .custom-toast-wrapper {
     min-width: auto;
@@ -622,15 +603,7 @@ textarea {
     min-width: 28px;
     min-height: 28px;
   }
-  .close-icon {
-    font-size: 18px;
-  }
 }
-
-.custom-toast-container > div + div {
-  margin-top: 8px;
-}
-
 /* ============================================ */
 /* Accessibility & Utility                       */
 /* ============================================ */

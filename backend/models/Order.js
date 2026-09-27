@@ -159,8 +159,19 @@ const orderSchema = new mongoose.Schema(
     codAmount: { type: Number },
 
     // Meta Purchase idempotency
-    purchaseEventId: { type: String, default: null },
+    // Meta Purchase idempotency + retry-safe state machine.
+    //   purchaseEventId     — deterministic, stable across retries
+    //   purchaseEventStatus — "pending" | "sent" | "failed"
+    //   purchaseTrackedAt   — last attempt timestamp (success or failure)
+    //   purchaseTrackingError — last failure message (if any)
+    purchaseEventId: { type: String, default: null, index: true },
+    purchaseEventStatus: {
+      type: String,
+      enum: ["pending", "sent", "failed", null],
+      default: null,
+    },
     purchaseTrackedAt: { type: Date, default: null },
+    purchaseTrackingError: { type: String, default: null },
 
     codAdvance: { type: Number, default: 0 },
     amountToPay: { type: Number },

@@ -13,9 +13,7 @@ const isFiniteNonNegative = (v) => {
 
 const stockValidator = {
   validator: (v) => {
-    // Allow only finite, non-negative numbers.
-    // Explicitly reject NaN, Infinity, "", null, undefined, non-numeric strings.
-    if (v === null || v === undefined) return true; // default handles it
+    if (v === null || v === undefined) return true;
     if (typeof v === "string" && v.trim() === "") return false;
     return isFiniteNonNegative(v);
   },
@@ -91,7 +89,6 @@ const productSchema = new mongoose.Schema(
     lensMaterial: { type: String },
     size: { type: String },
 
-    // ✅ Defensive stock validator
     stock: {
       type: Number,
       default: 0,
@@ -113,9 +110,6 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    // ─────────────────────────────────────────────
-    // VARIANTS
-    // ─────────────────────────────────────────────
     variants: [
       {
         name: { type: String, required: true },
@@ -123,7 +117,6 @@ const productSchema = new mongoose.Schema(
         price: { type: Number, required: true, default: 0, min: 0 },
         comparePrice: { type: Number, default: 0, min: 0 },
 
-        // ✅ Defensive stock validator on variant
         stock: {
           type: Number,
           default: 0,
@@ -165,6 +158,11 @@ const productSchema = new mongoose.Schema(
     isFeatured: { type: Boolean, default: false },
     isTrending: { type: Boolean, default: false },
 
+    // ✅ PERSISTED FIELD — was a virtual returning `false` before.
+    // Admin sets this explicitly, or it can be auto-maintained by
+    // a future job based on order sales.
+    isBestSeller: { type: Boolean, default: false, index: true },
+
     specifications: [
       {
         name: String,
@@ -191,16 +189,14 @@ const productSchema = new mongoose.Schema(
   },
 );
 
-// ✅ DYNAMIC VIRTUALS
+// ✅ Keep isNewArrival virtual (computed from createdAt — does not need persistence).
 productSchema.virtual("isNewArrival").get(function () {
   const daysSinceCreation =
     (Date.now() - new Date(this.createdAt).getTime()) / (1000 * 60 * 60 * 24);
   return daysSinceCreation <= 30;
 });
 
-productSchema.virtual("isBestSeller").get(function () {
-  return false;
-});
+// ✅ REMOVED: virtual isBestSeller — it is now a real persisted field.
 
 // ─────────────────────────────────────────────
 // Pre-save: slug + defensive stock normalization
@@ -217,11 +213,6 @@ productSchema.pre("save", function (next) {
     this.productCategory = this.productTypeOld;
   }
 
-  // ─────────────────────────────────────────────
-  // ✅ Defensive normalization.
-  // Never silently coerce NaN/undefined/invalid to 0 — that would hide
-  // a real bug. Instead, throw so the caller sees the exact cause.
-  // ─────────────────────────────────────────────
   const normalizeStock = (raw, label) => {
     if (raw === null || raw === undefined || raw === "") return 0;
     const n = Number(raw);
@@ -244,7 +235,6 @@ productSchema.pre("save", function (next) {
       );
     });
 
-    // Backfill product images from the first variant if the parent has none.
     if (
       (!this.images || this.images.length === 0) &&
       this.variants[0].images &&
@@ -257,7 +247,6 @@ productSchema.pre("save", function (next) {
       }));
     }
 
-    // Aggregate stock from variants.
     let totalStock = 0;
     this.variants.forEach((v) => {
       const s = Number(v.stock);
@@ -270,9 +259,6 @@ productSchema.pre("save", function (next) {
 
   if (this.stock < 0) this.stock = 0;
 
-  // ─────────────────────────────────────────────
-  // Guard all other numeric fields.
-  // ─────────────────────────────────────────────
   const finiteOrZero = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -284,7 +270,6 @@ productSchema.pre("save", function (next) {
   next();
 });
 
-// ✅ Atomic productId generation — race-safe
 productSchema.pre("save", async function (next) {
   if (this.isNew && !this.productId) {
     try {

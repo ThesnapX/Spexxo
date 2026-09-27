@@ -21,7 +21,10 @@ import { SITE_URL } from "../config/siteUrl";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
 import toast from "react-hot-toast";
-
+import {
+  getProductPrice,
+  getProductImage as getProductImageHelper,
+} from "../utils/productHelpers";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // ============================================
@@ -423,7 +426,7 @@ const ProductCard = ({
       product.stock === undefined
     : allVariantsOutOfStock;
 
-  const productImage = getProductImage();
+  const productImage = getProductImageHelper(product);
 
   return (
     <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
@@ -648,48 +651,52 @@ const Shop = () => {
     }
   }, [maxPrice]);
 
+  // const getDisplayPrice = useCallback((product) => {
+  //   let displayPrice = product.price || 0;
+  //   let originalPrice = product.price || 0;
+  //   let hasDiscount = false;
+  //   let discountPercent = 0;
+
+  //   if (product.variants && product.variants.length > 0) {
+  //     const variantPrices = product.variants.map((v) => v.price || 0);
+  //     const variantComparePrices = product.variants.map(
+  //       (v) => v.comparePrice || 0,
+  //     );
+  //     const minPrice = Math.min(...variantPrices);
+  //     const minCompare = Math.min(...variantComparePrices);
+
+  //     if (minCompare > 0 && minCompare < minPrice) {
+  //       displayPrice = minCompare;
+  //       originalPrice = minPrice;
+  //       hasDiscount = true;
+  //       discountPercent = Math.round(
+  //         ((minPrice - minCompare) / minPrice) * 100,
+  //       );
+  //     } else {
+  //       displayPrice = minPrice;
+  //       originalPrice = minPrice;
+  //     }
+  //   } else {
+  //     if (product.comparePrice && product.comparePrice < product.price) {
+  //       displayPrice = product.comparePrice;
+  //       originalPrice = product.price;
+  //       hasDiscount = true;
+  //       discountPercent = Math.round(
+  //         ((product.price - product.comparePrice) / product.price) * 100,
+  //       );
+  //     } else {
+  //       displayPrice = product.price || 0;
+  //       originalPrice = product.price || 0;
+  //     }
+  //   }
+
+  //   return { displayPrice, originalPrice, hasDiscount, discountPercent };
+  // }, []);
+
   const getDisplayPrice = useCallback((product) => {
-    let displayPrice = product.price || 0;
-    let originalPrice = product.price || 0;
-    let hasDiscount = false;
-    let discountPercent = 0;
-
-    if (product.variants && product.variants.length > 0) {
-      const variantPrices = product.variants.map((v) => v.price || 0);
-      const variantComparePrices = product.variants.map(
-        (v) => v.comparePrice || 0,
-      );
-      const minPrice = Math.min(...variantPrices);
-      const minCompare = Math.min(...variantComparePrices);
-
-      if (minCompare > 0 && minCompare < minPrice) {
-        displayPrice = minCompare;
-        originalPrice = minPrice;
-        hasDiscount = true;
-        discountPercent = Math.round(
-          ((minPrice - minCompare) / minPrice) * 100,
-        );
-      } else {
-        displayPrice = minPrice;
-        originalPrice = minPrice;
-      }
-    } else {
-      if (product.comparePrice && product.comparePrice < product.price) {
-        displayPrice = product.comparePrice;
-        originalPrice = product.price;
-        hasDiscount = true;
-        discountPercent = Math.round(
-          ((product.price - product.comparePrice) / product.price) * 100,
-        );
-      } else {
-        displayPrice = product.price || 0;
-        originalPrice = product.price || 0;
-      }
-    }
-
-    return { displayPrice, originalPrice, hasDiscount, discountPercent };
+    // Delegate to the canonical helper — single source of truth.
+    return getProductPrice(product);
   }, []);
-
   const getPageTitle = useCallback(() => {
     const parts = [];
 
