@@ -1,9 +1,12 @@
+// frontend/src/pages/Register.jsx
+
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -41,7 +44,6 @@ const Register = () => {
     username: "",
   });
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (emailTimeout.current) clearTimeout(emailTimeout.current);
@@ -50,7 +52,6 @@ const Register = () => {
     };
   }, []);
 
-  // Password strength calculation
   const getPasswordStrength = (password) => {
     if (!password) return { score: 0, label: "", color: "", barColor: "" };
     let score = 0;
@@ -84,7 +85,6 @@ const Register = () => {
 
   const passwordStrength = getPasswordStrength(form.password);
 
-  // Debounced email check
   const checkEmailExists = (email) => {
     if (emailTimeout.current) clearTimeout(emailTimeout.current);
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
@@ -109,7 +109,6 @@ const Register = () => {
     }, 500);
   };
 
-  // Debounced phone check
   const checkPhoneExists = (phone) => {
     if (phoneTimeout.current) clearTimeout(phoneTimeout.current);
     if (!phone || phone.length !== 10) {
@@ -134,7 +133,6 @@ const Register = () => {
     }, 500);
   };
 
-  // Debounced username check
   const checkUsernameAvailable = (username) => {
     if (usernameTimeout.current) clearTimeout(usernameTimeout.current);
     if (!username || username.length < 3) {
@@ -211,7 +209,6 @@ const Register = () => {
     if (field === "username") checkUsernameAvailable(value);
   };
 
-  // Tooltip Component
   const Tooltip = ({ text, children }) => {
     return (
       <span className="group relative inline-flex">
@@ -229,7 +226,7 @@ const Register = () => {
         title="Create Account | Spexxo"
         description="Create a Spexxo account to start shopping for premium eyewear with exclusive offers."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/register"
+        canonicalUrl={absoluteUrl("/register")}
         noIndex={true}
       />
       <div className="pt-28 pb-16">
@@ -246,7 +243,6 @@ const Register = () => {
             className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-4"
             noValidate
           >
-            {/* Name Fields */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -256,7 +252,11 @@ const Register = () => {
                   type="text"
                   value={form.firstName}
                   onChange={(e) => handleChange("firstName", e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-lg ${formErrors.firstName ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 border rounded-lg ${
+                    formErrors.firstName
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="John"
                 />
                 {formErrors.firstName && (
@@ -273,7 +273,11 @@ const Register = () => {
                   type="text"
                   value={form.lastName}
                   onChange={(e) => handleChange("lastName", e.target.value)}
-                  className={`w-full px-4 py-2.5 border rounded-lg ${formErrors.lastName ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 border rounded-lg ${
+                    formErrors.lastName
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="Doe"
                 />
                 {formErrors.lastName && (
@@ -284,7 +288,6 @@ const Register = () => {
               </div>
             </div>
 
-            {/* Username with tooltip */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Username{" "}
@@ -301,7 +304,13 @@ const Register = () => {
                     const v = e.target.value.replace(/[^a-zA-Z0-9_]/g, "");
                     handleChange("username", v);
                   }}
-                  className={`w-full pl-8 pr-10 py-2.5 border rounded-lg ${formErrors.username || usernameAvailable === false ? "border-red-300 bg-red-50" : usernameAvailable === true ? "border-green-300" : "border-gray-200"}`}
+                  className={`w-full pl-8 pr-10 py-2.5 border rounded-lg ${
+                    formErrors.username || usernameAvailable === false
+                      ? "border-red-300 bg-red-50"
+                      : usernameAvailable === true
+                        ? "border-green-300"
+                        : "border-gray-200"
+                  }`}
                   placeholder="your_username"
                 />
                 {checkingUsername && (
@@ -335,7 +344,6 @@ const Register = () => {
               )}
             </div>
 
-            {/* Email with tooltip */}
             <div>
               <label className="block text-sm font-medium mb-1">Email *</label>
               <div className="relative">
@@ -343,7 +351,11 @@ const Register = () => {
                   type="email"
                   value={form.email}
                   onChange={(e) => handleChange("email", e.target.value)}
-                  className={`w-full px-4 py-2.5 pr-10 border rounded-lg ${formErrors.email || emailExists ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 pr-10 border rounded-lg ${
+                    formErrors.email || emailExists
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="john@example.com"
                 />
                 {checkingEmail && (
@@ -373,7 +385,6 @@ const Register = () => {
               )}
             </div>
 
-            {/* Phone with tooltip */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Phone Number *
@@ -400,7 +411,11 @@ const Register = () => {
                     )
                       e.preventDefault();
                   }}
-                  className={`w-full pl-12 pr-10 py-2.5 border rounded-lg ${formErrors.phone || phoneExists ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full pl-12 pr-10 py-2.5 border rounded-lg ${
+                    formErrors.phone || phoneExists
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="10-digit number"
                   maxLength={10}
                   inputMode="numeric"
@@ -438,7 +453,6 @@ const Register = () => {
                 )}
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Password *
@@ -448,7 +462,11 @@ const Register = () => {
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(e) => handleChange("password", e.target.value)}
-                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${formErrors.password ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${
+                    formErrors.password
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="Min 6 characters"
                 />
                 <button
@@ -474,13 +492,25 @@ const Register = () => {
                   <div className="flex items-center gap-2 mb-1">
                     <div className="flex gap-1">
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 1 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 1
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 2 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 2
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 3 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 3
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                     </div>
                     <span
@@ -497,7 +527,6 @@ const Register = () => {
               )}
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Confirm Password *
@@ -508,7 +537,11 @@ const Register = () => {
                 onChange={(e) =>
                   handleChange("confirmPassword", e.target.value)
                 }
-                className={`w-full px-4 py-2.5 border rounded-lg ${formErrors.confirmPassword ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                className={`w-full px-4 py-2.5 border rounded-lg ${
+                  formErrors.confirmPassword
+                    ? "border-red-300 bg-red-50"
+                    : "border-gray-200"
+                }`}
                 placeholder="Re-enter password"
               />
               {formErrors.confirmPassword && (

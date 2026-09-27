@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import { EnvelopeIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -38,7 +39,7 @@ const ForgotPassword = () => {
           title="Forgot Password | Spexxo"
           description="Reset your Spexxo account password. Enter your email to receive a password reset link."
           ogType="website"
-          canonicalUrl="https://spexxo.vercel.app/forgot-password"
+          canonicalUrl={absoluteUrl("/forgot-password")}
           noIndex={true}
         />
         <div className="pt-28 pb-16">

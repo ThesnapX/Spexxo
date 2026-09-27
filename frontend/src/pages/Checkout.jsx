@@ -1,7 +1,7 @@
 // frontend/src/pages/Checkout.jsx
 
-import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
@@ -9,11 +9,9 @@ import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
 import {
   MapPinIcon,
-  PlusIcon,
   CheckCircleIcon,
   HomeIcon,
   BriefcaseIcon,
-  XMarkIcon,
   ExclamationCircleIcon,
   TicketIcon,
   XCircleIcon,
@@ -21,13 +19,17 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { trackInitiateCheckout, trackPurchase } from "../utils/metaPixel";
+import AddressForm from "../components/common/AddressForm";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
-import AddressForm from "../components/common/AddressForm";
+
+const safeNumber = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+};
 
 const Checkout = () => {
-  const location = useLocation();
   const {
     cart,
     cartTotal,
@@ -39,6 +41,7 @@ const Checkout = () => {
   } = useCart();
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(false);
   const [useSavedAddress, setUseSavedAddress] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("cod");
@@ -53,17 +56,16 @@ const Checkout = () => {
   const [buyNowCartTotal, setBuyNowCartTotal] = useState(0);
   const [buyNowItems, setBuyNowItems] = useState([]);
 
-  // Coupon states
+  // Coupon
   const [couponCode, setCouponCode] = useState("");
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
 
-  // ✅ Track if Razorpay script is loaded
+  // Razorpay loading
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
-  const [razorpayLoadAttempted, setRazorpayLoadAttempted] = useState(false);
 
-  // ✅ Shipping State - Updated for Pincode-based shipping
+  // Shipping
   const [shippingOptions, setShippingOptions] = useState([]);
   const [selectedShipping, setSelectedShipping] = useState(null);
   const [shippingLoading, setShippingLoading] = useState(false);
@@ -83,13 +85,19 @@ const Checkout = () => {
     pincode: "",
   });
 
-  // Check for deactivated products
-  const hasDeactivatedProducts = cart.items.some(
-    (item) => item.product?.isActive === false,
-  );
+  // ─────────────────────────────────────────────
+  // ✅ Hard submission lock.
+  // useRef is synchronous, unlike setState — this is the ONLY reliable
+  // way to block rapid double-clicks before React re-renders the button.
+  // ─────────────────────────────────────────────
+  const submittingRef = useRef(false);
+
+  // ✅ Idempotency key — regenerated per checkout attempt.
+  // Preserved across network retries within a single attempt.
+  const idempotencyKeyRef = useRef(null);
 
   // ─────────────────────────────────────────────
-  // Buy Now session bootstrap (runs once)
+  // Buy Now bootstrap
   // ─────────────────────────────────────────────
   useEffect(() => {
     const buyNowData = sessionStorage.getItem("buyNowItem");
@@ -100,7 +108,6 @@ const Checkout = () => {
         setIsBuyNow(true);
         setBuyNowItems([item]);
         setBuyNowCartTotal(item.price * item.quantity);
-        console.log("[CHECKOUT] Buy Now mode activated for:", item.name);
         sessionStorage.removeItem("buyNowItem");
       } catch (e) {
         console.error("[CHECKOUT] Failed to parse buyNowItem:", e);
@@ -109,19 +116,15 @@ const Checkout = () => {
   }, []);
 
   // ─────────────────────────────────────────────
-  // InitiateCheckout — fires exactly once per checkout session
-  // Waits until the correct data source is ready.
-  // Dedup via sessionStorage key tied to the checkout signature.
+  // InitiateCheckout — fires exactly once per checkout session.
   // ─────────────────────────────────────────────
   const initiateCheckoutFiredRef = useRef(false);
 
   useEffect(() => {
     if (initiateCheckoutFiredRef.current) return;
 
-    // Resolve the checkout shape
     let items = [];
     let value = 0;
-    let numItems = 0;
     let sessionKey = "";
 
     if (isBuyNow && buyNowItems.length > 0) {
@@ -131,10 +134,8 @@ const Checkout = () => {
         price: it.price,
       }));
       value = buyNowCartTotal;
-      numItems = items.reduce((s, it) => s + (it.quantity || 1), 0);
       sessionKey = `ic_buynow_${items[0].productId}_${items[0].quantity}`;
     } else if (cart?.items?.length > 0) {
-      // Wait for cart to actually settle (loading false)
       if (loading) return;
       const activeItems = cart.items.filter(
         (it) => it.product && it.product.isActive !== false,
@@ -143,21 +144,22 @@ const Checkout = () => {
       items = activeItems.map((it) => ({
         productId: it.product._id,
         quantity: it.quantity,
-        price: it.price || it.product.comparePrice || it.product.price || 0,
+        price:
+          safeNumber(it.price) ||
+          safeNumber(it.product.comparePrice) ||
+          safeNumber(it.product.price),
       }));
       value = cartTotal;
-      numItems = items.reduce((s, it) => s + (it.quantity || 1), 0);
       sessionKey = `ic_cart_${items
         .map((i) => `${i.productId}x${i.quantity}`)
         .sort()
         .join("_")}`;
     } else {
-      return; // nothing to track yet
+      return;
     }
 
     if (items.length === 0 || value <= 0) return;
 
-    // Dedup within the same browser session for the same shape
     const alreadyFired = sessionStorage.getItem(sessionKey);
     if (alreadyFired) {
       initiateCheckoutFiredRef.current = true;
@@ -167,36 +169,41 @@ const Checkout = () => {
     initiateCheckoutFiredRef.current = true;
     sessionStorage.setItem(sessionKey, "1");
 
-    trackInitiateCheckout({ items, value, numItems }).catch(() => {});
+    trackInitiateCheckout({
+      items,
+      value,
+      numItems: items.reduce((s, it) => s + (it.quantity || 1), 0),
+    }).catch(() => {});
   }, [isBuyNow, buyNowItems, buyNowCartTotal, cart, cartTotal, loading]);
 
-  // ✅ Fetch shipping based on pincode
-  const fetchShippingOptions = async (pincode) => {
-    if (!pincode || pincode.length !== 6) {
-      setShippingOptions([]);
-      setSelectedShipping(null);
-      setIsPincodeValid(false);
+  // ─────────────────────────────────────────────
+  // Shipping options
+  // ─────────────────────────────────────────────
+  const fetchShippingOptions = useCallback(
+    async (pincode) => {
+      if (!pincode || pincode.length !== 6) {
+        setShippingOptions([]);
+        setSelectedShipping(null);
+        setIsPincodeValid(false);
+        setPincodeChecked(false);
+        return;
+      }
+
+      setShippingLoading(true);
+      setShippingError("");
       setPincodeChecked(false);
-      return;
-    }
 
-    setShippingLoading(true);
-    setShippingError("");
-    setPincodeChecked(false);
+      try {
+        const items = isBuyNow ? buyNowItems : cart.items;
+        const { data } = await axios.post(`${API_URL}/shipping/options`, {
+          pincode,
+          items,
+        });
 
-    try {
-      const items = isBuyNow ? buyNowItems : cart.items;
-      const { data } = await axios.post(`${API_URL}/shipping/options`, {
-        pincode: pincode,
-        items: items,
-      });
-
-      if (data.success) {
-        if (data.isServiceable && data.options.length > 0) {
+        if (data.success && data.isServiceable && data.options?.length > 0) {
           setShippingOptions(data.options);
           setIsPincodeValid(true);
           setPincodeChecked(true);
-          // Select first option by default
           if (
             !selectedShipping ||
             !data.options.some((o) => o.id === selectedShipping?.id)
@@ -211,20 +218,20 @@ const Checkout = () => {
           setShippingError("We don't deliver to this pincode yet");
           toast.error("We don't deliver to this pincode yet");
         }
+      } catch (error) {
+        console.error("Failed to fetch shipping options:", error.message);
+        setShippingOptions([]);
+        setIsPincodeValid(false);
+        setPincodeChecked(true);
+        setShippingError("Failed to check shipping availability");
+        toast.error("Failed to check shipping availability");
+      } finally {
+        setShippingLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to fetch shipping options:", error);
-      setShippingOptions([]);
-      setIsPincodeValid(false);
-      setPincodeChecked(true);
-      setShippingError("Failed to check shipping availability");
-      toast.error("Failed to check shipping availability");
-    } finally {
-      setShippingLoading(false);
-    }
-  };
+    },
+    [isBuyNow, buyNowItems, cart.items, selectedShipping],
+  );
 
-  // ✅ Check shipping when pincode changes (with debounce)
   useEffect(() => {
     const timer = setTimeout(() => {
       if (form.pincode && form.pincode.length === 6) {
@@ -238,13 +245,15 @@ const Checkout = () => {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [form.pincode]);
+  }, [form.pincode, fetchShippingOptions]);
 
-  // Load default address on mount
+  // ─────────────────────────────────────────────
+  // Load default address
+  // ─────────────────────────────────────────────
   useEffect(() => {
     if (user?.addresses?.length > 0) {
       const defaultAddr =
-        user.addresses.find((addr) => addr.isDefault) || user.addresses[0];
+        user.addresses.find((a) => a.isDefault) || user.addresses[0];
       if (defaultAddr) {
         setSelectedAddressId(defaultAddr._id);
         setForm({
@@ -293,114 +302,76 @@ const Checkout = () => {
     }
   }, [user]);
 
-  // Refresh cart on mount (skip for Buy Now)
+  // Refresh cart (skip for Buy Now)
   useEffect(() => {
-    if (!isBuyNow) {
-      refreshCartWithLatestData();
-    }
+    if (!isBuyNow) refreshCartWithLatestData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBuyNow]);
 
-  // ✅ Load Razorpay script on component mount
+  // ─────────────────────────────────────────────
+  // Razorpay script
+  // ─────────────────────────────────────────────
   useEffect(() => {
     const loadRazorpay = async () => {
       if (window.Razorpay) {
-        console.log("[PAYMENT] Razorpay already loaded");
         setRazorpayLoaded(true);
-        setRazorpayLoadAttempted(true);
         return;
       }
-
       if (razorpayLoading) return;
-
       setRazorpayLoading(true);
-      setRazorpayLoadAttempted(true);
-      console.log("[PAYMENT] Loading Razorpay script...");
 
       try {
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         script.async = true;
         script.id = "razorpay-script";
+        const existing = document.getElementById("razorpay-script");
 
-        const existingScript = document.getElementById("razorpay-script");
-        if (existingScript) {
-          console.log(
-            "[PAYMENT] Razorpay script already exists, waiting for load...",
-          );
+        if (existing) {
           await new Promise((resolve) => {
-            if (window.Razorpay) {
-              resolve(true);
-              return;
-            }
-            existingScript.onload = () => {
-              console.log("[PAYMENT] Existing Razorpay script loaded");
-              resolve(true);
-            };
+            if (window.Razorpay) return resolve(true);
+            existing.onload = () => resolve(true);
           });
           setRazorpayLoaded(true);
-          setRazorpayLoading(false);
           return;
         }
 
         await new Promise((resolve, reject) => {
-          script.onload = () => {
-            console.log("[PAYMENT] Razorpay script loaded successfully");
-            setTimeout(() => {
-              resolve(true);
-            }, 500);
-          };
-          script.onerror = () => {
-            console.error("[PAYMENT] Failed to load Razorpay script");
+          script.onload = () => setTimeout(() => resolve(true), 500);
+          script.onerror = () =>
             reject(new Error("Failed to load Razorpay script"));
-          };
           document.body.appendChild(script);
         });
 
         let attempts = 0;
         while (!window.Razorpay && attempts < 20) {
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          await new Promise((r) => setTimeout(r, 200));
           attempts++;
         }
-
-        if (window.Razorpay) {
-          console.log("[PAYMENT] window.Razorpay is available");
-          setRazorpayLoaded(true);
-        } else {
-          console.error(
-            "[PAYMENT] window.Razorpay not available after loading",
-          );
-          setRazorpayLoaded(false);
-        }
+        setRazorpayLoaded(!!window.Razorpay);
       } catch (error) {
-        console.error("[PAYMENT] Razorpay loading error:", error);
+        console.error("[PAYMENT] Razorpay loading error:", error.message);
         setRazorpayLoaded(false);
       } finally {
         setRazorpayLoading(false);
       }
     };
-
     loadRazorpay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
-
-  // ✅ Get the correct cart total
+  // ─────────────────────────────────────────────
+  // Totals — display only. Backend recomputes.
+  // ─────────────────────────────────────────────
   const effectiveCartTotal = isBuyNow ? buyNowCartTotal : cartTotal;
   const effectiveItems = isBuyNow ? buyNowItems : cart.items;
 
-  // ✅ Get shipping cost from selected shipping option
   const getShippingCost = () => {
-    if (selectedShipping && isPincodeValid) {
-      return selectedShipping.price;
-    }
-    // Fallback: try to get from shippingOptions
-    if (shippingOptions.length > 0 && shippingOptions[0]) {
-      return shippingOptions[0].price;
-    }
-    return 99; // Default fallback
+    if (selectedShipping && isPincodeValid)
+      return safeNumber(selectedShipping.price);
+    if (shippingOptions.length > 0) return safeNumber(shippingOptions[0].price);
+    return 99;
   };
-
   const shippingCost = getShippingCost();
 
   const calculateCouponDiscount = () => {
@@ -409,11 +380,14 @@ const Checkout = () => {
     if (appliedCoupon.discountOn === "delivery") discountBase = shippingCost;
     let discount = 0;
     if (appliedCoupon.discountType === "percentage") {
-      discount = (discountBase * appliedCoupon.discountValue) / 100;
+      discount = (discountBase * safeNumber(appliedCoupon.discountValue)) / 100;
       if (appliedCoupon.maxDiscount)
-        discount = Math.min(discount, appliedCoupon.maxDiscount);
+        discount = Math.min(discount, safeNumber(appliedCoupon.maxDiscount));
     } else {
-      discount = Math.min(appliedCoupon.discountValue, discountBase);
+      discount = Math.min(
+        safeNumber(appliedCoupon.discountValue),
+        discountBase,
+      );
     }
     return Math.round(discount * 100) / 100;
   };
@@ -428,7 +402,12 @@ const Checkout = () => {
   const advanceAmount = Math.round(grandTotal * 0.1);
   const remainingCOD = grandTotal - advanceAmount;
 
-  // Handle coupon application
+  const hasDeactivatedProducts =
+    !isBuyNow && cart.items.some((item) => item.product?.isActive === false);
+
+  // ─────────────────────────────────────────────
+  // Coupon handlers
+  // ─────────────────────────────────────────────
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
       setCouponError("Please enter a coupon code");
@@ -465,21 +444,15 @@ const Checkout = () => {
     toast.success("Coupon removed");
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleApplyCoupon();
-    }
-  };
-
+  // ─────────────────────────────────────────────
+  // Address save
+  // ─────────────────────────────────────────────
   const refreshUserData = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/auth/me`);
-      if (data.user) {
-        updateProfile(data.user);
-      }
-    } catch (error) {
-      console.log("Failed to refresh user data");
+      if (data.user) updateProfile(data.user);
+    } catch {
+      /* silent */
     }
   };
 
@@ -488,24 +461,29 @@ const Checkout = () => {
       await axios.post(`${API_URL}/users/address`, addressData);
       await refreshUserData();
       return true;
-    } catch (error) {
-      console.log("Failed to save address:", error.message);
+    } catch {
       return false;
     }
   };
 
+  // ─────────────────────────────────────────────
+  // Build order items — only IDs + qty go to backend.
+  // Prices are recalculated by the backend.
+  // ─────────────────────────────────────────────
   const buildOrderItems = () => {
-    // If in Buy Now mode, use the buyNowItem
     if (isBuyNow && buyNowItem) {
       return [
         {
           product: buyNowItem.productId,
-          name: buyNowItem.name,
-          image: buyNowItem.image || buyNowItem.product?.images?.[0]?.url || "",
-          price: buyNowItem.price,
           quantity: buyNowItem.quantity,
-          subtotal: buyNowItem.price * buyNowItem.quantity,
-          variant: buyNowItem.variant || null,
+          variant: buyNowItem.variant
+            ? {
+                _id: buyNowItem.variant._id || null,
+                name: buyNowItem.variant.name || "",
+                sku: buyNowItem.variant.sku || "",
+                price: safeNumber(buyNowItem.variant.price),
+              }
+            : null,
         },
       ];
     }
@@ -514,42 +492,15 @@ const Checkout = () => {
       .map((item) => {
         const product = item.product;
         if (!product) return null;
-
-        const price = item.price || product.comparePrice || product.price || 0;
-        const variant = item.variant;
-
-        let variantImage = "";
-        if (variant && variant.images && variant.images.length > 0) {
-          variantImage = variant.images[0]?.url || "";
-        }
-        if (!variantImage && variant && variant.image) {
-          variantImage = variant.image;
-        }
-        if (!variantImage) {
-          variantImage = product.images?.[0]?.url || "";
-        }
-
         return {
           product: product._id,
-          name: product.name,
-          image: variantImage,
-          price: price,
           quantity: item.quantity,
-          subtotal: price * item.quantity,
-          variant: variant
+          variant: item.variant
             ? {
-                name: variant.name || "",
-                sku: variant.sku || "",
-                price: variant.price || price,
-                color: variant.color
-                  ? {
-                      _id: variant.color._id || null,
-                      name: variant.color.name || "",
-                      hexCode: variant.color.hexCode || "",
-                    }
-                  : null,
-                attributes: variant.attributes || {},
-                images: variant.images || [],
+                _id: item.variant._id || null,
+                name: item.variant.name || "",
+                sku: item.variant.sku || "",
+                price: safeNumber(item.variant.price),
               }
             : null,
         };
@@ -557,82 +508,16 @@ const Checkout = () => {
       .filter(Boolean);
   };
 
-  // Handle zero amount payment (free orders)
-  const handleZeroAmountOrder = async (orderItems) => {
-    try {
-      const orderData = {
-        shippingAddress: form,
-        couponCode: couponCodeApplied || undefined,
-        paymentMethod: "online",
-        paymentStatus: "paid",
-        isCOD: false,
-        orderStatus: "confirmed",
-        items: orderItems,
-        shippingMethod: selectedShipping?.id || "basic",
-        shippingMethodName: selectedShipping?.name || "Basic Shipping",
-        shippingCost: shippingCost,
-        shippingDelivery: selectedShipping?.delivery || "3-7 business days",
-        pincode: form.pincode,
-      };
-
-      const { data } = await axios.post(`${API_URL}/orders`, orderData);
-
-      if (isBuyNow) {
-        setIsBuyNow(false);
-        setBuyNowItem(null);
-        setBuyNowItems([]);
-        setBuyNowCartTotal(0);
-      } else {
-        await clearCart();
-      }
-
-      // ✅ Fire Purchase on confirmed zero-value order
-      if (data.order) {
-        trackPurchase(data.order, user).catch(() => {});
-      }
-
-      toast.success("Order placed successfully! 🎉");
-      navigate(`/account/orders/${data.order._id}`);
-      return true;
-    } catch (error) {
-      console.error("Zero amount order error:", error);
-      toast.error(error.response?.data?.message || "Failed to create order");
-      return false;
-    }
-  };
-
-  // ✅ Helper function to open Razorpay
-  const openRazorpay = (options) => {
-    console.log("[PAYMENT] Opening Razorpay...");
-    try {
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-      console.log("[PAYMENT] Razorpay opened successfully");
-      return true;
-    } catch (error) {
-      console.error("[PAYMENT] Failed to open Razorpay:", error);
-      toast.error("Failed to open payment window. Please try again.");
-      return false;
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    console.log("[PAYMENT] Checkout submitted");
-    console.log("[PAYMENT] Payment method:", paymentMethod);
-    console.log("[PAYMENT] Grand total:", grandTotal);
-    console.log("[PAYMENT] Is Buy Now:", isBuyNow);
-    console.log("[PAYMENT] Razorpay loaded:", razorpayLoaded);
-    console.log("[PAYMENT] window.Razorpay exists:", !!window.Razorpay);
-
+  // ─────────────────────────────────────────────
+  // Pre-submit validation
+  // ─────────────────────────────────────────────
+  const validateBeforeSubmit = () => {
     if (hasDeactivatedProducts && !isBuyNow) {
       toast.error(
         "Your cart contains deactivated products. Please remove them to proceed.",
       );
-      return;
+      return false;
     }
-
     if (
       !form.fullName ||
       !form.phone ||
@@ -641,105 +526,144 @@ const Checkout = () => {
       !form.pincode
     ) {
       toast.error("Please fill all required fields");
-      return;
+      return false;
     }
-
-    // ✅ Check if pincode is valid for shipping
-    if (!isPincodeValid && shippingOptions.length === 0) {
+    if (!/^[0-9]{6}$/.test(form.pincode)) {
+      toast.error("Please enter a valid 6-digit pincode");
+      return false;
+    }
+    if (!isPincodeValid || shippingOptions.length === 0) {
       toast.error("Please enter a valid pincode for shipping");
-      return;
+      return false;
     }
-
-    if (user && saveAddressToProfile && !useSavedAddress) {
-      const addressExists = user.addresses?.some(
-        (addr) =>
-          addr.addressLine1 === form.addressLine1 &&
-          addr.city === form.city &&
-          addr.pincode === form.pincode,
-      );
-
-      if (!addressExists) {
-        const addressData = {
-          name: "Home",
-          fullName: form.fullName,
-          phone: form.phone,
-          addressLine1: form.addressLine1,
-          addressLine2: form.addressLine2 || "",
-          landmark: form.landmark || "",
-          area: form.area || "",
-          city: form.city,
-          state: form.state,
-          pincode: form.pincode,
-          isDefault: user.addresses?.length === 0,
-        };
-        await saveAddressToUserProfile(addressData);
-      }
+    if (!Number.isFinite(grandTotal) || grandTotal < 0) {
+      toast.error("Order total is invalid. Please refresh and try again.");
+      return false;
     }
-
+    if (
+      paymentMethod === "online" &&
+      grandTotal > 0 &&
+      !razorpayLoaded &&
+      !window.Razorpay
+    ) {
+      toast.error("Payment gateway is still loading. Please wait a moment...");
+      return false;
+    }
     const orderItems = buildOrderItems();
-
     if (orderItems.length === 0) {
       toast.error("Your cart is empty");
+      return false;
+    }
+    return true;
+  };
+
+  // ─────────────────────────────────────────────
+  // Main submit
+  // ─────────────────────────────────────────────
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+
+    // ✅ Synchronous lock — the ONLY reliable double-click guard.
+    if (submittingRef.current) {
       return;
     }
+    submittingRef.current = true;
 
-    // Handle zero amount orders
-    if (grandTotal === 0) {
-      setLoading(true);
-      await handleZeroAmountOrder(orderItems);
-      setLoading(false);
-      return;
-    }
+    try {
+      if (!validateBeforeSubmit()) {
+        return;
+      }
 
-    // ✅ Check if Razorpay is loaded before proceeding
-    if (!razorpayLoaded && !window.Razorpay) {
-      toast.error("Payment gateway is still loading. Please wait a moment...");
-      return;
-    }
+      // Save address to profile if requested
+      if (user && saveAddressToProfile && !useSavedAddress) {
+        const addressExists = user.addresses?.some(
+          (addr) =>
+            addr.addressLine1 === form.addressLine1 &&
+            addr.city === form.city &&
+            addr.pincode === form.pincode,
+        );
+        if (!addressExists) {
+          await saveAddressToUserProfile({
+            name: "Home",
+            fullName: form.fullName,
+            phone: form.phone,
+            addressLine1: form.addressLine1,
+            addressLine2: form.addressLine2 || "",
+            landmark: form.landmark || "",
+            area: form.area || "",
+            city: form.city,
+            state: form.state,
+            pincode: form.pincode,
+            isDefault: user.addresses?.length === 0,
+          });
+        }
+      }
 
-    if (paymentMethod === "online") {
-      setLoading(true);
-      try {
-        console.log("[PAYMENT] Online payment flow started");
+      const orderItems = buildOrderItems();
 
+      // Fresh idempotency key per attempt.
+      idempotencyKeyRef.current = `ord_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 10)}`;
+
+      // ── Zero-value order → instant confirm, no Razorpay ──
+      if (grandTotal === 0) {
+        setLoading(true);
         const orderData = {
           shippingAddress: form,
           couponCode: couponCodeApplied || undefined,
           paymentMethod: "online",
-          paymentStatus: "pending",
           isCOD: false,
-          orderStatus: "pending",
           items: orderItems,
           shippingMethod: selectedShipping?.id || "basic",
           shippingMethodName: selectedShipping?.name || "Basic Shipping",
-          shippingCost: shippingCost,
+          shippingCost,
           shippingDelivery: selectedShipping?.delivery || "3-7 business days",
           pincode: form.pincode,
+          idempotencyKey: idempotencyKeyRef.current,
+        };
+        const { data } = await axios.post(`${API_URL}/orders`, orderData);
+        if (isBuyNow) {
+          setIsBuyNow(false);
+          setBuyNowItem(null);
+          setBuyNowItems([]);
+          setBuyNowCartTotal(0);
+        } else {
+          await clearCart();
+        }
+        if (data.order) trackPurchase(data.order, user).catch(() => {});
+        toast.success("Order placed successfully! 🎉");
+        navigate(`/account/orders/${data.order._id}`);
+        return;
+      }
+
+      // ── Online payment ──
+      if (paymentMethod === "online") {
+        setLoading(true);
+        const orderData = {
+          shippingAddress: form,
+          couponCode: couponCodeApplied || undefined,
+          paymentMethod: "online",
+          isCOD: false,
+          items: orderItems,
+          shippingMethod: selectedShipping?.id || "basic",
+          shippingMethodName: selectedShipping?.name || "Basic Shipping",
+          shippingCost,
+          shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+          pincode: form.pincode,
+          idempotencyKey: idempotencyKeyRef.current,
         };
 
-        console.log("[PAYMENT] Creating pending order...");
         const { data: orderResponse } = await axios.post(
           `${API_URL}/orders`,
           orderData,
         );
-
         const createdOrder = orderResponse.order;
-        console.log(
-          "[PAYMENT] Pending order created:",
-          createdOrder.orderNumber,
-        );
 
-        console.log("[PAYMENT] Creating Razorpay order...");
         const { data: razorpayData } = await axios.post(
           `${API_URL}/payment/create-order`,
           { orderId: createdOrder._id },
         );
-
-        console.log(
-          "[PAYMENT] Razorpay order created:",
-          razorpayData.razorpayOrderId,
-        );
-        console.log("[PAYMENT] Razorpay amount:", razorpayData.amount);
 
         setProcessingPayment(true);
 
@@ -763,44 +687,27 @@ const Checkout = () => {
           theme: { color: "#3D96EB" },
           modal: {
             ondismiss: function () {
-              console.log(
-                "[PAYMENT] Razorpay modal dismissed - payment cancelled",
-              );
               setProcessingPayment(false);
-              setLoading(false);
+              submittingRef.current = false;
               toast.error("Payment cancelled");
               axios
                 .delete(`${API_URL}/orders/${createdOrder._id}/cancel-pending`)
-                .then(() => {
-                  console.log("[PAYMENT] Pending order deleted");
-                })
-                .catch((err) => {
-                  console.error(
-                    "[PAYMENT] Failed to delete pending order:",
-                    err,
-                  );
-                });
+                .catch(() => {});
             },
           },
           handler: async function (response) {
-            console.log("[PAYMENT] Razorpay payment handler called");
             try {
               setProcessingPayment(false);
-
               const verifyData = {
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
                 orderId: createdOrder._id,
               };
-
-              console.log("[PAYMENT] Verifying payment...");
               const { data } = await axios.post(
                 `${API_URL}/payment/verify`,
                 verifyData,
               );
-
-              // ✅ Clear Buy Now state if applicable
               if (isBuyNow) {
                 setIsBuyNow(false);
                 setBuyNowItem(null);
@@ -809,251 +716,176 @@ const Checkout = () => {
               } else {
                 await clearCart();
               }
-              // ✅ Fire Purchase from the *server-confirmed* order
-              // The order carries a stable purchaseEventId — dedupe is guaranteed.
-              if (data.order) {
-                trackPurchase(data.order, user).catch(() => {});
-              }
-
+              if (data.order) trackPurchase(data.order, user).catch(() => {});
               toast.success("Payment successful! Order placed! 🎉");
-              console.log("[PAYMENT] Order verified and confirmed");
               navigate(`/account/orders/${data.order._id}`);
             } catch (error) {
-              console.error("[PAYMENT] Order verification error:", error);
-
-              try {
-                await axios.delete(
-                  `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
-                );
-                console.log(
-                  "[PAYMENT] Pending order deleted due to payment failure",
-                );
-              } catch (deleteError) {
-                console.error(
-                  "[PAYMENT] Failed to delete pending order:",
-                  deleteError,
-                );
-              }
-
+              console.error("[PAYMENT] Verification error:", error.message);
+              // Do NOT show "payment failed" — the payment may have
+              // succeeded but verification failed. Send user to orders list
+              // so they can see the true state.
               toast.error(
-                error.response?.data?.message ||
-                  "Payment verification failed. Please contact support.",
+                "Payment verification is delayed. Please check My Orders in a moment.",
               );
-              navigate("/");
+              navigate("/account/orders");
             }
           },
         };
 
-        console.log("[PAYMENT] Opening Razorpay...");
         const rzp = new window.Razorpay(options);
         rzp.open();
-        console.log("[PAYMENT] Razorpay opened successfully");
-      } catch (error) {
-        console.error("[PAYMENT] Payment initiation error:", error);
-        toast.error(
-          error.response?.data?.message ||
-            "Payment initiation failed. Please try again.",
-        );
-        setProcessingPayment(false);
-      } finally {
-        setLoading(false);
+        return;
       }
-    } else {
-      // COD Payment
+
+      // ── COD ──
       setLoading(true);
-      try {
-        console.log("[PAYMENT] COD payment flow started");
+      const advance = advanceAmount;
+      const isCodNoAdvance = advance <= 0;
 
-        if (advanceAmount > 0) {
-          const orderData = {
-            shippingAddress: form,
-            couponCode: couponCodeApplied || undefined,
-            paymentMethod: "cod",
-            paymentStatus: "pending",
-            isCOD: true,
-            orderStatus: "pending",
-            codAdvance: advanceAmount,
-            remainingCOD: remainingCOD,
-            items: orderItems,
-            shippingMethod: selectedShipping?.id || "basic",
-            shippingMethodName: selectedShipping?.name || "Basic Shipping",
-            shippingCost: shippingCost,
-            shippingDelivery: selectedShipping?.delivery || "3-7 business days",
-            pincode: form.pincode,
-          };
+      const orderData = {
+        shippingAddress: form,
+        couponCode: couponCodeApplied || undefined,
+        paymentMethod: "cod",
+        isCOD: true,
+        codAdvance: isCodNoAdvance ? 0 : advance,
+        remainingCOD: isCodNoAdvance ? 0 : remainingCOD,
+        items: orderItems,
+        shippingMethod: selectedShipping?.id || "basic",
+        shippingMethodName: selectedShipping?.name || "Basic Shipping",
+        shippingCost,
+        shippingDelivery: selectedShipping?.delivery || "3-7 business days",
+        pincode: form.pincode,
+        idempotencyKey: idempotencyKeyRef.current,
+      };
 
-          console.log("[PAYMENT] Creating pending COD order with advance...");
-          const { data: orderResponse } = await axios.post(
-            `${API_URL}/orders`,
-            orderData,
-          );
-          const createdOrder = orderResponse.order;
-          console.log(
-            "[PAYMENT] Pending COD order created:",
-            createdOrder.orderNumber,
-          );
-
-          console.log("[PAYMENT] Creating Razorpay order for advance...");
-          const { data: razorpayData } = await axios.post(
-            `${API_URL}/payment/create-order`,
-            { orderId: createdOrder._id },
-          );
-          console.log(
-            "[PAYMENT] Razorpay order created:",
-            razorpayData.razorpayOrderId,
-          );
-
-          setProcessingPayment(true);
-
-          const razorpayKey = razorpayData.key || RAZORPAY_KEY;
-
-          const options = {
-            key: razorpayKey,
-            amount: razorpayData.amount,
-            currency: "INR",
-            name: "Spexxo",
-            description: `10% Advance - Order ${createdOrder.orderNumber}`,
-            order_id: razorpayData.razorpayOrderId,
-            prefill: {
-              name:
-                form.fullName ||
-                `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
-                "Customer",
-              email: user?.email || "customer@spexxo.com",
-              contact: form.phone || user?.phone || "9999999999",
-            },
-            theme: { color: "#3D96EB" },
-            modal: {
-              ondismiss: function () {
-                console.log(
-                  "[PAYMENT] Razorpay modal dismissed - payment cancelled",
-                );
-                setProcessingPayment(false);
-                setLoading(false);
-                toast.error("Advance payment cancelled");
-                axios
-                  .delete(
-                    `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
-                  )
-                  .then(() => {
-                    console.log("[PAYMENT] Pending order deleted");
-                  })
-                  .catch((err) => {
-                    console.error(
-                      "[PAYMENT] Failed to delete pending order:",
-                      err,
-                    );
-                  });
-              },
-            },
-            handler: async function (response) {
-              console.log("[PAYMENT] Razorpay COD advance handler called");
-              try {
-                setProcessingPayment(false);
-
-                await axios.post(`${API_URL}/payment/verify-cod-advance`, {
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  orderId: createdOrder._id,
-                  isCODAdvance: true,
-                });
-
-                // ✅ Clear Buy Now state if applicable
-                if (isBuyNow) {
-                  setIsBuyNow(false);
-                  setBuyNowItem(null);
-                  setBuyNowItems([]);
-                  setBuyNowCartTotal(0);
-                } else {
-                  await clearCart();
-                }
-                // ✅ Fire Purchase on confirmed COD advance order
-                if (orderData?.order) {
-                  trackPurchase(orderData.order, user).catch(() => {});
-                }
-
-                toast.success(
-                  "Order placed with 10% advance! Remaining ₹" +
-                    remainingCOD.toLocaleString() +
-                    " on delivery.",
-                );
-                navigate(`/account/orders/${orderData.order._id}`);
-              } catch (error) {
-                console.error("[PAYMENT] COD order creation error:", error);
-                try {
-                  await axios.delete(
-                    `${API_URL}/orders/${createdOrder._id}/cancel-pending`,
-                  );
-                } catch (deleteError) {
-                  console.error(
-                    "[PAYMENT] Failed to delete pending order:",
-                    deleteError,
-                  );
-                }
-                toast.error("Order creation failed after advance payment.");
-                navigate("/");
-              }
-            },
-          };
-
-          console.log("[PAYMENT] Opening Razorpay for COD advance...");
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-          console.log("[PAYMENT] Razorpay opened for COD advance");
+      if (isCodNoAdvance) {
+        // Instant confirm — backend fires Purchase + reduces stock.
+        const { data } = await axios.post(`${API_URL}/orders`, orderData);
+        if (isBuyNow) {
+          setIsBuyNow(false);
+          setBuyNowItem(null);
+          setBuyNowItems([]);
+          setBuyNowCartTotal(0);
         } else {
-          console.log("[PAYMENT] Creating COD order without advance...");
-          const orderData = {
-            shippingAddress: form,
-            couponCode: couponCodeApplied || undefined,
-            paymentMethod: "cod",
-            paymentStatus: "pending",
-            isCOD: true,
-            orderStatus: "pending",
-            items: orderItems,
-            shippingMethod: selectedShipping?.id || "basic",
-            shippingMethodName: selectedShipping?.name || "Basic Shipping",
-            shippingCost: shippingCost,
-            shippingDelivery: selectedShipping?.delivery || "3-7 business days",
-            pincode: form.pincode,
-          };
-
-          const { data } = await axios.post(`${API_URL}/orders`, orderData);
-
-          if (isBuyNow) {
-            setIsBuyNow(false);
-            setBuyNowItem(null);
-            setBuyNowItems([]);
-            setBuyNowCartTotal(0);
-          } else {
-            await clearCart();
-          }
-          // ✅ Fire Purchase on confirmed COD no-advance order
-          if (data.order) {
-            trackPurchase(data.order, user).catch(() => {});
-          }
-
-          toast.success("Order placed successfully!");
-          console.log("[PAYMENT] COD order completed");
-          navigate(`/account/orders/${data.order._id}`);
+          await clearCart();
         }
-      } catch (error) {
-        console.error("[PAYMENT] COD order error:", error);
-        toast.error(error.response?.data?.message || "Failed to create order");
-        setProcessingPayment(false);
-      } finally {
-        setLoading(false);
+        if (data.order) trackPurchase(data.order, user).catch(() => {});
+        toast.success("Order placed successfully!");
+        navigate(`/account/orders/${data.order._id}`);
+        return;
       }
+
+      // COD with 10% advance → Razorpay for the advance.
+      const { data: orderResponse } = await axios.post(
+        `${API_URL}/orders`,
+        orderData,
+      );
+      const createdOrder = orderResponse.order;
+
+      const { data: razorpayData } = await axios.post(
+        `${API_URL}/payment/create-order`,
+        { orderId: createdOrder._id },
+      );
+
+      setProcessingPayment(true);
+
+      const razorpayKey = razorpayData.key || RAZORPAY_KEY;
+
+      const options = {
+        key: razorpayKey,
+        amount: razorpayData.amount,
+        currency: "INR",
+        name: "Spexxo",
+        description: `10% Advance - Order ${createdOrder.orderNumber}`,
+        order_id: razorpayData.razorpayOrderId,
+        prefill: {
+          name:
+            form.fullName ||
+            `${user?.firstName || ""} ${user?.lastName || ""}`.trim() ||
+            "Customer",
+          email: user?.email || "customer@spexxo.com",
+          contact: form.phone || user?.phone || "9999999999",
+        },
+        theme: { color: "#3D96EB" },
+        modal: {
+          ondismiss: function () {
+            setProcessingPayment(false);
+            submittingRef.current = false;
+            toast.error("Advance payment cancelled");
+            axios
+              .delete(`${API_URL}/orders/${createdOrder._id}/cancel-pending`)
+              .catch(() => {});
+          },
+        },
+        handler: async function (response) {
+          try {
+            setProcessingPayment(false);
+            const { data } = await axios.post(
+              `${API_URL}/payment/verify-cod-advance`,
+              {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                orderId: createdOrder._id,
+                isCODAdvance: true,
+              },
+            );
+            if (isBuyNow) {
+              setIsBuyNow(false);
+              setBuyNowItem(null);
+              setBuyNowItems([]);
+              setBuyNowCartTotal(0);
+            } else {
+              await clearCart();
+            }
+            if (data.order) trackPurchase(data.order, user).catch(() => {});
+            toast.success(
+              "Order placed with 10% advance! Remaining ₹" +
+                remainingCOD.toLocaleString() +
+                " on delivery.",
+            );
+            navigate(`/account/orders/${data.order._id}`);
+          } catch (error) {
+            console.error(
+              "[PAYMENT] COD advance verification error:",
+              error.message,
+            );
+            toast.error(
+              "Payment verification is delayed. Please check My Orders in a moment.",
+            );
+            navigate("/account/orders");
+          }
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error("[CHECKOUT] Submit error:", error.message);
+      toast.error(
+        error.response?.data?.message || "Checkout failed. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+      // Note: we intentionally do NOT reset submittingRef here.
+      // For payment flows, the Razorpay handler navigates away.
+      // For COD-instant, we also navigate away.
+      // On a caught error, the user stays on the page — and we want them
+      // to be able to retry, so we reset the lock.
+      // Detection: if we're still on /checkout after the try block,
+      // reset the lock so retry works.
+      // We use a microtask to check the current path is still /checkout.
+      Promise.resolve().then(() => {
+        if (window.location.pathname === "/checkout") {
+          submittingRef.current = false;
+        }
+      });
     }
   };
 
-  const handleAddressSubmit = (data) => {
-    setForm(data);
-    if (user && saveAddressToProfile) {
-      // Save to profile logic here
-    }
-  };
-
+  // ─────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────
   if (!effectiveItems?.length && !isBuyNow) {
     return (
       <div className="pt-24">
@@ -1061,9 +893,7 @@ const Checkout = () => {
           <p className="text-6xl mb-4">🛒</p>
           <h2 className="text-2xl font-bold text-text mb-2">Cart is Empty</h2>
           <p className="text-text-light mb-6">
-            {isBuyNow
-              ? "No product selected"
-              : "Add some products before checking out"}
+            Add some products before checking out
           </p>
           <Link to="/shop" className="btn-primary">
             Shop Now
@@ -1072,6 +902,27 @@ const Checkout = () => {
       </div>
     );
   }
+
+  const isSubmitDisabled =
+    loading ||
+    processingPayment ||
+    hasDeactivatedProducts ||
+    !isPincodeValid ||
+    !form.pincode ||
+    form.pincode.length !== 6;
+
+  const submitLabel = (() => {
+    if (hasDeactivatedProducts) return "Remove deactivated items to proceed";
+    if (!form.pincode || form.pincode.length !== 6)
+      return "Enter pincode to proceed";
+    if (!isPincodeValid) return "Pincode not serviceable";
+    if (loading && !processingPayment) return "Creating Order...";
+    if (processingPayment) return "Complete Payment in Popup...";
+    if (grandTotal === 0) return "Place Order (Free) 🎉";
+    if (paymentMethod === "online")
+      return `Pay ₹${grandTotal.toLocaleString()} Online`;
+    return `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`;
+  })();
 
   return (
     <>
@@ -1118,7 +969,7 @@ const Checkout = () => {
             </div>
           )}
 
-          {/* Deactivated Products Warning */}
+          {/* Deactivated warning */}
           {hasDeactivatedProducts && !isBuyNow && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
               <div className="flex items-start gap-3">
@@ -1129,7 +980,7 @@ const Checkout = () => {
                   </p>
                   <p className="text-sm text-red-600 mt-1">
                     Your cart contains products that have been deactivated.
-                    Please remove them to proceed with checkout.
+                    Please remove them to proceed.
                   </p>
                   <Link
                     to="/cart"
@@ -1244,7 +1095,7 @@ const Checkout = () => {
                 />
               </div>
 
-              {/* ✅ Shipping Options - Updated with Pincode Check */}
+              {/* Shipping Options */}
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4 flex items-center gap-2">
                   <TruckIcon className="w-5 h-5 text-primary" />
@@ -1320,6 +1171,7 @@ const Checkout = () => {
                 ) : null}
               </div>
 
+              {/* Payment Method */}
               <div className="bg-white rounded-xl border border-gray-100 p-5 mb-6">
                 <h3 className="font-semibold text-text mb-4">Payment Method</h3>
                 <div className="space-y-3">
@@ -1360,10 +1212,6 @@ const Checkout = () => {
                             Pay ₹{advanceAmount.toLocaleString()} now to confirm
                             your order. Remaining ₹
                             {remainingCOD.toLocaleString()} on delivery.
-                          </p>
-                          <p className="text-xs text-amber-600 mt-1">
-                            ✅ This helps us ensure your order reaches you
-                            reliably
                           </p>
                         </div>
                       </div>
@@ -1431,32 +1279,14 @@ const Checkout = () => {
 
               <button
                 onClick={handleSubmit}
-                disabled={
-                  loading ||
-                  processingPayment ||
-                  hasDeactivatedProducts ||
-                  !isPincodeValid
-                }
+                disabled={isSubmitDisabled}
                 className={`w-full btn-primary py-4 text-base disabled:opacity-50 disabled:cursor-not-allowed ${
                   hasDeactivatedProducts ? "bg-gray-400 hover:bg-gray-400" : ""
                 }`}
               >
-                {hasDeactivatedProducts
-                  ? "Remove deactivated items to proceed"
-                  : !isPincodeValid && form.pincode && form.pincode.length === 6
-                    ? "Pincode not serviceable"
-                    : !form.pincode || form.pincode.length !== 6
-                      ? "Enter pincode to proceed"
-                      : loading && !processingPayment
-                        ? "Creating Order..."
-                        : processingPayment
-                          ? "Complete Payment in Popup..."
-                          : grandTotal === 0
-                            ? "Place Order (Free) 🎉"
-                            : paymentMethod === "online"
-                              ? `Pay ₹${grandTotal.toLocaleString()} Online`
-                              : `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`}
+                {submitLabel}
               </button>
+
               {hasDeactivatedProducts && (
                 <p className="text-red-500 text-sm text-center mt-2">
                   ⚠️ Your cart contains deactivated products. Please remove them
@@ -1475,13 +1305,12 @@ const Checkout = () => {
                 )}
             </div>
 
+            {/* Order Summary */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
-                <h2 className="text-lg font-semibold mb-4">
-                  {isBuyNow ? "Order Summary" : "Order Summary"}
-                </h2>
+                <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
 
-                {/* Coupon Section */}
+                {/* Coupon */}
                 <div className="mb-4 pb-4 border-b">
                   <p className="text-sm font-medium text-text mb-2 flex items-center gap-1">
                     <TicketIcon className="w-4 h-4" /> Apply Coupon
@@ -1495,16 +1324,12 @@ const Checkout = () => {
                           </p>
                           <p className="text-xs text-green-600">
                             {appliedCoupon.discountType === "percentage"
-                              ? `${appliedCoupon.discountValue}% off${appliedCoupon.maxDiscount ? ` (max ₹${appliedCoupon.maxDiscount})` : ""}`
+                              ? `${appliedCoupon.discountValue}% off${
+                                  appliedCoupon.maxDiscount
+                                    ? ` (max ₹${appliedCoupon.maxDiscount})`
+                                    : ""
+                                }`
                               : `₹${appliedCoupon.discountValue} off`}
-                            <span className="text-green-500 ml-1">
-                              on{" "}
-                              {appliedCoupon.discountOn === "delivery"
-                                ? "delivery"
-                                : appliedCoupon.discountOn === "product"
-                                  ? "products"
-                                  : "total"}
-                            </span>
                           </p>
                         </div>
                         <button
@@ -1525,7 +1350,12 @@ const Checkout = () => {
                             setCouponCode(e.target.value.toUpperCase());
                             setCouponError("");
                           }}
-                          onKeyDown={handleKeyDown}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleApplyCoupon();
+                            }
+                          }}
                           placeholder="Enter coupon code"
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm uppercase focus:outline-none focus:border-primary"
                         />
@@ -1551,18 +1381,13 @@ const Checkout = () => {
                     const name = isBuyNow
                       ? item.name
                       : item.product?.name || item.name || "Product";
-                    const variantName = isBuyNow
-                      ? item.variant?.name || ""
-                      : item.variant?.name || "";
+                    const variantName = item.variant?.name || "";
                     const price = isBuyNow
                       ? item.price
-                      : item.price ||
-                        item.product?.comparePrice ||
-                        item.product?.price ||
-                        0;
-                    const quantity = isBuyNow
-                      ? item.quantity
-                      : item.quantity || 1;
+                      : safeNumber(item.price) ||
+                        safeNumber(item.product?.comparePrice) ||
+                        safeNumber(item.product?.price);
+                    const quantity = item.quantity || 1;
                     const isDeactivated = isBuyNow
                       ? false
                       : item.product?.isActive === false;
@@ -1570,7 +1395,9 @@ const Checkout = () => {
                     return (
                       <div
                         key={isBuyNow ? `buynow-${index}` : item._id}
-                        className={`flex justify-between text-sm py-2 border-b border-gray-50 ${isDeactivated ? "opacity-50" : ""}`}
+                        className={`flex justify-between text-sm py-2 border-b border-gray-50 ${
+                          isDeactivated ? "opacity-50" : ""
+                        }`}
                       >
                         <span className="truncate mr-2">
                           {isDeactivated && "⚠️ "}
@@ -1579,7 +1406,7 @@ const Checkout = () => {
                             <span className="text-xs text-primary ml-1">
                               ({variantName})
                             </span>
-                          )}
+                          )}{" "}
                           × {quantity}
                         </span>
                         <span className="flex-shrink-0">
@@ -1647,10 +1474,6 @@ const Checkout = () => {
                           <span className="font-semibold text-amber-700">
                             ₹{remainingCOD.toLocaleString()}
                           </span>
-                        </div>
-                        <div className="flex justify-between text-xs text-amber-600 mt-2 pt-2 border-t border-amber-200">
-                          <span>Total</span>
-                          <span>₹{grandTotal.toLocaleString()}</span>
                         </div>
                       </div>
                     )}

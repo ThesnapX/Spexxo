@@ -1,5 +1,6 @@
 // backend/controllers/orderController.js
 
+import crypto from "crypto";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
@@ -7,77 +8,218 @@ import Coupon from "../models/Coupon.js";
 import User from "../models/User.js";
 import { orderPlacedEmail, orderStatusEmail } from "../utils/emailTemplates.js";
 import { sendTransactionalEmail } from "../utils/emailService.js";
-import { sendMetaEvent } from "../utils/metaCapi.js";
+import { firePurchaseEvent } from "../utils/firePurchaseEvent.js";
+import {
+  applyStockForOrder,
+  incrementItemStock,
+  findVariantForItem,
+} from "../utils/stockService.js";
 
 // ─────────────────────────────────────────────
-// Meta Purchase helper (for zero-value / COD-no-advance)
+// Safe numeric helper
 // ─────────────────────────────────────────────
-const firePurchaseEvent = async (order, req) => {
-  try {
-    if (!order) return;
-    if (!order.purchaseEventId) {
-      order.purchaseEventId = `purchase_${order._id}_${Date.now()}`;
-      order.purchaseTrackedAt = new Date();
-      await order.save();
-    }
-    const eventId = order.purchaseEventId;
-
-    const contents = (order.items || []).map((it) => ({
-      id: String(it.product?._id || it.product),
-      quantity: Number(it.quantity || 1),
-      item_price: Number(it.price || 0),
-    }));
-
-    const userData = {
-      email: order.user?.email,
-      phone: order.user?.phone || order.shippingAddress?.phone,
-      firstName: order.user?.firstName,
-      lastName: order.user?.lastName,
-      city: order.shippingAddress?.city,
-      state: order.shippingAddress?.state,
-      zip: order.shippingAddress?.pincode,
-      country: "IN",
-      externalId: order.user?._id?.toString(),
-      fbc: req?.cookies?._fbc || req?.body?.fbc || null,
-      fbp: req?.cookies?._fbp || req?.body?.fbp || null,
-      clientIpAddress:
-        req?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
-        req?.socket?.remoteAddress ||
-        null,
-      clientUserAgent: req?.headers?.["user-agent"] || null,
-    };
-
-    const customData = {
-      value: Number(order.total || 0),
-      currency: "INR",
-      content_ids: contents.map((c) => c.id),
-      content_type: "product",
-      contents,
-      num_items: contents.reduce((s, c) => s + c.quantity, 0),
-      order_id: order.orderNumber || String(order._id),
-    };
-
-    console.log(
-      `[CAPI] Firing Purchase (instant-confirm) | order=${order.orderNumber} | eventId=${eventId}`,
-    );
-
-    await sendMetaEvent({
-      eventName: "Purchase",
-      eventId,
-      userData,
-      customData,
-      eventSourceUrl: process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/account/orders/${order._id}`
-        : undefined,
-    });
-  } catch (err) {
-    console.error("[CAPI] Purchase fire error (non-fatal):", err.message);
-  }
+const safeNumber = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 };
 
-// @desc   Create order (pending, or instantly confirmed for zero/COD-no-advance)
-// @route  POST /api/orders
-// @access Private
+// ─────────────────────────────────────────────
+// Resolve authoritative item pricing from DB.
+//
+// Input: array of { product, variant, quantity }
+// Output: { items: [...], subtotal }
+//
+// The frontend is NEVER trusted for price, name, image, or stock.
+// ─────────────────────────────────────────────
+const resolveItemsFromDb = async (rawItems) => {
+  const resolved = [];
+  let subtotal = 0;
+
+  for (const raw of rawItems) {
+    const productId =
+      raw.product && typeof raw.product === "object" && raw.product._id
+        ? raw.product._id
+        : raw.product;
+
+    if (!productId) {
+      const err = new Error("Each item must have a product ID");
+      err.status = 400;
+      throw err;
+    }
+
+    const quantity = Number(raw.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      const err = new Error(
+        `Invalid quantity for product ${productId}. Quantity must be a positive integer.`,
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+      const err = new Error(`Product not found: ${productId}`);
+      err.status = 404;
+      throw err;
+    }
+    if (product.isActive === false) {
+      const err = new Error(
+        `Product "${product.name}" is currently unavailable`,
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    // ── Variant path ──
+    if (raw.variant) {
+      const matched = findVariantForItem(product, raw.variant);
+      if (!matched) {
+        const err = new Error(
+          `Selected variant not found for "${product.name}"`,
+        );
+        err.status = 400;
+        throw err;
+      }
+      if (matched.isActive === false) {
+        const err = new Error(
+          `Variant "${matched.name}" of "${product.name}" is unavailable`,
+        );
+        err.status = 400;
+        throw err;
+      }
+
+      const variantStock = Number(matched.stock);
+      if (!Number.isFinite(variantStock) || variantStock < quantity) {
+        const err = new Error(
+          `Only ${Number.isFinite(variantStock) ? variantStock : 0} items available for variant "${matched.name}"`,
+        );
+        err.status = 400;
+        throw err;
+      }
+
+      const unitPrice = safeNumber(matched.price, 0);
+      const lineTotal = unitPrice * quantity;
+      subtotal += lineTotal;
+
+      const firstImage =
+        (matched.images && matched.images[0]?.url) ||
+        product.images?.[0]?.url ||
+        "";
+
+      resolved.push({
+        product: product._id,
+        name: product.name,
+        image: firstImage,
+        price: unitPrice,
+        quantity,
+        subtotal: lineTotal,
+        variant: {
+          _id: matched._id || null,
+          name: matched.name || "",
+          sku: matched.sku || "",
+          price: unitPrice,
+          color: matched.color || null,
+          attributes: matched.attributes || {},
+          images: matched.images || [],
+        },
+      });
+      continue;
+    }
+
+    // ── Simple path ──
+    const productStock = Number(product.stock);
+    if (!Number.isFinite(productStock) || productStock < quantity) {
+      const err = new Error(
+        `Only ${Number.isFinite(productStock) ? productStock : 0} items available for "${product.name}"`,
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const unitPrice = safeNumber(product.comparePrice || product.price, 0);
+    const lineTotal = unitPrice * quantity;
+    subtotal += lineTotal;
+
+    resolved.push({
+      product: product._id,
+      name: product.name,
+      image: product.images?.[0]?.url || "",
+      price: unitPrice,
+      quantity,
+      subtotal: lineTotal,
+      variant: null,
+    });
+  }
+
+  return { items: resolved, subtotal };
+};
+
+// ─────────────────────────────────────────────
+// Apply coupon — server-side only
+// ─────────────────────────────────────────────
+const computeCouponDiscount = async (couponCode, subtotal, shippingCost) => {
+  if (!couponCode) return { discount: 0, couponData: null, coupon: null };
+
+  const coupon = await Coupon.findOne({
+    code: String(couponCode).toUpperCase(),
+    isActive: true,
+    startDate: { $lte: new Date() },
+    endDate: { $gte: new Date() },
+  });
+
+  if (!coupon) return { discount: 0, couponData: null, coupon: null };
+
+  if (coupon.totalUsageLimit && coupon.usedCount >= coupon.totalUsageLimit) {
+    return { discount: 0, couponData: null, coupon: null };
+  }
+
+  if (subtotal < safeNumber(coupon.minPurchase, 0)) {
+    return { discount: 0, couponData: null, coupon: null };
+  }
+
+  let discountBase = subtotal;
+  if (coupon.discountOn === "delivery") discountBase = shippingCost;
+
+  let discount = 0;
+  if (coupon.discountType === "percentage") {
+    discount = (discountBase * safeNumber(coupon.discountValue, 0)) / 100;
+    if (coupon.maxDiscount) {
+      discount = Math.min(discount, safeNumber(coupon.maxDiscount, 0));
+    }
+  } else {
+    discount = Math.min(safeNumber(coupon.discountValue, 0), discountBase);
+  }
+  discount = Math.max(0, Math.round(discount * 100) / 100);
+
+  return {
+    discount,
+    couponData: { code: coupon.code, discount },
+    coupon,
+  };
+};
+
+// ─────────────────────────────────────────────
+// Shipping cost — server-side authority
+// ─────────────────────────────────────────────
+// Free above ₹999, else ₹99. If the frontend already told us the
+// shipping method selected (basic vs ultra-fast) at a specific price,
+// we still recompute a floor — but we honour the *method* the user
+// chose, since shipping pricing logic lives in the Shipping module
+// and is pre-computed there.
+const computeShippingCost = ({ subtotal, chosenShippingCost }) => {
+  const chosen = safeNumber(chosenShippingCost, null);
+  if (Number.isFinite(chosen) && chosen >= 0) {
+    return chosen;
+  }
+  // Fallback rule.
+  return subtotal >= 999 ? 0 : 99;
+};
+
+// ─────────────────────────────────────────────
+// Create order
+// @route   POST /api/orders
+// @access  Private
+// ─────────────────────────────────────────────
 export const createOrder = async (req, res) => {
   try {
     const {
@@ -88,12 +230,45 @@ export const createOrder = async (req, res) => {
       isCOD,
       remainingCOD,
       items,
+      // Idempotency hint from the client (optional).
+      idempotencyKey,
+      // Shipping method info (informational — cost is recomputed).
+      shippingMethod,
+      shippingMethodName,
+      shippingDelivery,
+      shippingCost: clientShippingCost,
+      pincode,
     } = req.body;
 
-    let orderItems = items;
-    let subtotal = 0;
+    if (!shippingAddress || !shippingAddress.addressLine1) {
+      return res.status(400).json({
+        success: false,
+        message: "Shipping address is required",
+      });
+    }
 
-    if (!orderItems || orderItems.length === 0) {
+    // ── Idempotency: same key + same user returns the existing order. ──
+    if (idempotencyKey) {
+      const existing = await Order.findOne({
+        user: req.user._id,
+        idempotencyKey,
+      })
+        .populate("items.product", "name slug images sku variants")
+        .populate("user", "firstName lastName email phone customerId");
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          order: existing,
+          message: "Order already created",
+          idempotent: true,
+        });
+      }
+    }
+
+    // ── Resolve raw items from either the body or the user's cart. ──
+    let rawItems = Array.isArray(items) && items.length > 0 ? items : null;
+
+    if (!rawItems) {
       const cart = await Cart.findOne({ user: req.user._id }).populate(
         "items.product",
       );
@@ -102,103 +277,87 @@ export const createOrder = async (req, res) => {
           .status(400)
           .json({ success: false, message: "Cart is empty" });
       }
-      orderItems = [];
-      for (const item of cart.items) {
-        const product = item.product;
-        const price = product.comparePrice || product.price;
-        const quantity = item.quantity;
-        const itemTotal = price * quantity;
-        subtotal += itemTotal;
-        let variantImage = "";
-        let variantData = item.variant || null;
-        if (variantData?.images?.length) {
-          variantImage = variantData.images[0]?.url || "";
-        }
-        if (!variantImage && variantData?.image) {
-          variantImage = variantData.image;
-        }
-        if (!variantImage) variantImage = product.images?.[0]?.url || "";
-        orderItems.push({
-          product: product._id,
-          name: product.name,
-          image: variantImage,
-          price,
-          quantity,
-          subtotal: itemTotal,
-          variant: variantData,
-        });
-      }
-    } else {
-      for (const item of orderItems) {
-        if (!item.product) {
-          return res.status(400).json({
-            success: false,
-            message: "Each item must have a product ID",
-          });
-        }
-        if (!item.quantity || item.quantity <= 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid quantity for product ${item.name || item.product}`,
-          });
-        }
-        if (!item.price || item.price < 0) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid price for product ${item.name || item.product}`,
-          });
-        }
-        subtotal += (item.price || 0) * (item.quantity || 1);
-      }
+      rawItems = cart.items.map((ci) => ({
+        product: ci.product?._id || ci.product,
+        quantity: ci.quantity,
+        variant: ci.variant || null,
+      }));
     }
 
-    let discount = 0;
-    let couponData = null;
-    if (couponCode) {
-      const coupon = await Coupon.findOne({
-        code: couponCode.toUpperCase(),
-        isActive: true,
-        startDate: { $lte: new Date() },
-        endDate: { $gte: new Date() },
-      });
-      if (coupon) {
-        if (coupon.discountType === "percentage") {
-          discount = (subtotal * coupon.discountValue) / 100;
-          if (coupon.maxDiscount)
-            discount = Math.min(discount, coupon.maxDiscount);
-        } else {
-          discount = Math.min(coupon.discountValue, subtotal);
-        }
-        couponData = { code: coupon.code, discount: discount };
-      }
+    if (!rawItems || rawItems.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No items to order" });
     }
 
-    const shippingCost = subtotal >= 999 ? 0 : 99;
+    // ── Server-side price resolution. Frontend is NEVER trusted. ──
+    const { items: resolvedItems, subtotal } =
+      await resolveItemsFromDb(rawItems);
+
+    // ── Shipping (server authoritative) ──
+    const shippingCost = computeShippingCost({
+      subtotal,
+      chosenShippingCost: clientShippingCost,
+    });
+
+    // ── Coupon (server authoritative) ──
+    const { discount, couponData, coupon } = await computeCouponDiscount(
+      couponCode,
+      subtotal,
+      shippingCost,
+    );
+
+    // ── Totals ──
     const total = Math.max(0, subtotal - discount + shippingCost);
 
-    // Determine if this order is instantly confirmed (no Razorpay step)
+    // ── Instant-confirm? ──
     const isZeroValue = total === 0;
     const isCodNoAdvance = isCOD === true && !codAdvance && total > 0;
     const instantConfirm = isZeroValue || isCodNoAdvance;
 
-    const order = await Order.create({
+    // ── Reserve stock atomically BEFORE creating the order (instant case).
+    //    For non-instant orders, stock is reserved at payment verification.
+    //    We use a two-phase approach:
+    //      Phase A (instant): claim stock, then create order.
+    //      Phase B (payment): create pending order, claim stock on verify.
+    if (instantConfirm) {
+      const probe = {
+        items: resolvedItems.map((i) => ({
+          product: i.product,
+          quantity: i.quantity,
+          variant: i.variant,
+        })),
+      };
+      const stockResult = await applyStockForOrder(probe, "decrement");
+      if (!stockResult.ok) {
+        return res.status(400).json({
+          success: false,
+          message: stockResult.message || "Stock unavailable",
+          code: stockResult.code,
+        });
+      }
+    }
+
+    // ── Build order doc ──
+    const orderPayload = {
       user: req.user._id,
-      items: orderItems.map((item) => ({
-        ...item,
-        variant: item.variant || null,
-      })),
-      shippingAddress: shippingAddress,
-      paymentMethod: paymentMethod || "online",
+      items: resolvedItems,
+      shippingAddress,
+      paymentMethod: paymentMethod || "cod",
       paymentStatus: instantConfirm ? "paid" : "pending",
       orderStatus: instantConfirm ? "confirmed" : "pending",
-      subtotal: subtotal,
-      shippingCost: shippingCost,
-      discount: discount,
+      subtotal,
+      shippingCost,
+      discount,
       coupon: couponData,
-      total: total,
-      isCOD: isCOD || false,
-      codAdvance: codAdvance || 0,
-      remainingCOD: remainingCOD || 0,
+      total,
+      isCOD: !!isCOD,
+      codAdvance: safeNumber(codAdvance, 0),
+      remainingCOD: safeNumber(remainingCOD, 0),
+      shippingMethod: shippingMethod || null,
+      shippingMethodName: shippingMethodName || null,
+      shippingDelivery: shippingDelivery || null,
+      pincode: pincode || shippingAddress.pincode || null,
       statusHistory: [
         {
           status: instantConfirm ? "confirmed" : "pending",
@@ -210,18 +369,67 @@ export const createOrder = async (req, res) => {
           date: new Date(),
         },
       ],
-    });
+    };
+
+    // If we already claimed stock in Phase A, mark stockReducedAt so
+    // verification flow (which never runs for instant orders) doesn't
+    // try to decrement again.
+    if (instantConfirm) {
+      orderPayload.stockReducedAt = new Date();
+    }
+
+    // Generate idempotency key if the client didn't send one.
+    orderPayload.idempotencyKey =
+      idempotencyKey ||
+      `auto_${req.user._id}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+    let order;
+    try {
+      order = await Order.create(orderPayload);
+    } catch (createErr) {
+      // If instant confirm and order creation failed, restore stock.
+      if (instantConfirm) {
+        await applyStockForOrder(
+          {
+            items: resolvedItems.map((i) => ({
+              product: i.product,
+              quantity: i.quantity,
+              variant: i.variant,
+            })),
+          },
+          "increment",
+        ).catch(() => {});
+      }
+      // Duplicate idempotency key race — return the existing order.
+      if (createErr.code === 11000 && idempotencyKey) {
+        const existing = await Order.findOne({
+          user: req.user._id,
+          idempotencyKey,
+        })
+          .populate("items.product", "name slug images sku variants")
+          .populate("user", "firstName lastName email phone customerId");
+        if (existing) {
+          return res.status(200).json({
+            success: true,
+            order: existing,
+            message: "Order already created",
+            idempotent: true,
+          });
+        }
+      }
+      throw createErr;
+    }
 
     const populatedOrder = await Order.findById(order._id)
       .populate("items.product", "name slug images sku variants")
       .populate("user", "firstName lastName email phone customerId");
 
-    // Fire Purchase for instantly-confirmed orders
+    // ── Instant-confirm: fire Purchase now. ──
     if (instantConfirm) {
-      await firePurchaseEvent(populatedOrder, req);
+      await firePurchaseEvent(populatedOrder, req).catch(() => {});
     }
 
-    // Send order-placed email (non-blocking)
+    // ── Confirmation email (non-blocking, non-fatal) ──
     try {
       if (populatedOrder.user?.email) {
         const tpl = orderPlacedEmail({
@@ -242,7 +450,7 @@ export const createOrder = async (req, res) => {
       console.log("Order placed email failed:", emailErr.message);
     }
 
-    // Reset follow-up stages
+    // ── Reset follow-ups ──
     try {
       await User.findByIdAndUpdate(req.user._id, {
         wishlistFollowUpStage: 0,
@@ -256,6 +464,23 @@ export const createOrder = async (req, res) => {
       console.log("Follow-up reset failed:", resetErr.message);
     }
 
+    // ── Coupon usage increment (only after order actually created) ──
+    if (coupon) {
+      try {
+        await Coupon.updateOne(
+          { _id: coupon._id },
+          {
+            $inc: { usedCount: 1 },
+            $push: {
+              usedBy: { user: req.user._id, count: 1 },
+            },
+          },
+        );
+      } catch (couponErr) {
+        console.log("Coupon usage increment failed:", couponErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       order: populatedOrder,
@@ -264,16 +489,19 @@ export const createOrder = async (req, res) => {
         : "Order created, awaiting payment",
     });
   } catch (error) {
-    console.error("[ORDER] Create order error:", error);
-    res.status(400).json({
+    console.error("[ORDER] Create order error:", error.code || error.message);
+    res.status(error.status || 400).json({
       success: false,
       message: error.message || "Failed to create order",
+      code: error.code,
     });
   }
 };
 
 // ─────────────────────────────────────────────
-// All other order controllers unchanged
+// Cancel a pending order (before payment)
+// @route   DELETE /api/orders/:id/cancel-pending
+// @access  Private
 // ─────────────────────────────────────────────
 export const cancelPendingOrder = async (req, res) => {
   try {
@@ -283,16 +511,21 @@ export const cancelPendingOrder = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Order not found" });
     if (order.orderStatus !== "pending")
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Only pending orders can be cancelled",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
     if (order.user.toString() !== req.user._id.toString())
       return res
         .status(403)
         .json({ success: false, message: "Not authorized" });
+
+    // If stock was somehow already claimed, restore it.
+    if (order.stockReducedAt) {
+      await applyStockForOrder(order, "increment").catch((e) =>
+        console.error("[ORDER] Stock restore failed:", e.message),
+      );
+    }
 
     await Order.findByIdAndDelete(req.params.id);
     res
@@ -305,6 +538,9 @@ export const cancelPendingOrder = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Get current user's orders
+// ─────────────────────────────────────────────
 export const getOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id })
@@ -317,6 +553,9 @@ export const getOrders = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Get single order
+// ─────────────────────────────────────────────
 export const getOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
@@ -343,6 +582,9 @@ export const getOrder = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Cancel order (user or admin)
+// ─────────────────────────────────────────────
 export const cancelOrder = async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -350,6 +592,7 @@ export const cancelOrder = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+
     if (
       order.user.toString() !== req.user._id.toString() &&
       req.user.role !== "admin"
@@ -370,54 +613,43 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Order is already cancelled" });
     }
 
-    if (order.orderStatus === "confirmed") {
-      for (const item of order.items) {
-        const product = await Product.findById(item.product);
-        if (!product) continue;
-        const quantity = Number(item.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) continue;
-        if (item.variant && product.variants?.length > 0) {
-          const variantIndex = product.variants.findIndex(
-            (v) =>
-              v._id?.toString() === item.variant._id?.toString() ||
-              v.name === item.variant.name ||
-              v.sku === item.variant.sku,
-          );
-          if (variantIndex !== -1) {
-            product.variants[variantIndex].stock += quantity;
-          }
-        } else {
-          product.stock += quantity;
-        }
-        if (product.productType === "variable") {
-          let totalStock = 0;
-          product.variants.forEach((v) => {
-            totalStock += v.stock || 0;
-          });
-          product.stock = totalStock;
-        }
-        await product.save();
+    // ── Restore stock if it was reduced. ──
+    if (order.stockReducedAt) {
+      const restore = await applyStockForOrder(order, "increment");
+      if (!restore.ok) {
+        console.error(
+          "[ORDER] Stock restore failed on cancel:",
+          restore.code,
+          restore.message,
+        );
+        // Continue anyway — we do not want to block cancellation.
       }
     }
 
+    // ── Restore coupon usage. ──
     if (order.coupon?.code) {
-      await Coupon.findOneAndUpdate(
-        { code: order.coupon.code },
-        { $inc: { usedCount: -1 } },
-      );
+      try {
+        await Coupon.findOneAndUpdate(
+          { code: order.coupon.code },
+          { $inc: { usedCount: -1 } },
+        );
+      } catch (e) {
+        console.log("Coupon restore failed:", e.message);
+      }
     }
 
+    // ── Refund accounting. ──
     let refundAmount = 0;
     let refundNote = "";
-    if (order.codAdvance > 0 && order.paymentStatus === "paid") {
-      refundAmount = order.codAdvance;
+    if (safeNumber(order.codAdvance, 0) > 0 && order.paymentStatus === "paid") {
+      refundAmount = safeNumber(order.codAdvance, 0);
       refundNote = `Order cancelled. Refund of ₹${refundAmount} (advance) is pending.`;
       order.paymentStatus = "refund_pending";
     } else if (
       order.paymentStatus === "paid" &&
       order.paymentMethod === "online"
     ) {
-      refundAmount = order.total || 0;
+      refundAmount = safeNumber(order.total, 0);
       refundNote = `Order cancelled. Refund of ₹${refundAmount} is pending.`;
       order.paymentStatus = "refund_pending";
     } else {
@@ -449,29 +681,34 @@ export const cancelOrder = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Admin: get all orders
+// ─────────────────────────────────────────────
 export const getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
+    const safeLimit = Math.min(Number(limit) || 20, 100);
+    const safePage = Math.max(Number(page) || 1, 1);
     const query = {};
     if (status) query.orderStatus = status;
-    const skip = (Number(page) - 1) * Number(limit);
+    const skip = (safePage - 1) * safeLimit;
     const [orders, total] = await Promise.all([
       Order.find(query)
         .populate("user", "firstName lastName email phone customerId")
         .populate("items.product", "name slug images sku variants")
         .sort("-createdAt")
         .skip(skip)
-        .limit(Number(limit)),
+        .limit(safeLimit),
       Order.countDocuments(query),
     ]);
     res.status(200).json({
       success: true,
       orders,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page: safePage,
+        limit: safeLimit,
         total,
-        pages: Math.ceil(total / Number(limit)),
+        pages: Math.ceil(total / safeLimit),
       },
     });
   } catch (error) {
@@ -479,6 +716,9 @@ export const getAllOrders = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Admin: update order status
+// ─────────────────────────────────────────────
 export const updateOrderStatus = async (req, res) => {
   try {
     const { status, note } = req.body;
@@ -490,6 +730,7 @@ export const updateOrderStatus = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+
     const oldStatus = order.orderStatus;
     order.orderStatus = status;
     order.statusHistory.push({
@@ -535,6 +776,9 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────
+// Admin: update order (bulk field edit)
+// ─────────────────────────────────────────────
 export const updateOrder = async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(req.params.id, req.body, {
@@ -552,3 +796,6 @@ export const updateOrder = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+// Imported for backward compat with existing route code that referenced it.
+export { findVariantForItem };

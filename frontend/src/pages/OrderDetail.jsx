@@ -5,26 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
-import {
-  ArrowLeftIcon,
-  UserIcon,
-  ShoppingBagIcon,
-  MapPinIcon,
-  CreditCardIcon,
-  CalendarIcon,
-  ClockIcon,
-  CurrencyRupeeIcon,
-  TruckIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  PhotoIcon,
-  EnvelopeIcon,
-  PhoneIcon,
-  ClipboardDocumentListIcon,
-  TagIcon,
-  ReceiptRefundIcon,
-} from "@heroicons/react/24/outline";
-import { StarIcon as StarSolid } from "@heroicons/react/24/solid";
+import { absoluteUrl } from "../config/siteUrl";
+import { ReceiptRefundIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -105,28 +87,15 @@ const OrderDetail = () => {
     }
   };
 
-  // Get shipping method display name
   const getShippingMethodName = () => {
-    if (order.shippingMethodName) {
-      return order.shippingMethodName;
-    }
-    if (
-      order.shippingMethod === "ultra-fast" ||
-      order.shippingMethod === "ultra-fast"
-    ) {
-      return "Ultra Fast Shipping";
-    }
+    if (order.shippingMethodName) return order.shippingMethodName;
+    if (order.shippingMethod === "ultra-fast") return "Ultra Fast Shipping";
     return "Basic Shipping";
   };
 
-  // Get shipping delivery text
   const getShippingDelivery = () => {
-    if (order.shippingDelivery) {
-      return order.shippingDelivery;
-    }
-    if (order.shippingMethod === "ultra-fast") {
-      return "1-2 business days";
-    }
+    if (order.shippingDelivery) return order.shippingDelivery;
+    if (order.shippingMethod === "ultra-fast") return "1-2 business days";
     return "3-7 business days";
   };
 
@@ -136,7 +105,7 @@ const OrderDetail = () => {
         title={`Order #${order.orderNumber} | Spexxo`}
         description={`View order details for #${order.orderNumber} at Spexxo. Track your order status and items.`}
         ogType="website"
-        canonicalUrl={`https://spexxo.vercel.app/account/orders/${id}`}
+        canonicalUrl={absoluteUrl(`/account/orders/${id}`)}
         noIndex={true}
       />
       <div className="pt-28 pb-16">
@@ -190,7 +159,6 @@ const OrderDetail = () => {
             </div>
           </div>
 
-          {/* Refund Pending Banner */}
           {order.paymentStatus === "refund_pending" && (
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
               <div className="flex items-start gap-3">
@@ -214,7 +182,6 @@ const OrderDetail = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Order Items */}
             <div>
               <h2 className="text-lg font-semibold mb-4">Items</h2>
               <div className="space-y-3">
@@ -231,14 +198,13 @@ const OrderDetail = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <PhotoIcon className="w-6 h-6 text-gray-400" />
+                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs">
+                          No image
                         </div>
                       )}
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-text">{item.name}</p>
-                      {/* ✅ Show variant details */}
                       {item.variant?.name && (
                         <p className="text-sm text-primary font-medium">
                           Variant: {item.variant.name}
@@ -274,9 +240,7 @@ const OrderDetail = () => {
               </div>
             </div>
 
-            {/* Order Details */}
             <div className="space-y-6">
-              {/* Shipping Address */}
               <div className="bg-white rounded-xl border border-gray-100 p-6">
                 <h2 className="text-lg font-semibold mb-4">Shipping Address</h2>
                 <p className="font-medium">{order.shippingAddress?.fullName}</p>
@@ -313,12 +277,8 @@ const OrderDetail = () => {
                 )}
               </div>
 
-              {/* ✅ Shipping Method - Added */}
               <div className="bg-white rounded-xl border border-gray-100 p-6">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <TruckIcon className="w-5 h-5 text-primary" />
-                  Shipping Method
-                </h2>
+                <h2 className="text-lg font-semibold mb-4">Shipping Method</h2>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-text-light">Method</span>
@@ -351,7 +311,6 @@ const OrderDetail = () => {
                 </div>
               </div>
 
-              {/* Payment Details */}
               <div className="bg-white rounded-xl border border-gray-100 p-6">
                 <h2 className="text-lg font-semibold mb-4">Payment Details</h2>
                 <div className="space-y-2 text-sm">
@@ -428,7 +387,6 @@ const OrderDetail = () => {
                 </div>
               </div>
 
-              {/* Price Breakdown */}
               <div className="bg-white rounded-xl border border-gray-100 p-6">
                 <h2 className="text-lg font-semibold mb-4">Price Breakdown</h2>
                 <div className="space-y-2 text-sm">
@@ -465,7 +423,6 @@ const OrderDetail = () => {
                 </div>
               </div>
 
-              {/* Status History */}
               {order.statusHistory?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 p-6">
                   <h2 className="text-lg font-semibold mb-4">Order Timeline</h2>

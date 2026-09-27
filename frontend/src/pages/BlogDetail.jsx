@@ -4,6 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import BlogArticlePreview from "../components/blog/BlogArticlePreview";
 import { migrateToBlocks } from "../utils/blogBlocks";
 
@@ -64,7 +65,7 @@ const BlogDetail = () => {
         keywords={blog.seo?.metaKeywords}
         ogImage={blog.seo?.ogImage || blog.featuredImage?.url}
         ogType="article"
-        canonicalUrl={`https://spexxo.vercel.app/blog/${blog.slug}`}
+        canonicalUrl={absoluteUrl(`/blog/${blog.slug}`)}
         blog={blog}
       />
 

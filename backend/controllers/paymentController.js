@@ -3,216 +3,152 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import Order from "../models/Order.js";
-import Product from "../models/Product.js";
 import Cart from "../models/Cart.js";
-import { sendMetaEvent } from "../utils/metaCapi.js";
+import { applyStockForOrder } from "../utils/stockService.js";
+import { firePurchaseEvent } from "../utils/firePurchaseEvent.js";
 
+// ─────────────────────────────────────────────
 // Initialize Razorpay
+// ─────────────────────────────────────────────
 let razorpay;
 try {
-  razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-  });
-  console.log(
-    "✅ Razorpay initialized with key:",
-    process.env.RAZORPAY_KEY_ID?.substring(0, 10) + "...",
-  );
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    console.error(
+      "❌ Razorpay credentials missing. Payment endpoints will fail.",
+    );
+  } else {
+    razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+    console.log(
+      "✅ Razorpay initialized with key:",
+      process.env.RAZORPAY_KEY_ID.substring(0, 10) + "...",
+    );
+  }
 } catch (error) {
   console.error("❌ Failed to initialize Razorpay:", error.message);
 }
 
 // ─────────────────────────────────────────────
-// Safe stock helpers
+// Safe helpers
 // ─────────────────────────────────────────────
-const getSafeStock = (value) => {
-  if (value === undefined || value === null || isNaN(value)) return 0;
-  return Number(value);
+const safeNumber = (v, fallback = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 };
 
-const validateQuantity = (quantity, productName) => {
-  const qty = Number(quantity);
-  if (!Number.isFinite(qty) || qty <= 0) {
-    throw new Error(
-      `Invalid quantity for product "${productName}": ${quantity}. Quantity must be a positive number.`,
-    );
-  }
-  return qty;
-};
+const short = (s, n = 12) => (s ? String(s).substring(0, n) + "..." : "—");
 
 // ─────────────────────────────────────────────
-// Meta Purchase — fired once per order, idempotent
-// ─────────────────────────────────────────────
-/**
- * Fire Meta Purchase for a paid order (browser + CAPI dedup via purchaseEventId).
- * Must be called AFTER order is confirmed & saved.
- * Never throws — tracking must not block payment flow.
- */
-const firePurchaseEvent = async (order, req) => {
-  try {
-    if (!order) return;
-
-    // Stable idempotent event id, persisted on the order
-    if (!order.purchaseEventId) {
-      order.purchaseEventId = `purchase_${order._id}_${Date.now()}`;
-      order.purchaseTrackedAt = new Date();
-      await order.save();
-    }
-
-    // Skip if we've already sent the Purchase event in this session
-    // (idempotency is enforced by the order itself via purchaseEventId)
-    const eventId = order.purchaseEventId;
-
-    const contents = (order.items || []).map((it) => ({
-      id: String(it.product?._id || it.product),
-      quantity: Number(it.quantity || 1),
-      item_price: Number(it.price || 0),
-    }));
-
-    const content_ids = contents.map((c) => c.id);
-    const num_items = contents.reduce((s, c) => s + c.quantity, 0);
-
-    // user_data — prefer order user, then request user
-    const userData = {
-      email: order.user?.email,
-      phone: order.user?.phone || order.shippingAddress?.phone,
-      firstName: order.user?.firstName,
-      lastName: order.user?.lastName,
-      city: order.shippingAddress?.city,
-      state: order.shippingAddress?.state,
-      zip: order.shippingAddress?.pincode,
-      country: "IN",
-      externalId: order.user?._id?.toString(),
-      // Attribution (from request cookies/body — Meta will attribute)
-      fbc: req?.cookies?._fbc || req?.body?.fbc || null,
-      fbp: req?.cookies?._fbp || req?.body?.fbp || null,
-      clientIpAddress:
-        req?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() ||
-        req?.socket?.remoteAddress ||
-        null,
-      clientUserAgent: req?.headers?.["user-agent"] || null,
-    };
-
-    const customData = {
-      value: Number(order.total || 0),
-      currency: "INR",
-      content_ids,
-      content_type: "product",
-      contents,
-      num_items,
-      order_id: order.orderNumber || String(order._id),
-    };
-
-    console.log(
-      `[CAPI] Firing Purchase | order=${order.orderNumber} | eventId=${eventId}`,
-    );
-
-    await sendMetaEvent({
-      eventName: "Purchase",
-      eventId,
-      userData,
-      customData,
-      eventSourceUrl: process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/account/orders/${order._id}`
-        : undefined,
-    });
-  } catch (err) {
-    // Never let tracking break the payment flow
-    console.error("[CAPI] Purchase fire error (non-fatal):", err.message);
-  }
-};
-
-// ─────────────────────────────────────────────
-// Confirm order and reduce stock
+// Confirm order: reduce stock (atomic) + mark paid
+//
+// Idempotent by design:
+//   1. If paymentStatus === "paid" AND stockReducedAt is set → return early.
+//   2. Claim stockReducedAt via atomic findOneAndUpdate BEFORE any
+//      stock mutation. Two concurrent verify calls cannot both win.
+//   3. applyStockForOrder handles its own rollback if any item fails.
+//   4. Only after stock succeeds do we set orderStatus = "confirmed".
+//   5. Purchase is fired once (guarded by order.purchaseEventId).
 // ─────────────────────────────────────────────
 const confirmOrderAndReduceStock = async (orderId, paymentId, req) => {
-  console.log("[PAYMENT] Confirming order and reducing stock:", orderId);
+  console.log("[PAYMENT] Confirming order:", orderId);
 
   const order = await Order.findById(orderId);
-  if (!order) throw new Error("Order not found");
+  if (!order) {
+    const err = new Error("Order not found");
+    err.status = 404;
+    throw err;
+  }
 
-  if (order.orderStatus === "confirmed") {
-    console.log("[PAYMENT] Order already confirmed — Purchase may have fired");
-    // Still attempt Purchase (idempotent — same eventId)
-    await firePurchaseEvent(
-      await Order.findById(orderId)
-        .populate("user", "firstName lastName email phone")
-        .populate("items.product", "name slug images sku"),
-      req,
+  // Already fully confirmed → return early, no re-verify.
+  if (
+    order.paymentStatus === "paid" &&
+    order.stockReducedAt &&
+    order.orderStatus === "confirmed"
+  ) {
+    console.log(
+      `[PAYMENT] Order ${order.orderNumber} already confirmed. Returning existing.`,
     );
-    return order;
+    // Fire Purchase only if it somehow wasn't (defensive — firePurchaseEvent
+    // is itself idempotent via purchaseEventId).
+    const populated = await Order.findById(orderId)
+      .populate("user", "firstName lastName email phone")
+      .populate("items.product", "name slug images sku");
+    await firePurchaseEvent(populated, req).catch(() => {});
+    return populated;
   }
 
-  // Step 1: reduce stock
-  for (const item of order.items) {
-    const product = await Product.findById(item.product);
-    if (!product) continue;
-
-    const quantity = validateQuantity(item.quantity, product.name);
-
-    if (item.variant && product.variants && product.variants.length > 0) {
-      const variantIndex = product.variants.findIndex(
-        (v) =>
-          v._id?.toString() === item.variant._id?.toString() ||
-          v.name === item.variant.name ||
-          v.sku === item.variant.sku,
-      );
-      if (variantIndex === -1) continue;
-
-      const currentVariantStock = getSafeStock(
-        product.variants[variantIndex].stock,
-      );
-      if (currentVariantStock < quantity) {
-        throw new Error(
-          `Not enough stock for variant ${product.variants[variantIndex].name}.`,
-        );
-      }
-      product.variants[variantIndex].stock = currentVariantStock - quantity;
-
-      if (product.productType === "variable") {
-        let totalStock = 0;
-        product.variants.forEach((v) => {
-          totalStock += getSafeStock(v.stock);
-        });
-        product.stock = totalStock;
-      }
-      product.markModified("variants");
-      await product.save();
-    } else {
-      const currentStock = getSafeStock(product.stock);
-      if (currentStock < quantity) {
-        throw new Error(`Not enough stock for ${product.name}.`);
-      }
-      product.stock = currentStock - quantity;
-      await product.save();
-    }
-  }
-
-  // Step 2: confirm order
-  order.paymentStatus = "paid";
-  order.orderStatus = "confirmed";
-  order.statusHistory.push({
-    status: "confirmed",
-    note: `Payment verified. Payment ID: ${paymentId}`,
-    date: new Date(),
-  });
-  await order.save();
-
-  // Step 3: clear cart
-  await Cart.findOneAndUpdate(
-    { user: order.user },
-    { items: [] },
+  // ── Atomic claim of stockReducedAt ──
+  // Only one concurrent request can flip this field from null → date.
+  const claimed = await Order.findOneAndUpdate(
+    { _id: orderId, stockReducedAt: null },
+    { $set: { stockReducedAt: new Date() } },
     { new: true },
   );
 
-  // Step 4: reload populated order for Purchase tracking
-  const populatedOrder = await Order.findById(order._id)
+  if (!claimed) {
+    // Another request already reduced stock. Just make sure status is
+    // reflected, then return.
+    console.log(
+      `[PAYMENT] Stock already reduced by a concurrent request for ${order.orderNumber}`,
+    );
+    const populated = await Order.findById(orderId)
+      .populate("user", "firstName lastName email phone")
+      .populate("items.product", "name slug images sku");
+    await firePurchaseEvent(populated, req).catch(() => {});
+    return populated;
+  }
+
+  // ── Reduce stock atomically (with rollback on failure) ──
+  const stockResult = await applyStockForOrder(claimed, "decrement");
+
+  if (!stockResult.ok) {
+    // Roll back the claim so a future legitimate retry can try again.
+    await Order.updateOne({ _id: orderId }, { $set: { stockReducedAt: null } });
+    console.error(
+      `[PAYMENT] Stock reduction failed for ${claimed.orderNumber}:`,
+      stockResult.code,
+      stockResult.message,
+    );
+    const err = new Error(stockResult.message || "Stock reduction failed");
+    err.status = 400;
+    err.code = stockResult.code;
+    throw err;
+  }
+
+  // ── Mark paid + confirmed ──
+  claimed.paymentStatus = "paid";
+  claimed.orderStatus = "confirmed";
+  claimed.paymentVerifiedAt = new Date();
+  if (!claimed.paymentDetails) claimed.paymentDetails = {};
+  if (paymentId) claimed.paymentDetails.transactionId = paymentId;
+
+  claimed.statusHistory.push({
+    status: "confirmed",
+    note: `Payment verified. Payment ID: ${short(paymentId)}`,
+    date: new Date(),
+  });
+
+  await claimed.save();
+
+  // ── Clear the cart ──
+  try {
+    await Cart.findOneAndUpdate(
+      { user: claimed.user },
+      { items: [], followUpStage: 0, lastActivityAt: new Date() },
+      { new: true },
+    );
+  } catch (e) {
+    console.error("[PAYMENT] Cart clear failed (non-fatal):", e.message);
+  }
+
+  // ── Reload populated, then fire Purchase (idempotent) ──
+  const populatedOrder = await Order.findById(claimed._id)
     .populate("items.product", "name slug images sku variants")
     .populate("user", "firstName lastName email phone customerId");
 
-  // Step 5: fire Purchase (idempotent, non-blocking — but awaited here
-  //         so the eventId is guaranteed persisted before response)
-  await firePurchaseEvent(populatedOrder, req);
+  await firePurchaseEvent(populatedOrder, req).catch(() => {});
 
   return populatedOrder;
 };
@@ -246,9 +182,9 @@ export const createRazorpayOrder = async (req, res) => {
         .json({ success: false, message: "Order already paid" });
     }
 
-    let amountToCharge = order.total;
-    if (order.isCOD && order.codAdvance > 0) {
-      amountToCharge = order.codAdvance;
+    let amountToCharge = safeNumber(order.total, 0);
+    if (order.isCOD && safeNumber(order.codAdvance, 0) > 0) {
+      amountToCharge = safeNumber(order.codAdvance, 0);
     } else if (order.isCOD && !order.codAdvance) {
       return res.status(400).json({
         success: false,
@@ -256,10 +192,10 @@ export const createRazorpayOrder = async (req, res) => {
       });
     }
 
-    if (amountToCharge <= 0) {
+    if (!Number.isFinite(amountToCharge) || amountToCharge <= 0) {
       return res
         .status(400)
-        .json({ success: false, message: "Payment amount is zero." });
+        .json({ success: false, message: "Payment amount is invalid." });
     }
 
     if (!razorpay) {
@@ -269,7 +205,9 @@ export const createRazorpayOrder = async (req, res) => {
       });
     }
 
-    const productNames = order.items.map((item) => item.name).join(", ");
+    const productNames = (order.items || [])
+      .map((item) => item.name)
+      .join(", ");
     const amountInPaise = Math.round(amountToCharge * 100);
     const receipt = order.orderNumber || `ORD-${Date.now()}`;
 
@@ -325,7 +263,7 @@ export const createRazorpayOrder = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-// Verify Razorpay payment
+// Verify Razorpay payment (idempotent)
 // ─────────────────────────────────────────────
 export const verifyRazorpayPayment = async (req, res) => {
   try {
@@ -336,6 +274,19 @@ export const verifyRazorpayPayment = async (req, res) => {
       orderId,
     } = req.body;
 
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required payment verification fields",
+      });
+    }
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "orderId is required" });
+    }
+
+    // Signature check (constant-time safe).
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -343,6 +294,9 @@ export const verifyRazorpayPayment = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
+      console.warn(
+        `[PAYMENT] Signature mismatch for order ${orderId} | payment ${short(razorpay_payment_id)}`,
+      );
       return res.status(400).json({
         success: false,
         message: "Payment verification failed - Invalid signature",
@@ -356,12 +310,15 @@ export const verifyRazorpayPayment = async (req, res) => {
         .json({ success: false, message: "Order not found" });
     }
 
+    // Idempotency: if already paid, return the existing order.
     if (order.paymentStatus === "paid") {
-      // Idempotent — Purchase already fired when first confirmed
+      const populated = await Order.findById(order._id)
+        .populate("items.product", "name slug images sku variants")
+        .populate("user", "firstName lastName email phone customerId");
       return res.status(200).json({
         success: true,
         message: "Order already paid",
-        order: order,
+        order: populated,
       });
     }
 
@@ -377,8 +334,11 @@ export const verifyRazorpayPayment = async (req, res) => {
       order: populatedOrder,
     });
   } catch (error) {
-    console.error("[PAYMENT] Payment verification error:", error.message);
-    res.status(500).json({
+    console.error(
+      "[PAYMENT] Payment verification error:",
+      error.code || error.message,
+    );
+    res.status(error.status || 500).json({
       success: false,
       message: error.message || "Payment verification failed",
     });
@@ -396,7 +356,7 @@ export const getRazorpayKey = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-// Verify COD advance payment
+// Verify COD advance (idempotent)
 // ─────────────────────────────────────────────
 export const verifyCODAdvance = async (req, res) => {
   try {
@@ -414,6 +374,17 @@ export const verifyCODAdvance = async (req, res) => {
         message: "Missing required payment verification fields",
       });
     }
+    if (!orderId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "orderId is required" });
+    }
+    if (!isCODAdvance) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid COD advance request",
+      });
+    }
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
@@ -422,6 +393,9 @@ export const verifyCODAdvance = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== razorpay_signature) {
+      console.warn(
+        `[PAYMENT] COD signature mismatch for order ${orderId} | payment ${short(razorpay_payment_id)}`,
+      );
       return res.status(400).json({
         success: false,
         message: "Payment verification failed - Invalid signature",
@@ -436,17 +410,13 @@ export const verifyCODAdvance = async (req, res) => {
     }
 
     if (order.paymentStatus === "paid") {
+      const populated = await Order.findById(order._id)
+        .populate("items.product", "name slug images sku variants")
+        .populate("user", "firstName lastName email phone customerId");
       return res.status(200).json({
         success: true,
         message: "Order already paid",
-        order: order,
-      });
-    }
-
-    if (!isCODAdvance) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid COD advance request",
+        order: populated,
       });
     }
 
@@ -456,10 +426,14 @@ export const verifyCODAdvance = async (req, res) => {
       req,
     );
 
-    populatedOrder.codAdvance =
-      populatedOrder.codAdvance || Math.round(populatedOrder.total * 0.1);
-    populatedOrder.remainingCOD =
-      populatedOrder.total - populatedOrder.codAdvance;
+    // COD bookkeeping: ensure codAdvance and remainingCOD are set.
+    const total = safeNumber(populatedOrder.total, 0);
+    const advance =
+      safeNumber(populatedOrder.codAdvance, 0) > 0
+        ? safeNumber(populatedOrder.codAdvance, 0)
+        : Math.round(total * 0.1);
+    populatedOrder.codAdvance = advance;
+    populatedOrder.remainingCOD = Math.max(0, total - advance);
     await populatedOrder.save();
 
     res.status(200).json({
@@ -468,8 +442,11 @@ export const verifyCODAdvance = async (req, res) => {
       order: populatedOrder,
     });
   } catch (error) {
-    console.error("[PAYMENT] COD advance verification error:", error.message);
-    res.status(500).json({
+    console.error(
+      "[PAYMENT] COD advance verification error:",
+      error.code || error.message,
+    );
+    res.status(error.status || 500).json({
       success: false,
       message: error.message || "Payment verification failed",
     });

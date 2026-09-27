@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -45,7 +46,7 @@ const MyOrders = () => {
         title="My Orders | Spexxo"
         description="View your order history and track your shipments at Spexxo."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/account/orders"
+        canonicalUrl={absoluteUrl("/account/orders")}
         noIndex={true}
       />
       <div className="pt-24 pb-16">
@@ -101,12 +102,18 @@ const MyOrders = () => {
                     </div>
                     <div className="flex items-center gap-3 flex-wrap">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${statusColors[order.orderStatus] || "bg-gray-100 text-gray-700"}`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                          statusColors[order.orderStatus] ||
+                          "bg-gray-100 text-gray-700"
+                        }`}
                       >
                         {order.orderStatus}
                       </span>
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${paymentStatusColors[order.paymentStatus] || "bg-gray-100 text-gray-700"}`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                          paymentStatusColors[order.paymentStatus] ||
+                          "bg-gray-100 text-gray-700"
+                        }`}
                       >
                         {order.paymentStatus === "refund_pending"
                           ? "Refund Pending"
@@ -117,7 +124,6 @@ const MyOrders = () => {
                     </div>
                   </div>
                   <div className="p-4">
-                    {/* ✅ Show items with variant details */}
                     <div className="space-y-2">
                       {order.items?.map((item, index) => (
                         <div

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -21,7 +22,6 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
-  // Password strength calculation
   const getPasswordStrength = (password) => {
     if (!password) return { score: 0, label: "", color: "", barColor: "" };
     let score = 0;
@@ -92,7 +92,7 @@ const ResetPassword = () => {
         title="Reset Password | Spexxo"
         description="Create a new password for your Spexxo account."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/reset-password/:token"
+        canonicalUrl={absoluteUrl("/reset-password")}
         noIndex={true}
       />
       <div className="pt-28 pb-16">
@@ -109,7 +109,6 @@ const ResetPassword = () => {
             className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-4"
             noValidate
           >
-            {/* New Password */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 New Password *
@@ -123,7 +122,11 @@ const ResetPassword = () => {
                     if (formErrors.password)
                       setFormErrors({ ...formErrors, password: undefined });
                   }}
-                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${formErrors.password ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${
+                    formErrors.password
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="Min 6 characters"
                 />
                 <button
@@ -149,13 +152,25 @@ const ResetPassword = () => {
                   <div className="flex items-center gap-2 mb-1">
                     <div className="flex gap-1">
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 1 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 1
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 2 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 2
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                       <div
-                        className={`h-1.5 w-12 rounded-full ${passwordStrength.score >= 3 ? passwordStrength.barColor : "bg-gray-200"}`}
+                        className={`h-1.5 w-12 rounded-full ${
+                          passwordStrength.score >= 3
+                            ? passwordStrength.barColor
+                            : "bg-gray-200"
+                        }`}
                       ></div>
                     </div>
                     <span
@@ -172,7 +187,6 @@ const ResetPassword = () => {
               )}
             </div>
 
-            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Confirm Password *
@@ -189,7 +203,11 @@ const ResetPassword = () => {
                         confirmPassword: undefined,
                       });
                   }}
-                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${formErrors.confirmPassword ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                  className={`w-full px-4 py-2.5 pr-11 border rounded-lg ${
+                    formErrors.confirmPassword
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
                   placeholder="Re-enter password"
                 />
                 <button

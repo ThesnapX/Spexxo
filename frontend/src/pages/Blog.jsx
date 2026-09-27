@@ -3,13 +3,12 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
-import { useState } from "react";
 import SEO from "../components/common/SEO";
+import { SITE_URL } from "../config/siteUrl";
 import BlogLiveSearch from "../components/common/BlogLiveSearch";
-import { ClockIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { ClockIcon } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const SITE_URL = "https://spexxo.vercel.app";
 
 const Blog = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,7 +16,6 @@ const Blog = () => {
   const searchTerm = searchParams.get("search") || "";
   const tag = searchParams.get("tag") || "";
 
-  // Internal-search pages should not be indexed
   const isSearchPage = !!(searchTerm || tag);
 
   const { data, isLoading } = useQuery({
@@ -72,9 +70,6 @@ const Blog = () => {
             ? `Read articles about ${category} on the Spexxo blog. Eye care tips, buying guides and eyewear trends.`
             : "Eye care tips, buying guides and eyewear trends from the Spexxo team. Learn how to choose the right eyeglasses, sunglasses and contact lenses."
         }
-        // ✅ Canonical collapses to /blog. Category-tagged browse is
-        // supplementary and shouldn't produce a new canonical URL,
-        // unless you later create dedicated /blog/category/:slug routes.
         canonicalUrl={`${SITE_URL}/blog`}
         noIndex={isSearchPage}
         ogType="website"

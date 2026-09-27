@@ -12,8 +12,6 @@ import {
   ShoppingBagIcon,
   ChevronRightIcon,
   ChevronDownIcon,
-  XMarkIcon,
-  ArrowsPointingOutIcon,
   MinusIcon,
   PlusIcon,
   PhotoIcon,
@@ -26,6 +24,7 @@ import {
   StarIcon as StarSolid,
 } from "@heroicons/react/24/solid";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import AuthPopup from "../components/common/AuthPopup";
 import { useCart } from "../context/CartContext";
 import { useWishlist } from "../context/WishlistContext";
@@ -39,7 +38,6 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [showZoom, setShowZoom] = useState(false);
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [openAccordion, setOpenAccordion] = useState("description");
   const [selectedVariant, setSelectedVariant] = useState(null);
@@ -68,12 +66,14 @@ const ProductDetail = () => {
 
   const product = data?.product;
   const isDeactivated = product?.isActive === false;
+
   useEffect(() => {
     if (product && product._id) {
       trackViewContent(product);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product?._id]);
-  // Fetch colors for display
+
   const { data: colorsData } = useQuery({
     queryKey: ["colors"],
     queryFn: async () => {
@@ -129,10 +129,8 @@ const ProductDetail = () => {
     enabled: !!product?._id,
   });
 
-  // Set default variant when product loads
   useEffect(() => {
     if (product?.variants && product.variants.length > 0) {
-      // Find the default variant or use the first one
       const defaultVariant =
         product.variants.find((v) => v.isDefault) || product.variants[0];
       setSelectedVariant(defaultVariant);
@@ -144,14 +142,12 @@ const ProductDetail = () => {
         setSelectedImage(0);
       }
     } else {
-      // Reset variant selection for simple products
       setSelectedVariant(null);
       setSelectedVariantImages([]);
       setSelectedImage(0);
     }
   }, [product]);
 
-  // Update images when selected variant changes
   useEffect(() => {
     if (selectedVariant) {
       if (selectedVariant.images?.length > 0) {
@@ -164,17 +160,14 @@ const ProductDetail = () => {
     }
   }, [selectedVariant]);
 
-  // ✅ NEW: Preselect variant from cart if product is in cart
   const { cart } = useCart();
   useEffect(() => {
     if (product && cart?.items?.length > 0 && product.variants?.length > 0) {
-      // Find if this product is in the cart
       const cartItem = cart.items.find(
         (item) => item.product?._id === product._id,
       );
 
       if (cartItem && cartItem.variant) {
-        // Find the matching variant in the product's variants
         const matchingVariant = product.variants?.find(
           (v) =>
             v._id?.toString() === cartItem.variant._id?.toString() ||
@@ -196,10 +189,8 @@ const ProductDetail = () => {
   const displayRelated =
     smartRelated?.length > 0 ? smartRelated : data?.relatedProducts || [];
 
-  // ✅ FIXED: Get display price with proper variant discount support
   const getVariantPriceInfo = (variant) => {
     if (!variant) {
-      // Fallback to product level
       const productPrice = product?.price || 0;
       const productCompare = product?.comparePrice || 0;
       const hasDisc = productCompare > 0 && productCompare < productPrice;
@@ -229,19 +220,15 @@ const ProductDetail = () => {
     };
   };
 
-  // Get current price info based on selected variant or product
   const currentPriceInfo = getVariantPriceInfo(selectedVariant);
 
   const displayPrice = currentPriceInfo.displayPrice;
   const originalPrice = currentPriceInfo.originalPrice;
-  const comparePrice = currentPriceInfo.comparePrice;
   const hasDiscount = currentPriceInfo.hasDiscount;
   const discountPercent = currentPriceInfo.discountPercent;
 
   const getDisplayStock = () => {
-    if (selectedVariant?.stock !== undefined) {
-      return selectedVariant.stock;
-    }
+    if (selectedVariant?.stock !== undefined) return selectedVariant.stock;
     return product?.stock || 0;
   };
 
@@ -249,19 +236,13 @@ const ProductDetail = () => {
   const isVariantOutOfStock = selectedVariant && selectedVariant.stock <= 0;
   const isProductOutOfStock = !selectedVariant && (product?.stock || 0) <= 0;
 
-  // Helper function to get color details from color ID or name
   const getColorDetails = (colorId) => {
     if (!colorId) return null;
-    // If colorId is an object (populated)
-    if (typeof colorId === "object" && colorId !== null) {
-      return colorId;
-    }
-    // If colorId is a string (ID)
+    if (typeof colorId === "object" && colorId !== null) return colorId;
     const color = colors.find((c) => c._id === colorId);
     return color || null;
   };
 
-  // Get variant attributes for display
   const getVariantAttributes = () => {
     if (selectedVariant) {
       return {
@@ -275,7 +256,6 @@ const ProductDetail = () => {
         bridge: selectedVariant.bridge || null,
       };
     }
-    // Fallback to product-level attributes
     return {
       frameShape: product?.frameShape || null,
       frameMaterial: product?.frameMaterial || null,
@@ -290,7 +270,6 @@ const ProductDetail = () => {
 
   const variantAttributes = getVariantAttributes();
 
-  // Helper function to get attribute values as array
   const getAttributeValues = (value) => {
     if (!value) return [];
     return value
@@ -299,7 +278,6 @@ const ProductDetail = () => {
       .filter(Boolean);
   };
 
-  // Get color details for frame colors
   const getColorInfo = (colorName) => {
     if (!colorName) return null;
     return colors.find((c) => c.name.toLowerCase() === colorName.toLowerCase());
@@ -335,16 +313,13 @@ const ProductDetail = () => {
       return;
     }
 
-    // ✅ Get variant image if available
     let variantImage = "";
     let variantData = selectedVariant;
 
     if (selectedVariant) {
-      // Check if variant has images
       if (selectedVariant.images && selectedVariant.images.length > 0) {
         variantImage = selectedVariant.images[0]?.url || "";
       }
-      // If variant has no images, use product image
       if (!variantImage) {
         variantImage = product.images?.[0]?.url || "";
       }
@@ -427,11 +402,10 @@ const ProductDetail = () => {
     }
   };
 
-  // Get frame colors with color swatches
   const getFrameColorsWithSwatches = (frameColorValue) => {
     if (!frameColorValue) return [];
-    const colors = getAttributeValues(frameColorValue);
-    return colors.map((colorName) => {
+    const colorList = getAttributeValues(frameColorValue);
+    return colorList.map((colorName) => {
       const colorInfo = getColorInfo(colorName);
       return {
         name: colorName,
@@ -502,13 +476,12 @@ Please confirm availability.`;
         }
         ogImage={product.images?.[0]?.url}
         ogType="product"
-        canonicalUrl={`https://spexxo.vercel.app/product/${product.slug}`}
+        canonicalUrl={absoluteUrl(`/product/${product.slug}`)}
         product={product}
       />
 
       <div className="pt-20 md:pt-24 pb-16">
         <div className="container-custom">
-          {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-sm text-text-light mb-6 overflow-x-auto whitespace-nowrap pb-2">
             <Link to="/" className="hover:text-primary transition">
               Home
@@ -533,13 +506,11 @@ Please confirm availability.`;
           </nav>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 mb-16">
-            {/* Image Gallery */}
             <div>
               <div
-                className={`relative bg-gray-50 rounded-2xl overflow-hidden group ${
-                  isDeactivated ? "opacity-60 grayscale" : "cursor-zoom-in"
+                className={`relative bg-gray-50 rounded-2xl overflow-hidden ${
+                  isDeactivated ? "opacity-60 grayscale" : ""
                 }`}
-                onClick={() => !isDeactivated && setShowZoom(!showZoom)}
               >
                 <img
                   src={
@@ -549,17 +520,8 @@ Please confirm availability.`;
                     "https://picsum.photos/800/800"
                   }
                   alt={product.name}
-                  className={`w-full aspect-square object-cover transition-transform duration-300 ${
-                    showZoom && !isDeactivated
-                      ? "scale-150"
-                      : "group-hover:scale-105"
-                  }`}
+                  className="w-full aspect-square object-cover"
                 />
-                {!isDeactivated && (
-                  <button className="absolute top-4 right-4 w-10 h-10 bg-white/90 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition">
-                    <ArrowsPointingOutIcon className="w-5 h-5 text-text" />
-                  </button>
-                )}
                 {isDeactivated ? (
                   <span className="absolute top-4 left-4 bg-gray-600 text-white text-sm font-semibold px-3 py-1.5 rounded-full">
                     Deactivated
@@ -588,10 +550,7 @@ Please confirm availability.`;
                   ).map((img, index) => (
                     <button
                       key={index}
-                      onClick={() => {
-                        setSelectedImage(index);
-                        setShowZoom(false);
-                      }}
+                      onClick={() => setSelectedImage(index)}
                       className={`w-16 h-16 md:w-20 md:h-20 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all ${
                         selectedImage === index
                           ? "border-primary ring-2 ring-primary/20"
@@ -609,7 +568,6 @@ Please confirm availability.`;
               )}
             </div>
 
-            {/* Product Info */}
             <div>
               {product.brand?.name && (
                 <p className="text-sm font-medium text-primary mb-2">
@@ -619,7 +577,7 @@ Please confirm availability.`;
               <h1 className="text-2xl md:text-3xl font-bold text-text mb-3 leading-tight">
                 {product.name}
               </h1>
-              {/* Price & Rating */}
+
               <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <div className="flex items-baseline gap-2">
                   <span
@@ -662,7 +620,6 @@ Please confirm availability.`;
                 </div>
               </div>
 
-              {/* Variant Selector */}
               {product?.variants && product.variants.length > 0 && (
                 <div className="mb-6">
                   <label className="text-sm font-medium text-text mb-3 block">
@@ -674,12 +631,10 @@ Please confirm availability.`;
                         selectedVariant?._id === variant._id ||
                         selectedVariant?.name === variant.name;
                       const isVariantActive = variant.isActive !== false;
-                      const isVariantOutOfStock = variant.stock <= 0;
-                      const isDisabled =
-                        !isVariantActive || isVariantOutOfStock;
+                      const isVariantOut = variant.stock <= 0;
+                      const isDisabled = !isVariantActive || isVariantOut;
                       const color = getColorDetails(variant.color);
 
-                      // ✅ Get variant price info
                       const variantPriceInfo = getVariantPriceInfo(variant);
                       const vDisplayPrice = variantPriceInfo.displayPrice;
                       const vOriginalPrice = variantPriceInfo.originalPrice;
@@ -690,9 +645,7 @@ Please confirm availability.`;
                         <button
                           key={index}
                           onClick={() => {
-                            if (!isDisabled) {
-                              setSelectedVariant(variant);
-                            }
+                            if (!isDisabled) setSelectedVariant(variant);
                           }}
                           disabled={isDisabled}
                           className={`
@@ -706,7 +659,6 @@ Please confirm availability.`;
                             }
                           `}
                         >
-                          {/* Color Swatch */}
                           <div className="flex items-center gap-2 mb-1.5">
                             {color?.hexCode ? (
                               <span
@@ -721,7 +673,6 @@ Please confirm availability.`;
                             </span>
                           </div>
 
-                          {/* ✅ Price with discount */}
                           <div className="text-xs text-text-light">
                             ₹{vDisplayPrice?.toLocaleString()}
                             {vHasDiscount && (
@@ -736,9 +687,8 @@ Please confirm availability.`;
                             )}
                           </div>
 
-                          {/* Stock status */}
                           <div className="text-xs mt-1">
-                            {isVariantOutOfStock && (
+                            {isVariantOut && (
                               <span className="text-red-500 font-medium">
                                 Out of Stock
                               </span>
@@ -750,15 +700,13 @@ Please confirm availability.`;
                             )}
                           </div>
 
-                          {/* Selected Checkmark */}
                           {isSelected && !isDisabled && (
                             <div className="absolute top-2 right-2">
                               <CheckCircleIcon className="w-4 h-4 text-primary" />
                             </div>
                           )}
 
-                          {/* Out of Stock Overlay */}
-                          {isVariantOutOfStock && (
+                          {isVariantOut && (
                             <div className="absolute inset-0 bg-gray-100/50 rounded-xl flex items-center justify-center">
                               <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full rotate-[-15deg] shadow-lg">
                                 OUT OF STOCK
@@ -770,7 +718,6 @@ Please confirm availability.`;
                     })}
                   </div>
 
-                  {/* Selected Variant Details */}
                   {selectedVariant && (
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm text-text-light">
@@ -781,21 +728,11 @@ Please confirm availability.`;
                         {selectedVariant.sku &&
                           ` • SKU: ${selectedVariant.sku}`}
                       </p>
-                      {selectedVariant.frameShape && (
-                        <p className="text-xs text-text-light mt-1">
-                          Frame Shape: {selectedVariant.frameShape}
-                        </p>
-                      )}
-                      {selectedVariant.lensType && (
-                        <p className="text-xs text-text-light">
-                          Lens Type: {selectedVariant.lensType}
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
               )}
-              {/* Deactivated Banner */}
+
               {isDeactivated && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
                   <div className="flex items-center gap-2 text-red-700">
@@ -804,12 +741,9 @@ Please confirm availability.`;
                       This product is currently deactivated
                     </span>
                   </div>
-                  <p className="text-sm text-red-600 mt-1">
-                    This product is not available for purchase at the moment.
-                  </p>
                 </div>
               )}
-              {/* Quantity */}
+
               <div className="flex items-center gap-4 mb-6">
                 <span className="text-sm font-medium text-text">Quantity:</span>
                 <div
@@ -866,7 +800,7 @@ Please confirm availability.`;
                   </span>
                 )}
               </div>
-              {/* Action Buttons */}
+
               <div className="flex gap-3 mb-6">
                 <button
                   onClick={handleAddToCart}
@@ -904,6 +838,7 @@ Please confirm availability.`;
                   )}
                 </button>
               </div>
+
               <button
                 onClick={handleBuyNow}
                 disabled={
@@ -922,7 +857,7 @@ Please confirm availability.`;
                     ? "Out of Stock"
                     : "Buy Now"}
               </button>
-              {/* WhatsApp Order */}
+
               {!isDeactivated &&
                 !isVariantOutOfStock &&
                 !isProductOutOfStock && (
@@ -947,13 +882,11 @@ Please confirm availability.`;
             </div>
           </div>
 
-          {/* Product Details Accordions */}
           <div className="max-w-3xl mb-16">
             <h2 className="text-xl font-bold text-text mb-6">
               Product Details
             </h2>
             <div className="space-y-3">
-              {/* Description */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -983,7 +916,6 @@ Please confirm availability.`;
                 </div>
               </div>
 
-              {/* Dynamic Attributes - Updates based on selected variant */}
               {(frameShapes.length > 0 ||
                 frameMaterials.length > 0 ||
                 lensTypes.length > 0 ||
@@ -1023,7 +955,6 @@ Please confirm availability.`;
                     }`}
                   >
                     <div className="px-5 pb-5 space-y-3">
-                      {/* Frame Shape */}
                       {frameShapes.length > 0 && (
                         <div className="flex items-start gap-4">
                           <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
@@ -1042,7 +973,6 @@ Please confirm availability.`;
                         </div>
                       )}
 
-                      {/* Frame Material */}
                       {frameMaterials.length > 0 && (
                         <div className="flex items-start gap-4">
                           <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
@@ -1061,7 +991,6 @@ Please confirm availability.`;
                         </div>
                       )}
 
-                      {/* Lens Type */}
                       {lensTypes.length > 0 && (
                         <div className="flex items-start gap-4">
                           <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
@@ -1080,7 +1009,6 @@ Please confirm availability.`;
                         </div>
                       )}
 
-                      {/* Frame Color - With Color Swatches */}
                       {frameColorDetails.length > 0 && (
                         <div className="flex items-start gap-4">
                           <h4 className="text-sm font-medium text-text-light w-32 flex-shrink-0 pt-1">
@@ -1103,7 +1031,6 @@ Please confirm availability.`;
                         </div>
                       )}
 
-                      {/* Dimensions */}
                       {(variantAttributes.frameWidth ||
                         variantAttributes.lensWidth ||
                         variantAttributes.frameHeight ||
@@ -1159,7 +1086,6 @@ Please confirm availability.`;
                 </div>
               )}
 
-              {/* Specifications */}
               {product.specifications?.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                   <button
@@ -1203,7 +1129,6 @@ Please confirm availability.`;
                 </div>
               )}
 
-              {/* FAQ */}
               <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <button
                   onClick={() =>
@@ -1253,7 +1178,6 @@ Please confirm availability.`;
             </div>
           </div>
 
-          {/* Related Products */}
           {displayRelated.length > 0 && (
             <section className="mb-16">
               <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
@@ -1293,7 +1217,6 @@ Please confirm availability.`;
             </section>
           )}
 
-          {/* Reviews */}
           <section className="max-w-3xl">
             <h2 className="text-xl md:text-2xl font-bold text-text mb-6">
               Customer Reviews ({product.ratings?.count || 0})
@@ -1474,16 +1397,6 @@ Please confirm availability.`;
                           <p className="text-xs font-semibold text-blue-700">
                             Spexxo Admin
                           </p>
-                          <span className="text-xs text-blue-400">•</span>
-                          <span className="text-xs text-blue-400">
-                            {new Date(
-                              review.updatedAt || review.createdAt,
-                            ).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </span>
                         </div>
                         <p className="text-sm text-text">{review.adminReply}</p>
                       </div>
@@ -1496,7 +1409,6 @@ Please confirm availability.`;
         </div>
       </div>
 
-      {/* Auth Popup */}
       <AuthPopup
         isOpen={showAuthPopup}
         onClose={() => setShowAuthPopup(false)}

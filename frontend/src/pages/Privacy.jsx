@@ -1,4 +1,5 @@
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 
 const Privacy = () => (
   <>
@@ -6,7 +7,7 @@ const Privacy = () => (
       title="Privacy Policy | Spexxo"
       description="Read Spexxo's privacy policy to understand how we collect, use, and protect your personal information."
       ogType="website"
-      canonicalUrl="https://spexxo.vercel.app/privacy"
+      canonicalUrl={absoluteUrl("/privacy")}
     />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">

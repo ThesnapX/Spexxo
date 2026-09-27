@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
 import { useWishlist } from "../context/WishlistContext";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import ProductCard from "../components/common/ProductCard";
 
 const Wishlist = () => {
   const { wishlist } = useWishlist();
 
-  // Filter out deactivated products
   const activeWishlist = wishlist.filter(
     (product) => product.isActive !== false,
   );
@@ -17,15 +17,15 @@ const Wishlist = () => {
         title="My Wishlist | Spexxo"
         description="View and manage your saved wishlist items at Spexxo. Save your favorite eyewear for later."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/account/wishlist"
-        noIndex={true} // Wishlist is user-specific, don't index
+        canonicalUrl={absoluteUrl("/account/wishlist")}
+        noIndex={true}
       />
       <div className="pt-24 pb-16">
         <div className="container-custom max-w-6xl">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-text">
-                My Wishlist Check
+                My Wishlist
               </h1>
               <p className="text-text-light text-sm mt-1">
                 {activeWishlist.length}{" "}

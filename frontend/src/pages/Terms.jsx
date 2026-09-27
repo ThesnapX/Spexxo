@@ -1,4 +1,5 @@
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 
 const Terms = () => (
   <>
@@ -6,7 +7,7 @@ const Terms = () => (
       title="Terms & Conditions | Spexxo"
       description="Read Spexxo's terms and conditions for using our website, placing orders, and other services."
       ogType="website"
-      canonicalUrl="https://spexxo.vercel.app/terms"
+      canonicalUrl={absoluteUrl("/terms")}
     />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">

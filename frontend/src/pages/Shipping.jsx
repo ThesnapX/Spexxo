@@ -1,4 +1,5 @@
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 
 const Shipping = () => (
   <>
@@ -6,7 +7,7 @@ const Shipping = () => (
       title="Shipping Policy | Spexxo"
       description="Learn about Spexxo's shipping policy, delivery times, and free shipping on orders above ₹999."
       ogType="website"
-      canonicalUrl="https://spexxo.vercel.app/shipping"
+      canonicalUrl={absoluteUrl("/shipping")}
     />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">

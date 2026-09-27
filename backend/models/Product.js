@@ -3,6 +3,26 @@
 import mongoose from "mongoose";
 import { getNextSequence } from "./Counter.js";
 
+// ─────────────────────────────────────────────
+// Reusable validators
+// ─────────────────────────────────────────────
+const isFiniteNonNegative = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0;
+};
+
+const stockValidator = {
+  validator: (v) => {
+    // Allow only finite, non-negative numbers.
+    // Explicitly reject NaN, Infinity, "", null, undefined, non-numeric strings.
+    if (v === null || v === undefined) return true; // default handles it
+    if (typeof v === "string" && v.trim() === "") return false;
+    return isFiniteNonNegative(v);
+  },
+  message: (props) =>
+    `Stock must be a finite non-negative number (got: ${JSON.stringify(props.value)})`,
+};
+
 const productSchema = new mongoose.Schema(
   {
     productId: {
@@ -38,29 +58,12 @@ const productSchema = new mongoose.Schema(
       enum: ["eyeglasses", "sunglasses", "contactlens"],
     },
 
-    price: {
-      type: Number,
-      default: 0,
-    },
-    comparePrice: {
-      type: Number,
-      default: 0,
-    },
-    costPrice: {
-      type: Number,
-      default: 0,
-    },
-    sku: {
-      type: String,
-      unique: true,
-      sparse: true,
-    },
-    barcode: {
-      type: String,
-    },
-    category: {
-      type: String,
-    },
+    price: { type: Number, default: 0, min: 0 },
+    comparePrice: { type: Number, default: 0, min: 0 },
+    costPrice: { type: Number, default: 0, min: 0 },
+    sku: { type: String, unique: true, sparse: true },
+    barcode: { type: String },
+    category: { type: String },
     brand: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Brand",
@@ -87,11 +90,15 @@ const productSchema = new mongoose.Schema(
     bridge: { type: Number },
     lensMaterial: { type: String },
     size: { type: String },
+
+    // ✅ Defensive stock validator
     stock: {
       type: Number,
       default: 0,
       min: 0,
+      validate: stockValidator,
     },
+
     images: [
       {
         url: String,
@@ -106,14 +113,24 @@ const productSchema = new mongoose.Schema(
       },
     ],
 
-    // VARIANT PRODUCT FIELDS
+    // ─────────────────────────────────────────────
+    // VARIANTS
+    // ─────────────────────────────────────────────
     variants: [
       {
         name: { type: String, required: true },
         sku: { type: String, sparse: true },
-        price: { type: Number, required: true, default: 0 },
-        comparePrice: { type: Number, default: 0 },
-        stock: { type: Number, default: 0, min: 0 },
+        price: { type: Number, required: true, default: 0, min: 0 },
+        comparePrice: { type: Number, default: 0, min: 0 },
+
+        // ✅ Defensive stock validator on variant
+        stock: {
+          type: Number,
+          default: 0,
+          min: 0,
+          validate: stockValidator,
+        },
+
         color: {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Color",
@@ -185,7 +202,9 @@ productSchema.virtual("isBestSeller").get(function () {
   return false;
 });
 
-// ✅ Pre-save hook for slug + stock
+// ─────────────────────────────────────────────
+// Pre-save: slug + defensive stock normalization
+// ─────────────────────────────────────────────
 productSchema.pre("save", function (next) {
   if (this.isModified("name")) {
     this.slug = this.name
@@ -198,18 +217,34 @@ productSchema.pre("save", function (next) {
     this.productCategory = this.productTypeOld;
   }
 
-  if (this.variants && this.variants.length > 0) {
+  // ─────────────────────────────────────────────
+  // ✅ Defensive normalization.
+  // Never silently coerce NaN/undefined/invalid to 0 — that would hide
+  // a real bug. Instead, throw so the caller sees the exact cause.
+  // ─────────────────────────────────────────────
+  const normalizeStock = (raw, label) => {
+    if (raw === null || raw === undefined || raw === "") return 0;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      const err = new Error(
+        `Invalid stock value for ${label}: ${JSON.stringify(raw)}. ` +
+          `Stock must be a finite non-negative number.`,
+      );
+      err.code = "INVALID_STOCK";
+      throw err;
+    }
+    return Math.floor(n);
+  };
+
+  if (Array.isArray(this.variants) && this.variants.length > 0) {
     this.variants.forEach((variant) => {
-      if (
-        variant.stock === undefined ||
-        variant.stock === null ||
-        isNaN(variant.stock)
-      ) {
-        variant.stock = 0;
-      }
-      variant.stock = Number(variant.stock);
+      variant.stock = normalizeStock(
+        variant.stock,
+        `variant "${variant.name || "unnamed"}"`,
+      );
     });
 
+    // Backfill product images from the first variant if the parent has none.
     if (
       (!this.images || this.images.length === 0) &&
       this.variants[0].images &&
@@ -222,20 +257,29 @@ productSchema.pre("save", function (next) {
       }));
     }
 
+    // Aggregate stock from variants.
     let totalStock = 0;
     this.variants.forEach((v) => {
-      const variantStock = Number(v.stock) || 0;
-      totalStock += variantStock;
+      const s = Number(v.stock);
+      totalStock += Number.isFinite(s) && s > 0 ? s : 0;
     });
     this.stock = totalStock;
   } else {
-    if (this.stock === undefined || this.stock === null || isNaN(this.stock)) {
-      this.stock = 0;
-    }
-    this.stock = Number(this.stock);
+    this.stock = normalizeStock(this.stock, "product");
   }
 
   if (this.stock < 0) this.stock = 0;
+
+  // ─────────────────────────────────────────────
+  // Guard all other numeric fields.
+  // ─────────────────────────────────────────────
+  const finiteOrZero = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  this.price = finiteOrZero(this.price);
+  this.comparePrice = finiteOrZero(this.comparePrice);
+  this.costPrice = finiteOrZero(this.costPrice);
 
   next();
 });

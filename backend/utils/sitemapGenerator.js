@@ -2,12 +2,6 @@
 //
 // Deterministic sitemap generation.
 //
-// IMPORTANT:
-//   - Does NOT write into frontend/public at runtime on Vercel.
-//   - Exposes an export that returns the XML string AND a helper that
-//     writes to a local file path (used only when run manually / in local dev).
-//   - Called from server.js at startup AND from a route.
-//
 // Production strategy for Vercel:
 //   Run `node backend/utils/sitemapGenerator.js --write` locally with a
 //   production MONGODB_URI, which regenerates frontend/public/sitemap.xml.
@@ -19,14 +13,13 @@ import Category from "../models/Category.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { SITE_URL_FINAL } from "./siteUrl.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BASE_URL =
-  process.env.SITEMAP_BASE_URL ||
-  process.env.FRONTEND_URL ||
-  "https://spexxo.vercel.app";
+// ✅ Env-driven base URL — falls back to the shared siteUrl resolver.
+const BASE_URL = process.env.SITEMAP_BASE_URL || SITE_URL_FINAL;
 
 const escapeXml = (str = "") =>
   String(str)
@@ -83,8 +76,6 @@ export const buildSitemapXml = async () => {
     console.error("[SITEMAP] blogs fetch error:", e.message);
   }
 
-  // Only include category slugs that are actually rendered as /shop/:slug.
-  // These are the three hardcoded category routes in App.jsx.
   const SUPPORTED_SHOP_SLUGS = new Set([
     "eyeglasses",
     "sunglasses",
@@ -102,7 +93,6 @@ export const buildSitemapXml = async () => {
     console.error("[SITEMAP] categories fetch error:", e.message);
   }
 
-  // Build url entries
   const urls = [];
 
   STATIC_PAGES.forEach((p) => {
@@ -112,10 +102,9 @@ export const buildSitemapXml = async () => {
     });
   });
 
-  // Additional category pages that map to /shop/:slug
   categories.forEach((cat) => {
     if (!cat.slug) return;
-    if (!SUPPORTED_SHOP_SLUGS.has(cat.slug)) return; // avoid dead links
+    if (!SUPPORTED_SHOP_SLUGS.has(cat.slug)) return;
     const loc = `${BASE_URL}/shop/${cat.slug}`;
     if (urls.some((u) => u.loc === loc)) return;
     urls.push({
@@ -188,7 +177,6 @@ if (
   process.argv[1].endsWith("sitemapGenerator.js") &&
   process.argv.includes("--write")
 ) {
-  // Lazy: only connect DB when running as script
   (async () => {
     const mongoose = (await import("mongoose")).default;
     const dotenv = (await import("dotenv")).default;

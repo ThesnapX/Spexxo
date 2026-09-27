@@ -1,5 +1,6 @@
 import { useState } from "react";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
 
 const faqs = [
@@ -38,7 +39,7 @@ const FAQ = () => {
         title="FAQ - Frequently Asked Questions | Spexxo"
         description="Find answers to frequently asked questions about Spexxo eyewear, returns, shipping, payments, and more."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/faq"
+        canonicalUrl={absoluteUrl("/faq")}
       />
       <div className="pt-28 pb-16">
         <div className="container-custom max-w-3xl">
@@ -60,7 +61,9 @@ const FAQ = () => {
                 >
                   <span className="font-medium text-text">{faq.q}</span>
                   <ChevronDownIcon
-                    className={`w-5 h-5 text-text-light transition-transform ${openIndex === index ? "rotate-180" : ""}`}
+                    className={`w-5 h-5 text-text-light transition-transform ${
+                      openIndex === index ? "rotate-180" : ""
+                    }`}
                   />
                 </button>
                 {openIndex === index && (

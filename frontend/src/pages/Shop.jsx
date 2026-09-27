@@ -22,12 +22,9 @@ import { useWishlist } from "../context/WishlistContext";
 import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const SITE_URL = "https://spexxo.vercel.app";
 
 // ============================================
-// Category SEO map — one entry per real landing page.
-// These are the only routes that produce a canonical
-// /shop/:slug URL. Query-string category variations map here.
+// Category SEO map
 // ============================================
 const SHOP_SEO = {
   eyeglasses: {

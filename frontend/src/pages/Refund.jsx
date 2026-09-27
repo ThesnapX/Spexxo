@@ -1,4 +1,5 @@
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 
 const Refund = () => (
   <>
@@ -6,7 +7,7 @@ const Refund = () => (
       title="Refund Policy | Spexxo"
       description="Read Spexxo's refund policy for returns, exchanges, and refunds on eyewear purchases."
       ogType="website"
-      canonicalUrl="https://spexxo.vercel.app/refund"
+      canonicalUrl={absoluteUrl("/refund")}
     />
     <div className="pt-28 pb-16">
       <div className="container-custom max-w-3xl">

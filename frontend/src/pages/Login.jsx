@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import toast from "react-hot-toast";
 import SEO from "../components/common/SEO";
+import { absoluteUrl } from "../config/siteUrl";
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -95,7 +96,7 @@ const Login = () => {
         title="Login | Spexxo"
         description="Login to your Spexxo account to access your orders, wishlist, and profile."
         ogType="website"
-        canonicalUrl="https://spexxo.vercel.app/login"
+        canonicalUrl={absoluteUrl("/login")}
         noIndex={true}
       />
       <div className="pt-28 pb-16 register-page">

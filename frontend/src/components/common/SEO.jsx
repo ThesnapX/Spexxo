@@ -1,9 +1,9 @@
 // frontend/src/components/common/SEO.jsx
 
 import { Helmet } from "react-helmet-async";
+import { SITE_URL } from "../../config/siteUrl";
 
 const SITE_NAME = "Spexxo";
-const SITE_URL = "https://spexxo.vercel.app";
 const DEFAULT_IMAGE = `${SITE_URL}/images/og-image.jpg`;
 const DEFAULT_DESCRIPTION =
   "Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999.";
