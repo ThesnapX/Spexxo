@@ -5,7 +5,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { trackViewContent } from "../utils/metaPixel";
-
+import { buildBreadcrumbs } from "../utils/seoHelpers";
 import {
   StarIcon,
   HeartIcon,
@@ -442,17 +442,28 @@ const ProductDetail = () => {
 
   if (!product) {
     return (
-      <div className="pt-24">
-        <div className="container-custom text-center py-20">
-          <p className="text-6xl mb-4">😕</p>
-          <h2 className="text-2xl font-bold text-text mb-2">
-            Product Not Found
-          </h2>
-          <Link to="/shop" className="btn-primary">
-            Browse Products
-          </Link>
+      <>
+        <SEO
+          title="Product Not Found | Spexxo"
+          description="The product you're looking for is no longer available. Browse our full eyewear collection."
+          noIndex
+          ogType="website"
+        />
+        <div className="pt-24">
+          <div className="container-custom text-center py-20">
+            <p className="text-6xl mb-4">😕</p>
+            <h2 className="text-2xl font-bold text-text mb-2">
+              Product Not Found
+            </h2>
+            <p className="text-text-light mb-6">
+              This product may have been removed or the link is incorrect.
+            </p>
+            <Link to="/shop" className="btn-primary">
+              Browse Products
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -471,13 +482,27 @@ Please confirm availability.`;
       <SEO
         title={product.name}
         description={
-          product.description?.substring(0, 160) ||
-          `Buy ${product.name} at Spexxo. Premium quality eyewear with best prices.`
+          product.description
+            ? product.description.substring(0, 160)
+            : `Buy ${product.name} at Spexxo. Premium quality eyewear with best prices.`
         }
         ogImage={product.images?.[0]?.url}
         ogType="product"
         canonicalUrl={absoluteUrl(`/product/${product.slug}`)}
         product={product}
+        breadcrumbs={buildBreadcrumbs([
+          { name: "Home", path: "/" },
+          { name: "Shop", path: "/shop" },
+          ...(product.brand?.name
+            ? [
+                {
+                  name: product.brand.name,
+                  path: `/shop?brand=${product.brand.slug}`,
+                },
+              ]
+            : []),
+          { name: product.name, path: `/product/${product.slug}` },
+        ])}
       />
 
       <div className="pt-20 md:pt-24 pb-16">

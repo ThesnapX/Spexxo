@@ -2,9 +2,10 @@
 
 import { Helmet } from "react-helmet-async";
 import { SITE_URL } from "../../config/siteUrl";
+import { resolveOgImage, smartTruncate } from "../../utils/seoHelpers";
 
 const SITE_NAME = "Spexxo";
-const DEFAULT_IMAGE = `${SITE_URL}/images/og-image.jpg`;
+const DEFAULT_IMAGE = `${SITE_URL}/favicon.png`;
 const DEFAULT_DESCRIPTION =
   "Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999.";
 
@@ -40,8 +41,11 @@ const SEO = ({
   jsonLd,
 }) => {
   const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
-  const pageDescription = description || DEFAULT_DESCRIPTION;
-  const image = ogImage || DEFAULT_IMAGE;
+  const pageDescription = smartTruncate(
+    description || DEFAULT_DESCRIPTION,
+    160,
+  );
+  const image = resolveOgImage(ogImage || DEFAULT_IMAGE);
 
   // Canonical: caller supplies it, or we compute it from the CURRENT
   // pathname WITHOUT the query string.
@@ -57,7 +61,6 @@ const SEO = ({
   // ---- Structured Data ----
   const schemas = [];
 
-  // Organization + WebSite — only on the true homepage
   const isHomepage =
     typeof window !== "undefined" &&
     (window.location.pathname === "/" || window.location.pathname === "");
@@ -123,11 +126,10 @@ const SEO = ({
       "@context": "https://schema.org",
       "@type": "Product",
       name: product.name,
-      description:
-        product.shortDescription ||
-        (product.description
-          ? String(product.description).substring(0, 300)
-          : product.name),
+      description: smartTruncate(
+        product.shortDescription || product.description || product.name,
+        300,
+      ),
       image: product.images?.length
         ? product.images.map((i) => i.url).filter(Boolean)
         : [image],
@@ -164,15 +166,15 @@ const SEO = ({
       "@context": "https://schema.org",
       "@type": "BlogPosting",
       headline: blog.seo?.metaTitle || blog.title,
-      description:
+      description: smartTruncate(
         blog.seo?.metaDescription ||
-        blog.excerpt ||
-        (blog.content
-          ? String(blog.content)
-              .replace(/<[^>]*>/g, "")
-              .substring(0, 200)
-          : ""),
-      image: blog.featuredImage?.url || blog.seo?.ogImage || image,
+          blog.excerpt ||
+          (blog.content ? blog.content.replace(/<[^>]*>/g, "") : ""),
+        200,
+      ),
+      image: resolveOgImage(
+        blog.featuredImage?.url || blog.seo?.ogImage || image,
+      ),
       datePublished: blog.publishedAt || blog.createdAt,
       dateModified: blog.updatedAt || blog.createdAt || blog.publishedAt,
       author: {
@@ -208,7 +210,6 @@ const SEO = ({
     });
   }
 
-  // Extra caller-supplied
   if (Array.isArray(jsonLd)) schemas.push(...jsonLd);
 
   return (
@@ -219,7 +220,6 @@ const SEO = ({
       <meta name="robots" content={robotsContent} />
       <meta name="googlebot" content={robotsContent} />
 
-      {/* Canonical */}
       <link rel="canonical" href={canonical} />
 
       {/* Open Graph */}
@@ -228,6 +228,8 @@ const SEO = ({
       <meta property="og:description" content={pageDescription} />
       <meta property="og:url" content={canonical} />
       <meta property="og:image" content={image} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:locale" content="en_IN" />
 
@@ -238,7 +240,6 @@ const SEO = ({
       <meta name="twitter:url" content={canonical} />
       <meta name="twitter:image" content={image} />
 
-      {/* JSON-LD */}
       {schemas.map((s, i) => (
         <script key={i} type="application/ld+json">
           {JSON.stringify(s)}

@@ -1247,7 +1247,7 @@ const Shop = () => {
         description={seoMeta.description}
         canonicalUrl={seoMeta.canonical}
         noIndex={seoMeta.noIndex}
-        ogType="website"
+        ogImage={undefined}
         breadcrumbs={[
           { name: "Home", item: `${SITE_URL}/` },
           { name: "Shop", item: `${SITE_URL}/shop` },
