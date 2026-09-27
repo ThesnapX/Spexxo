@@ -2,20 +2,36 @@
 
 import nodemailer from "nodemailer";
 
-const sendEmail = async (options) => {
-  try {
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
+let cachedTransporter = null;
 
-    // Define mail options
+const getTransporter = () => {
+  if (cachedTransporter) return cachedTransporter;
+
+  const user = process.env.EMAIL_USER;
+  const pass = process.env.EMAIL_PASS;
+
+  if (!user || !pass) {
+    console.warn("[EMAIL] SMTP credentials missing (EMAIL_USER / EMAIL_PASS).");
+    return null;
+  }
+
+  cachedTransporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: { user, pass },
+  });
+  return cachedTransporter;
+};
+
+const sendEmail = async (options) => {
+  const transporter = getTransporter();
+  if (!transporter) {
+    // Do NOT throw — email is non-critical.
+    return null;
+  }
+
+  try {
     const mailOptions = {
       from: `"Spexxo" <${process.env.EMAIL_USER}>`,
       to: options.email,
@@ -23,14 +39,17 @@ const sendEmail = async (options) => {
       html: options.html,
     };
 
-    // Send email
     const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent: ", info.messageId);
+    console.log(
+      `[EMAIL] sent → ${options.email} | subject="${options.subject}" | id=${info.messageId}`,
+    );
     return info;
   } catch (error) {
-    console.error("Email error:", error.message);
-    console.log("Email not sent, but continuing...");
-    // Don't throw error, just log it so app doesn't crash
+    // Never log credentials, tokens, or full SMTP config.
+    console.error(
+      `[EMAIL] failed → ${options.email} | subject="${options.subject}" | reason=${error.message}`,
+    );
+    return null;
   }
 };
 

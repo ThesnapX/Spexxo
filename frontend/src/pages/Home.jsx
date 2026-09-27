@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import SEO from "../components/common/SEO";
+import { SITE_URL } from "../config/siteUrl";
 import HeroSlider from "../components/home/HeroSlider";
 import BentoCategoryGrid from "../components/home/BentoCategoryGrid";
 import ProductCarousel from "../components/home/ProductCarousel";
@@ -50,9 +51,9 @@ const Home = () => {
   return (
     <>
       <SEO
-        title="Premium Eyeglasses, Sunglasses & Contact Lenses Online"
-        description="Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999."
-        canonicalUrl="https://spexxo.vercel.app/"
+        exactTitle="Spexxo — Premium Eyeglasses, Sunglasses & Contact Lenses"
+        description="Buy premium eyewear online at Spexxo. Browse eyeglasses, sunglasses and contact lenses from top brands. Prescription-ready frames, UV400 protection, and free shipping on orders above ₹999 across India."
+        canonicalUrl={`${SITE_URL}/`}
         ogType="website"
       />
 

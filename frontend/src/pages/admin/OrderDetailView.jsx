@@ -30,11 +30,13 @@ import {
 } from "@heroicons/react/24/outline";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const FRONTEND_URL =
+const RAW_FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
-  window.location.origin ||
   "https://spexxo.vercel.app";
+
+// Strip trailing slashes so `${FRONTEND_URL}/product/x` never double-slashes.
+const FRONTEND_URL = String(RAW_FRONTEND_URL).replace(/\/+$/, "");
 
 const OrderDetailView = () => {
   const { id } = useParams();

@@ -37,7 +37,6 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 10 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
-      // ✅ Retry only on transient failures (5xx, network). Never on 4xx.
       retry: shouldRetryQuery,
       retryDelay,
       refetchOnWindowFocus: false,
@@ -47,8 +46,6 @@ const queryClient = new QueryClient({
       retryOnMount: true,
     },
     mutations: {
-      // Mutations should not silently retry — a failed order create
-      // must NOT retry invisibly. Let the UI decide.
       retry: 0,
     },
   },

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { getProductImage, getProductPrice } from "../../utils/productHelpers";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -17,12 +18,10 @@ const LiveSearch = ({
   const searchRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Live search query - searches across all fields
   const { data, isLoading } = useQuery({
     queryKey: ["live-search", query],
     queryFn: async () => {
       if (!query || query.length < 2) return { products: [] };
-      // Search across name, category, brand, gender, lens type, frame shape, material, color
       const { data } = await axios.get(
         `${API_URL}/products?search=${encodeURIComponent(query)}&limit=6`,
       );
@@ -33,7 +32,6 @@ const LiveSearch = ({
 
   const products = data?.products || [];
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -44,7 +42,6 @@ const LiveSearch = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Keyboard navigation
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -102,7 +99,6 @@ const LiveSearch = ({
 
   return (
     <div ref={searchRef} className={`relative ${className}`}>
-      {/* Search Input */}
       <div className="relative">
         <input
           ref={inputRef}
@@ -135,10 +131,8 @@ const LiveSearch = ({
         </div>
       </div>
 
-      {/* Live Results Dropdown */}
       {isOpen && (
         <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 border-t-0 rounded-b-2xl shadow-xl z-50 max-h-[500px] overflow-y-auto">
-          {/* Loading */}
           {isLoading && query.length >= 2 && (
             <div className="p-4 text-center">
               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -146,62 +140,73 @@ const LiveSearch = ({
             </div>
           )}
 
-          {/* Results */}
           {!isLoading && query.length >= 2 && products.length > 0 && (
             <div className="py-2">
               <p className="px-4 py-1.5 text-xs text-text-light font-medium uppercase tracking-wider">
                 Products ({data?.pagination?.total || products.length})
               </p>
-              {products.map((product) => (
-                <Link
-                  key={product._id}
-                  to={`/product/${product.slug}`}
-                  onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
-                >
-                  <img
-                    src={
-                      product.images?.[0]?.url || "https://picsum.photos/60/60"
-                    }
-                    alt={product.name}
-                    className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-text line-clamp-1">
-                      {highlightMatch(product.name, query)}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-text-light">
-                      {product.brand?.name && <span>{product.brand.name}</span>}
-                      {product.brand?.name && product.productType && (
-                        <span>•</span>
-                      )}
-                      {product.productType && (
-                        <span className="capitalize">
-                          {product.productType}
-                        </span>
-                      )}
-                      {product.frameShape && (
-                        <span>• {product.frameShape.split(",")[0]}</span>
+              {products.map((product) => {
+                // ✅ Use authoritative helpers — same logic as ProductCard.
+                const image = getProductImage(product);
+                const { displayPrice, originalPrice, hasDiscount } =
+                  getProductPrice(product);
+
+                return (
+                  <Link
+                    key={product._id}
+                    to={`/product/${product.slug}`}
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition"
+                  >
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">
+                          No img
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-semibold text-text">
-                      ₹
-                      {(
-                        product.comparePrice || product.price
-                      )?.toLocaleString()}
-                    </p>
-                    {product.comparePrice && (
-                      <p className="text-xs text-gray-400 line-through">
-                        ₹{product.price?.toLocaleString()}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-text line-clamp-1">
+                        {highlightMatch(product.name, query)}
                       </p>
-                    )}
-                  </div>
-                </Link>
-              ))}
+                      <div className="flex items-center gap-2 text-xs text-text-light">
+                        {product.brand?.name && (
+                          <span>{product.brand.name}</span>
+                        )}
+                        {product.brand?.name && product.productType && (
+                          <span>•</span>
+                        )}
+                        {product.productType && (
+                          <span className="capitalize">
+                            {product.productType}
+                          </span>
+                        )}
+                        {product.frameShape && (
+                          <span>• {product.frameShape.split(",")[0]}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-text">
+                        ₹{displayPrice?.toLocaleString()}
+                      </p>
+                      {hasDiscount && originalPrice > displayPrice && (
+                        <p className="text-xs text-gray-400 line-through">
+                          ₹{originalPrice?.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
 
-              {/* See all results */}
               <button
                 onClick={handleSubmit}
                 className="w-full px-4 py-2.5 text-center text-sm text-primary font-medium hover:bg-primary/5 transition border-t"
@@ -211,7 +216,6 @@ const LiveSearch = ({
             </div>
           )}
 
-          {/* No Results */}
           {!isLoading && query.length >= 2 && products.length === 0 && (
             <div className="p-6 text-center">
               <MagnifyingGlassIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
@@ -224,7 +228,6 @@ const LiveSearch = ({
             </div>
           )}
 
-          {/* Short query hint */}
           {query.length > 0 && query.length < 2 && (
             <div className="p-4 text-center">
               <p className="text-xs text-text-light">

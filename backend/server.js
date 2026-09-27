@@ -37,10 +37,12 @@ import subscriberRoutes from "./routes/subscriberRoutes.js";
 import { startCronJobs } from "./utils/cronJobs.js";
 import adminCronRoutes from "./routes/adminCronRoutes.js";
 import metaRoutes from "./routes/metaRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -164,6 +166,7 @@ app.use("/api/shipping", shippingRoutes);
 app.use("/api/subscribers", subscriberRoutes);
 app.use("/api/admin/cron", adminCronRoutes);
 app.use("/api/meta", metaRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 console.log("✅ All routes registered");
 

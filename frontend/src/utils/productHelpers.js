@@ -125,10 +125,8 @@ export const getProductPrice = (product) => {
  */
 export const isProductOutOfStock = (product) => {
   if (hasVariants(product)) {
-    // Check if ALL variants are out of stock
     return product.variants.every((v) => v.stock <= 0 || v.stock === null);
   }
-  // Simple product
   return (
     product.stock === 0 || product.stock === null || product.stock === undefined
   );

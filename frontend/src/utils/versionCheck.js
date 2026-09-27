@@ -1,19 +1,41 @@
 // frontend/src/utils/versionCheck.js
 //
-// Detects when a new deployment has shipped and forces a hard reload
-// so the browser fetches fresh chunk hashes.
+// Stale-deployment detection + chunk-load-error recovery.
 //
-// Why: Vite emits content-hashed chunk filenames. After a new deploy,
-// old chunks are gone. A user with cached index.html will 404 on the
-// old chunk and crash. This module prevents that.
+// Responsibilities:
+//   1. Fetch /version.txt on boot; if the deployed version changed,
+//      hard-reload once.
+//   2. Listen for chunk-load / dynamic-import errors and reload once
+//      IF the server version differs.
+//   3. Never loop. Track the deployment ID that caused the reload in
+//      sessionStorage.
+//
+// IMPORTANT: This does NOT catch generic JS errors, only errors that
+// are known to indicate a stale-chunk / MIME / failed-module-load
+// condition. Genuine application errors must still surface normally.
 
 const VERSION_STORAGE_KEY = "spexxo_app_version";
+const RECOVERY_FLAG_KEY = "spexxo_recovery_in_progress";
 
-/**
- * Fetch a tiny version file that Vercel serves with no caching.
- * We use /version.txt so it's a plain static asset (has a dot → not
- * rewritten by the SPA rule).
- */
+// Patterns that unambiguously indicate a failed module/chunk load.
+const STALE_CHUNK_PATTERNS = [
+  "Failed to fetch dynamically imported module",
+  "Importing a module script failed",
+  'MIME type of "text/html"',
+  "Loading chunk",
+  "Loading CSS chunk",
+  "error loading dynamically imported module",
+  "Expected a JavaScript-or-Wasm module script",
+];
+
+const isStaleChunkError = (msg) => {
+  if (!msg || typeof msg !== "string") return false;
+  return STALE_CHUNK_PATTERNS.some((p) => msg.includes(p));
+};
+
+// ─────────────────────────────────────────────
+// Version fetch — cache-busted, no-store
+// ─────────────────────────────────────────────
 const fetchCurrentVersion = async () => {
   try {
     const res = await fetch(`/version.txt?t=${Date.now()}`, {
@@ -21,64 +43,112 @@ const fetchCurrentVersion = async () => {
     });
     if (!res.ok) return null;
     const text = await res.text();
-    return text.trim();
+    const trimmed = text.trim();
+    // Guard against accidentally serving index.html (which would be huge).
+    if (!trimmed || trimmed.length > 200) return null;
+    return trimmed;
   } catch {
     return null;
   }
 };
 
-/**
- * If the version changed since the last visit, hard-reload the page.
- * Safe to call once on app boot.
- */
+// ─────────────────────────────────────────────
+// Public API: run on app boot
+// ─────────────────────────────────────────────
 export const checkVersionAndReload = async () => {
+  // If we already triggered a recovery reload in this tab, do nothing —
+  // we've already handled the mismatch.
+  const recoveryFlag = sessionStorage.getItem(RECOVERY_FLAG_KEY);
+
   const serverVersion = await fetchCurrentVersion();
   if (!serverVersion) return; // network issue → do nothing
 
   const lastVersion = localStorage.getItem(VERSION_STORAGE_KEY);
 
   if (lastVersion && lastVersion !== serverVersion) {
-    // New deploy → force a full reload
-    localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-    // Only reload if we're not already in a reload loop
-    const reloadKey = "spexxo_reload_in_progress";
-    if (!sessionStorage.getItem(reloadKey)) {
-      sessionStorage.setItem(reloadKey, "1");
-      window.location.reload();
+    // A new deployment exists. Reload ONCE.
+    if (recoveryFlag === serverVersion) {
+      // Already reloaded for this exact new version — do not loop.
+      // Accept the new version and move on.
+      localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
+      sessionStorage.removeItem(RECOVERY_FLAG_KEY);
+      return;
     }
+
+    // Record the target version BEFORE reloading so a second pass
+    // does not try again.
+    sessionStorage.setItem(RECOVERY_FLAG_KEY, serverVersion);
+    localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
+    window.location.reload();
     return;
   }
 
+  // Fresh install or already current — record it.
   localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-  sessionStorage.removeItem("spexxo_reload_in_progress");
+  sessionStorage.removeItem(RECOVERY_FLAG_KEY);
 };
 
-/**
- * Attach a listener that catches dynamic import errors (chunk 404s)
- * and reloads the page once.
- */
+// ─────────────────────────────────────────────
+// Public API: install chunk-error handlers
+// ─────────────────────────────────────────────
 export const installChunkErrorHandler = () => {
-  const handler = (event) => {
-    const msg =
-      event?.reason?.message ||
-      event?.message ||
-      (typeof event === "string" ? event : "");
+  if (typeof window === "undefined") return;
 
-    if (
-      msg &&
-      (msg.includes("Failed to fetch dynamically imported module") ||
-        msg.includes('MIME type of "text/html"') ||
-        msg.includes("Importing a module script failed"))
-    ) {
-      const reloadKey = "spexxo_chunk_reload";
-      if (!sessionStorage.getItem(reloadKey)) {
-        sessionStorage.setItem(reloadKey, "1");
-        console.warn("[VersionCheck] Chunk load error — reloading once.");
-        window.location.reload();
-      }
+  let handling = false;
+
+  const handle = async (message) => {
+    if (handling) return;
+    if (!isStaleChunkError(message)) return;
+
+    handling = true;
+
+    const serverVersion = await fetchCurrentVersion();
+    const lastVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+
+    // Only reload if a genuinely newer deployment exists.
+    const isNewerDeployment = serverVersion && serverVersion !== lastVersion;
+
+    const alreadyTried = sessionStorage.getItem(RECOVERY_FLAG_KEY);
+
+    if (!isNewerDeployment) {
+      // No new deployment — this is a genuine error, not staleness.
+      // Do NOT reload. Let the error propagate.
+      console.warn(
+        "[versionCheck] Chunk load failed but no new deployment detected. Not reloading.",
+      );
+      handling = false;
+      return;
     }
+
+    if (alreadyTried === serverVersion) {
+      // Already attempted recovery for this exact new version.
+      // Do not loop.
+      console.warn(
+        "[versionCheck] Recovery already attempted for this deployment.",
+      );
+      handling = false;
+      return;
+    }
+
+    sessionStorage.setItem(RECOVERY_FLAG_KEY, serverVersion);
+    localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
+    console.warn("[versionCheck] Stale chunk detected — reloading once.");
+    window.location.reload();
   };
 
-  window.addEventListener("error", handler);
-  window.addEventListener("unhandledrejection", handler);
+  window.addEventListener("error", (event) => {
+    const msg =
+      event?.error?.message ||
+      event?.message ||
+      (typeof event === "string" ? event : "");
+    handle(msg);
+  });
+
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event?.reason;
+    const msg =
+      (typeof reason === "string" ? reason : reason?.message) ||
+      (typeof event === "string" ? event : "");
+    handle(msg);
+  });
 };

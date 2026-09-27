@@ -419,13 +419,17 @@ const ProductPicker = ({ isOpen, onClose, initialProducts = [], onSave }) => {
               {products.map((p) => {
                 const isSelected = selected.some((s) => s._id === p._id);
                 const isDeactivated = p.isActive === false;
-                const hasVariants = p.variants && p.variants.length > 0;
                 const variantCount = hasVariants ? p.variants.length : 0;
-                const allVariantsOutOfStock =
-                  hasVariants && p.variants.every((v) => (v.stock || 0) <= 0);
+                const hasVariants = p.variants && p.variants.length > 0;
                 const totalStock = hasVariants
-                  ? p.variants.reduce((sum, v) => sum + (v.stock || 0), 0)
-                  : p.stock || 0;
+                  ? p.variants.reduce((sum, v) => {
+                      const s = Number(v.stock);
+                      return sum + (Number.isFinite(s) && s > 0 ? s : 0);
+                    }, 0)
+                  : (() => {
+                      const s = Number(p.stock);
+                      return Number.isFinite(s) && s > 0 ? s : 0;
+                    })();
                 const outOfStock = hasVariants
                   ? allVariantsOutOfStock
                   : (p.stock || 0) <= 0;

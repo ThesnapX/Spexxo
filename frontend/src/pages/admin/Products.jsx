@@ -26,10 +26,13 @@ import { useState, useEffect } from "react";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 // ✅ FIX: Prefer environment variable over window.location.origin
-const FRONTEND_URL =
+const RAW_FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
   "https://spexxo.vercel.app";
+
+// Strip trailing slashes so `${FRONTEND_URL}/product/x` never double-slashes.
+const FRONTEND_URL = String(RAW_FRONTEND_URL).replace(/\/+$/, "");
 
 const Products = () => {
   const navigate = useNavigate();
@@ -186,15 +189,25 @@ const Products = () => {
     return null;
   };
 
-  // Helper function to get total stock (main + variants)
+  // Authoritative total stock — mirrors the backend's Product model semantics.
+  //
+  // For variable products, the backend pre-save hook aggregates variant stock
+  // into product.stock. So product.stock ALREADY equals the sum of variant
+  // stock. Recomputing here from variants avoids any drift.
+  //
+  // For simple products, product.stock is the source of truth.
   const getTotalStock = (product) => {
-    let total = product.stock || 0;
     if (product.variants && product.variants.length > 0) {
+      // Always sum variants — this is what the storefront sees as total.
+      let total = 0;
       product.variants.forEach((v) => {
-        total += v.stock || 0;
+        const s = Number(v.stock);
+        if (Number.isFinite(s) && s > 0) total += s;
       });
+      return total;
     }
-    return total;
+    const s = Number(product.stock);
+    return Number.isFinite(s) && s > 0 ? s : 0;
   };
 
   // ✅ Helper function to get display price with discount (checks variant level too)

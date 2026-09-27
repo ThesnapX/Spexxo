@@ -226,7 +226,15 @@ export const addToCart = async (req, res) => {
     cart.lastActivityAt = new Date();
     cart.followUpStage = 0;
 
-    await cart.save();
+    try {
+      const ActivityLog = (await import("../models/ActivityLog.js")).default;
+      ActivityLog.create({
+        type: "cart_add",
+        user: req.user._id,
+        product: productId,
+        quantity,
+      }).catch(() => {});
+    } catch {}
 
     // Re-populate the cart
     const populatedCart = await Cart.findById(cart._id).populate({

@@ -27,10 +27,13 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 // ✅ FIX: Prefer environment variable over window.location.origin
-const FRONTEND_URL =
+const RAW_FRONTEND_URL =
   import.meta.env.VITE_SITE_URL ||
   import.meta.env.VITE_FRONTEND_URL ||
   "https://spexxo.vercel.app";
+
+// Strip trailing slashes so `${FRONTEND_URL}/product/x` never double-slashes.
+const FRONTEND_URL = String(RAW_FRONTEND_URL).replace(/\/+$/, "");
 
 const ProductDetailView = () => {
   const { id } = useParams();

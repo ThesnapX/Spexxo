@@ -9,23 +9,59 @@ import SectionHeader from "../common/SectionHeader";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const BlogSection = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["home-blogs"],
     queryFn: async () => {
-      try {
-        const { data } = await axios.get(`${API_URL}/blogs?limit=3`);
-        return data.blogs || [];
-      } catch {
-        return [];
-      }
+      const { data } = await axios.get(`${API_URL}/blogs?limit=3`);
+      return data.blogs || [];
     },
     staleTime: 15 * 60 * 1000,
+    retry: 1,
   });
 
   const blogs = data || [];
 
-  // ✅ Don't render the section at all if there are no blogs
-  if (isLoading || blogs.length === 0) return null;
+  // Loading → show skeleton within the section (do not hide).
+  if (isLoading) {
+    return (
+      <section className="py-12 md:py-16 bg-gray-50">
+        <div className="container-custom">
+          <SectionHeader
+            title="Eye Care Blog"
+            subtitle="Tips, guides & latest trends in eyewear"
+            linkTo="/blog"
+            linkText="View All Posts"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden animate-pulse"
+              >
+                <div className="aspect-[16/9] bg-gray-200" />
+                <div className="p-5 space-y-2">
+                  <div className="h-3 bg-gray-200 rounded w-1/3" />
+                  <div className="h-4 bg-gray-200 rounded w-3/4" />
+                  <div className="h-3 bg-gray-200 rounded w-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Error → do NOT render the section (do not break homepage).
+  if (isError) {
+    if (import.meta.env.DEV) {
+      console.warn("[BlogSection] Failed to load blogs from API.");
+    }
+    return null;
+  }
+
+  // Empty → do not render the section.
+  if (blogs.length === 0) return null;
 
   return (
     <section className="py-12 md:py-16 bg-gray-50">

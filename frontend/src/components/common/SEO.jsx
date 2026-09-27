@@ -7,7 +7,7 @@ import { resolveOgImage, smartTruncate } from "../../utils/seoHelpers";
 const SITE_NAME = "Spexxo";
 const DEFAULT_IMAGE = `${SITE_URL}/favicon.png`;
 const DEFAULT_DESCRIPTION =
-  "Shop premium eyeglasses, sunglasses & contact lenses online at Spexxo. Best prices, COD available, free shipping on orders above ₹999.";
+  "Buy premium eyewear online at Spexxo. Browse eyeglasses, sunglasses and contact lenses from top brands. Prescription-ready frames, UV400 protection, and free shipping on orders above ₹999 across India.";
 
 /**
  * SEO component.
@@ -28,6 +28,7 @@ const DEFAULT_DESCRIPTION =
  */
 const SEO = ({
   title,
+  exactTitle,
   description,
   keywords,
   ogImage,
@@ -40,15 +41,18 @@ const SEO = ({
   breadcrumbs,
   jsonLd,
 }) => {
-  const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
+  const pageTitle = exactTitle
+    ? exactTitle
+    : title
+      ? `${title} | ${SITE_NAME}`
+      : SITE_NAME;
+
   const pageDescription = smartTruncate(
     description || DEFAULT_DESCRIPTION,
     160,
   );
   const image = resolveOgImage(ogImage || DEFAULT_IMAGE);
 
-  // Canonical: caller supplies it, or we compute it from the CURRENT
-  // pathname WITHOUT the query string.
   let canonical = canonicalUrl;
   if (!canonical && typeof window !== "undefined") {
     canonical = `${SITE_URL}${window.location.pathname}`;
@@ -58,7 +62,6 @@ const SEO = ({
   const robotsContent =
     robots || (noIndex ? "noindex, nofollow" : "index, follow");
 
-  // ---- Structured Data ----
   const schemas = [];
 
   const isHomepage =
@@ -107,7 +110,6 @@ const SEO = ({
     });
   }
 
-  // Product JSON-LD — only if a valid product is passed AND not noIndex
   if (product && product._id && !noIndex) {
     const price =
       Number(product.comparePrice) > 0 &&
@@ -160,7 +162,6 @@ const SEO = ({
     schemas.push(productSchema);
   }
 
-  // BlogPosting JSON-LD
   if (blog && blog._id && !noIndex) {
     schemas.push({
       "@context": "https://schema.org",
@@ -196,7 +197,6 @@ const SEO = ({
     });
   }
 
-  // Breadcrumbs
   if (Array.isArray(breadcrumbs) && breadcrumbs.length > 0 && !noIndex) {
     schemas.push({
       "@context": "https://schema.org",
@@ -222,7 +222,6 @@ const SEO = ({
 
       <link rel="canonical" href={canonical} />
 
-      {/* Open Graph */}
       <meta property="og:type" content={ogType} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={pageDescription} />
@@ -233,7 +232,6 @@ const SEO = ({
       <meta property="og:site_name" content={SITE_NAME} />
       <meta property="og:locale" content="en_IN" />
 
-      {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={pageDescription} />

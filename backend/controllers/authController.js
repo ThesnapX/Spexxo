@@ -23,7 +23,7 @@ export const register = async (req, res) => {
       isEmailVerified,
     } = req.body;
 
-    // Check if user exists by email OR phone
+    // Check if user exists by email OR phone OR username
     const userExists = await User.findOne({
       $or: [
         ...(email ? [{ email: email.toLowerCase() }] : []),
@@ -65,7 +65,19 @@ export const register = async (req, res) => {
     if (isPhoneVerified) userData.isPhoneVerified = true;
     if (isEmailVerified) userData.isEmailVerified = true;
 
-    const user = await User.create(userData);
+    // ✅ Retry on rare sequential-ID collision (E11000 on userId).
+    const { createWithDuplicateRetry } =
+      await import("../utils/retryOnDuplicateKey.js");
+
+    const user = await createWithDuplicateRetry({
+      createFn: () => User.create(userData),
+      onRetry: () => {
+        // Force the pre-save hook to allocate a fresh userId.
+        delete userData.userId;
+      },
+      maxAttempts: 3,
+    });
+
     const token = generateToken(user._id);
 
     // ✅ Send welcome email (non-blocking, non-fatal)
@@ -102,6 +114,15 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
+    // Surface duplicate-key errors clearly if they survive retries.
+    if (error && error.code === 11000) {
+      const key = Object.keys(error.keyPattern || {})[0] || "field";
+      return res.status(409).json({
+        success: false,
+        message: `Duplicate value for ${key}. Please try again.`,
+        code: "DUPLICATE_KEY",
+      });
+    }
     res.status(400).json({ success: false, message: error.message });
   }
 };

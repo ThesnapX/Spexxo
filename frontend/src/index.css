@@ -458,12 +458,14 @@ textarea {
 /* CUSTOM TOAST WITH REAL CLOSE BUTTON           */
 /* ============================================ */
 
+/* Outer container must NOT block clicks anywhere. */
 .custom-toast-container {
   pointer-events: none !important;
 }
 
+/* Only the visible toast itself accepts pointer events. */
 .custom-toast-container > div {
-  pointer-events: all !important;
+  pointer-events: auto !important;
 }
 
 .custom-toast-wrapper {
@@ -479,7 +481,7 @@ textarea {
   max-width: 420px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
   position: relative;
-  pointer-events: all;
+  pointer-events: auto;
   font-family: var(--font-poppins);
   font-size: 14px;
   line-height: 1.5;
@@ -488,11 +490,9 @@ textarea {
 .custom-toast-wrapper.success {
   border-left: 4px solid #10b981;
 }
-
 .custom-toast-wrapper.error {
   border-left: 4px solid #ef4444;
 }
-
 .custom-toast-wrapper.loading {
   border-left: 4px solid #3d96eb;
 }
@@ -540,17 +540,14 @@ textarea {
   position: relative;
   z-index: 10;
 }
-
 .toast-close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
   transform: scale(1.05);
 }
-
 .toast-close-btn:active {
   transform: scale(0.9);
 }
-
 .toast-close-btn:focus-visible {
   outline: 2px solid #3d96ea;
   outline-offset: 2px;
@@ -596,8 +593,13 @@ textarea {
   }
 }
 
-[data-rht-toaster] * {
-  pointer-events: auto;
+/* react-hot-toast injects a wrapper with inline styles.
+   Force the wrapper container to remain transparent to clicks. */
+[data-rht-toaster] {
+  pointer-events: none !important;
+}
+[data-rht-toaster] > div {
+  pointer-events: auto !important;
 }
 
 @media (max-width: 480px) {
@@ -608,22 +610,18 @@ textarea {
     font-size: 13px;
     border-radius: 10px;
   }
-
   .toast-icon {
     font-size: 16px;
   }
-
   .toast-message {
     font-size: 13px;
   }
-
   .toast-close-btn {
     width: 28px;
     height: 28px;
     min-width: 28px;
     min-height: 28px;
   }
-
   .close-icon {
     font-size: 18px;
   }

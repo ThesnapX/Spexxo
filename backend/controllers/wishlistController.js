@@ -34,7 +34,17 @@ export const addToWishlist = async (req, res) => {
       user.wishlistFollowUpStage = 0;
       user.wishlistLastActivityAt = new Date();
 
-      await user.save();
+      // ✅ Analytics: record wishlist-add (non-blocking, non-fatal)
+      import("../models/ActivityLog.js")
+        .then(({ default: ActivityLog }) =>
+          ActivityLog.create({
+            type: "wishlist_add",
+            user: user._id,
+            product: req.params.productId,
+            quantity: 1,
+          }),
+        )
+        .catch(() => {});
 
       // ✅ Send wishlist added email (non-blocking, deduped per product)
       try {

@@ -275,7 +275,39 @@ const Dashboard = () => {
     },
     staleTime: 5 * 60 * 1000,
   });
+  const { data: analyticsData, isLoading: analyticsLoading } = useQuery({
+    queryKey: ["admin-analytics-dashboard", dateRange],
+    queryFn: async () => {
+      const { from, to } = (() => {
+        const now = new Date();
+        const start = (() => {
+          switch (dateRange) {
+            case "today":
+              return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            case "7d":
+              return new Date(now.getTime() - 7 * 86400000);
+            case "30d":
+              return new Date(now.getTime() - 30 * 86400000);
+            case "90d":
+              return new Date(now.getTime() - 90 * 86400000);
+            case "180d":
+              return new Date(now.getTime() - 180 * 86400000);
+            case "365d":
+              return new Date(now.getTime() - 365 * 86400000);
+            default:
+              return new Date(now.getTime() - 30 * 86400000);
+          }
+        })();
+        return { from: start.toISOString(), to: now.toISOString() };
+      })();
 
+      const { data } = await axios.get(
+        `${API_URL}/analytics/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      );
+      return data;
+    },
+    staleTime: 2 * 60 * 1000,
+  });
   const isLoading = ordersLoading || productsLoading || usersLoading;
 
   const handleRefresh = async () => {

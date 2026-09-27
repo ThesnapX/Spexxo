@@ -255,6 +255,7 @@ const ProductCarousel = ({
     retry: 1,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const filteredProducts = useMemo(() => {

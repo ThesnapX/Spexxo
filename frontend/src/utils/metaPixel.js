@@ -12,11 +12,13 @@ export const generateEventId = () => {
   return `evt_${ts}_${rand}`;
 };
 
+// Session-scoped ViewContent de-dupe.
+// Guards against Strict Mode double effects and fast mount/unmount.
+const viewContentFiredFor = new Set();
+
 // ─────────────────────────────────────────────
 // Safe numeric normalization
 // ─────────────────────────────────────────────
-// Returns a finite non-negative number, or null.
-// Never returns NaN / Infinity / negative.
 const safeMoney = (v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return null;
@@ -39,10 +41,6 @@ const writeCookie = (name, value, maxAgeSeconds = 60 * 60 * 24 * 90) => {
   )}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
 };
 
-/**
- * Capture fbclid from the URL and persist as _fbc if not already present.
- * Safe to call on every mount — it becomes a no-op after the first capture.
- */
 export const captureFbclid = () => {
   try {
     if (typeof window === "undefined") return;
@@ -55,10 +53,8 @@ export const captureFbclid = () => {
 
     const fbc = `fb.1.${Date.now()}.${fbclid}`;
     writeCookie("_fbc", fbc);
-    // eslint-disable-next-line no-console
     console.log("[Meta] Captured fbclid → _fbc persisted");
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[Meta] fbclid capture failed:", err.message);
   }
 };
@@ -69,16 +65,6 @@ export const getFbc = () => readCookie("_fbc");
 // ─────────────────────────────────────────────
 // Core event dispatcher
 // ─────────────────────────────────────────────
-/**
- * Fires a Meta event via Browser Pixel AND CAPI, sharing one event_id.
- *
- * @param {object} args
- * @param {string} args.eventName
- * @param {object} [args.customData]
- * @param {object} [args.userData]
- * @param {string} [args.eventId]
- * @returns {Promise<{eventId:string, browserFired:boolean, capiResult:any}>}
- */
 export const trackMetaEvent = async ({
   eventName,
   customData = {},
@@ -87,17 +73,12 @@ export const trackMetaEvent = async ({
 }) => {
   const eventId = providedEventId || generateEventId();
 
-  // ── Sanitize customData value if present ──
   if ("value" in customData) {
     const v = safeMoney(customData.value);
     customData = { ...customData, value: v };
-    if (v === null) {
-      // Remove invalid value entirely rather than send null.
-      delete customData.value;
-    }
+    if (v === null) delete customData.value;
   }
 
-  // ── Sanitize contents if present ──
   if (Array.isArray(customData.contents)) {
     customData = {
       ...customData,
@@ -113,12 +94,9 @@ export const trackMetaEvent = async ({
         })
         .filter(Boolean),
     };
-    if (customData.contents.length === 0) {
-      delete customData.contents;
-    }
+    if (customData.contents.length === 0) delete customData.contents;
   }
 
-  // ── Browser pixel ──
   let browserFired = false;
   try {
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
@@ -126,11 +104,9 @@ export const trackMetaEvent = async ({
       browserFired = true;
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn(`[Meta] fbq failed for ${eventName}:`, err.message);
   }
 
-  // ── CAPI (server relay) ──
   const enrichedUserData = {
     ...userData,
     fbp: getFbp(),
@@ -157,12 +133,10 @@ export const trackMetaEvent = async ({
     });
     capiResult = await res.json().catch(() => null);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn(`[Meta] CAPI failed for ${eventName}:`, err.message);
   }
 
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
     console.log(`[Meta] ${eventName}`, {
       eventId,
       browserFired,
@@ -182,6 +156,12 @@ export const trackMetaEvent = async ({
 // ─────────────────────────────────────────────
 export const trackViewContent = (product) => {
   if (!product?._id) return Promise.resolve();
+
+  const key = String(product._id);
+  if (viewContentFiredFor.has(key)) {
+    return Promise.resolve();
+  }
+  viewContentFiredFor.add(key);
 
   const productPrice = Number(product.price) || 0;
   const comparePrice = Number(product.comparePrice) || 0;
@@ -211,7 +191,6 @@ export const trackAddToCart = (product, quantity = 1, variant = null) => {
   const qty = Number(quantity);
   if (!Number.isFinite(qty) || qty <= 0) return Promise.resolve();
 
-  // Use variant price when available — matches what the user actually pays.
   const productPrice = Number(product.price) || 0;
   const comparePrice = Number(product.comparePrice) || 0;
   const productSelling =
@@ -281,11 +260,6 @@ export const trackInitiateCheckout = ({ items, value, numItems }) => {
   });
 };
 
-/**
- * Purchase — receives the confirmed order from the server.
- * Uses the order's persisted purchaseEventId so browser + CAPI dedupe.
- * Never fires twice for the same order.
- */
 export const trackPurchase = (order, user) => {
   if (!order?._id) return Promise.resolve();
 
