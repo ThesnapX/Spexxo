@@ -5,9 +5,9 @@ import crypto from "crypto";
 const PIXEL_ID = process.env.META_PIXEL_ID;
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN;
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE;
-// Explicit opt-in test mode — never implicitly enabled by NODE_ENV
+// Explicit opt-in test mode — never implicitly enabled by NODE_ENV.
 const TEST_MODE = process.env.META_CAPI_TEST_MODE === "true";
-// Controlled API version — override via env if needed
+// Controlled API version.
 const API_VERSION = process.env.META_CAPI_API_VERSION || "v21.0";
 
 // ─────────────────────────────────────────────
@@ -28,11 +28,9 @@ const normalizePhone = (phone) => {
   return digits;
 };
 
-/**
- * Build Meta user_data object.
- * - Only hashes fields that Meta requires to be hashed.
- * - Never hashes twice — the caller must pass RAW values.
- */
+// ─────────────────────────────────────────────
+// Build Meta user_data
+// ─────────────────────────────────────────────
 const buildUserData = (userData = {}) => {
   const out = {};
 
@@ -46,7 +44,7 @@ const buildUserData = (userData = {}) => {
   if (userData.country) out.country = [sha256(userData.country)];
   if (userData.externalId) out.external_id = [sha256(userData.externalId)];
 
-  // Non-hashed browser/server context fields
+  // Non-hashed browser/server context.
   if (userData.clientIpAddress)
     out.client_ip_address = userData.clientIpAddress;
   if (userData.clientUserAgent)
@@ -54,7 +52,7 @@ const buildUserData = (userData = {}) => {
   if (userData.fbc) out.fbc = userData.fbc;
   if (userData.fbp) out.fbp = userData.fbp;
 
-  // Drop null hash entries
+  // Drop null hash entries.
   Object.keys(out).forEach((k) => {
     const v = out[k];
     if (Array.isArray(v) && v[0] === null) delete out[k];
@@ -63,23 +61,34 @@ const buildUserData = (userData = {}) => {
   return out;
 };
 
-/**
- * Build Meta custom_data object — strict naming.
- * Accepts camelCase or snake_case from the frontend and normalises.
- */
+// ─────────────────────────────────────────────
+// Build Meta custom_data — strict naming & numeric validation
+// ─────────────────────────────────────────────
+const isFiniteNonNegative = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0;
+};
+
 const buildCustomData = (customData = {}) => {
   const out = {};
 
+  // value — must be finite, non-negative, ≤ 1e9 (sane upper bound).
   const value = customData.value;
-  if (value !== undefined && value !== null && !isNaN(Number(value))) {
-    out.value = Number(value);
+  if (value !== undefined && value !== null) {
+    const n = Number(value);
+    if (isFiniteNonNegative(n) && n <= 1_000_000_000) {
+      out.value = Math.round(n * 100) / 100;
+    }
   }
 
   if (customData.currency) out.currency = String(customData.currency);
 
   const contentIds = customData.content_ids || customData.contentIds;
   if (Array.isArray(contentIds) && contentIds.length > 0) {
-    out.content_ids = contentIds.filter(Boolean);
+    out.content_ids = contentIds
+      .map((id) => (id === null || id === undefined ? null : String(id)))
+      .filter(Boolean)
+      .slice(0, 50); // Meta caps at 50.
   }
 
   if (customData.content_type || customData.contentType) {
@@ -92,21 +101,34 @@ const buildCustomData = (customData = {}) => {
 
   if (Array.isArray(customData.contents) && customData.contents.length > 0) {
     out.contents = customData.contents
-      .filter((c) => c && (c.id || c.item_price !== undefined))
-      .map((c) => ({
-        id: String(c.id),
-        quantity: Number(c.quantity || 1),
-        item_price: Number(c.item_price ?? c.price ?? 0),
-      }));
+      .map((c) => {
+        if (!c) return null;
+        const id = c.id ? String(c.id) : null;
+        const q = Number(c.quantity);
+        const p = Number(c.item_price ?? c.price);
+        if (!id) return null;
+        if (!Number.isFinite(q) || q <= 0) return null;
+        if (!isFiniteNonNegative(p)) return null;
+        return {
+          id,
+          quantity: q,
+          item_price: Math.round(p * 100) / 100,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 50);
   }
 
   const numItems = customData.num_items ?? customData.numItems;
   if (numItems !== undefined && numItems !== null) {
-    out.num_items = Number(numItems);
+    const n = Number(numItems);
+    if (Number.isFinite(n) && n >= 0) {
+      out.num_items = Math.floor(n);
+    }
   }
 
   const orderId = customData.order_id || customData.orderId;
-  if (orderId) out.order_id = String(orderId);
+  if (orderId) out.order_id = String(orderId).slice(0, 100);
 
   return out;
 };
@@ -115,18 +137,11 @@ const buildCustomData = (customData = {}) => {
 // Request-scoped attribution extraction
 // ─────────────────────────────────────────────
 export const getFbcFromRequest = (req) => {
-  // Priority 1: explicit body value (from frontend cookie read)
   const bodyFbc = req.body?.userData?.fbc || req.body?.fbc;
   if (bodyFbc) return bodyFbc;
-
-  // Priority 2: existing cookie
   if (req.cookies?._fbc) return req.cookies._fbc;
-
-  // Priority 3: construct from fbclid query
   const fbclid = req.query?.fbclid || req.body?.fbclid;
-  if (fbclid) {
-    return `fb.1.${Date.now()}.${fbclid}`;
-  }
+  if (fbclid) return `fb.1.${Date.now()}.${fbclid}`;
   return null;
 };
 
@@ -148,7 +163,16 @@ export const sendMetaEvent = async ({
   actionSource = "website",
   eventTime = Math.floor(Date.now() / 1000),
 }) => {
-  // Validate credentials
+  // Validate event_id BEFORE sending — an empty id disables dedup.
+  if (!eventId || typeof eventId !== "string" || eventId.length > 100) {
+    return {
+      success: false,
+      reason: "invalid_event_id",
+      eventName,
+      eventId,
+    };
+  }
+
   if (!PIXEL_ID || !ACCESS_TOKEN) {
     console.warn("[CAPI] Missing Meta credentials — event dropped:", {
       eventName,
@@ -182,7 +206,6 @@ export const sendMetaEvent = async ({
       ],
     };
 
-    // Test mode — explicit opt-in only
     if (TEST_MODE && TEST_EVENT_CODE) {
       payload.test_event_code = TEST_EVENT_CODE;
       console.log(
