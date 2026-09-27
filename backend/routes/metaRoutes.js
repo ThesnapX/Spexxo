@@ -1,20 +1,14 @@
 // backend/routes/metaRoutes.js
 
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { sendMetaEventController } from "../controllers/metaController.js";
 import { metaLimiter } from "../middleware/rateLimiters.js";
+
 const router = express.Router();
 
-// Strict rate limit for the public Meta ingestion endpoint
-const metaLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 120, // 120 events / min / IP is plenty for a normal session
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "Too many tracking events" },
-});
-
+// Public endpoint — accepts a strict allowlist of events, hashes user data
+// server-side, and mirrors to Meta CAPI. Rate-limited aggressively to
+// prevent spam from a runaway client.
 router.post("/event", metaLimiter, sendMetaEventController);
 
 export default router;

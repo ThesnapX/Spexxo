@@ -1,3 +1,5 @@
+// backend/routes/authRoutes.js
+
 import express from "express";
 import {
   register,
@@ -16,16 +18,22 @@ import {
 } from "../controllers/authController.js";
 import { protect } from "../middleware/auth.js";
 import { authLimiter } from "../middleware/rateLimiters.js";
+
 const router = express.Router();
 
 // ============ PUBLIC ROUTES ============
+// Strict rate limit on auth endpoints — protects against credential stuffing
+// and brute-force attempts.
 router.post("/register", authLimiter, register);
 router.post("/login", authLimiter, login);
 router.post("/forgot-password", authLimiter, forgotPassword);
 router.put("/reset-password/:token", authLimiter, resetPassword);
-router.get("/check-username/:username", checkUsername);
-router.post("/check-email", checkEmailExists);
-router.post("/check-phone", checkPhoneExists);
+
+// Username / email / phone availability checks — public but rate-limited
+// to prevent enumeration at scale.
+router.get("/check-username/:username", authLimiter, checkUsername);
+router.post("/check-email", authLimiter, checkEmailExists);
+router.post("/check-phone", authLimiter, checkPhoneExists);
 
 // ============ PROTECTED ROUTES ============
 router.get("/me", protect, getMe);

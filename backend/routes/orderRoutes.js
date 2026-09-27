@@ -12,8 +12,8 @@ import {
   cancelPendingOrder,
 } from "../controllers/orderController.js";
 import { protect, admin } from "../middleware/auth.js";
-import Order from "../models/Order.js";
 import { orderLimiter } from "../middleware/rateLimiters.js";
+import Order from "../models/Order.js";
 
 const router = express.Router();
 
@@ -63,7 +63,7 @@ router.put("/:id/refund", protect, admin, async (req, res) => {
       order,
     });
   } catch (error) {
-    console.error("Refund error:", error);
+    console.error("Refund error:", error.message);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to process refund",

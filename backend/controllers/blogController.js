@@ -4,16 +4,11 @@ import Blog from "../models/Blog.js";
 import BlogCategory from "../models/BlogCategory.js";
 import BlogTag from "../models/BlogTag.js";
 import { calculateBlogSeoScore } from "../utils/seoScore.js";
+import { clampPagination, sanitizeSearch } from "../utils/validation.js";
 
 // ============================================
 // BLOG CRUD
 // ============================================
-
-// At the top of blogController.js, add this import:
-// import { clampPagination, sanitizeSearch } from "../utils/validation.js";
-
-// At the top of blogController.js, add this import:
-// import { clampPagination, sanitizeSearch } from "../utils/validation.js";
 
 // @desc    Get published blogs (public)
 // @route   GET /api/blogs
@@ -79,6 +74,126 @@ export const getBlogs = async (req, res) => {
   }
 };
 
+// @desc    Get single blog by slug (public)
+// @route   GET /api/blogs/:slug
+// @access  Public
+export const getBlog = async (req, res) => {
+  try {
+    const blog = await Blog.findOne({
+      slug: req.params.slug,
+      status: "published",
+    })
+      .populate("category", "name slug")
+      .populate("tags", "name slug");
+
+    if (!blog)
+      return res
+        .status(404)
+        .json({ success: false, message: "Blog not found" });
+
+    // Views increment — non-blocking
+    Blog.findByIdAndUpdate(blog._id, { $inc: { views: 1 } }).catch(() => {});
+
+    // Related blogs
+    const relatedQuery = {
+      _id: { $ne: blog._id },
+      status: "published",
+    };
+
+    let relatedBlogs = [];
+    if (blog.category || (blog.tags && blog.tags.length > 0)) {
+      const orClauses = [];
+      if (blog.category) orClauses.push({ category: blog.category._id });
+      if (blog.tags && blog.tags.length > 0)
+        orClauses.push({ tags: { $in: blog.tags.map((t) => t._id) } });
+
+      relatedBlogs = await Blog.find({ ...relatedQuery, $or: orClauses })
+        .sort("-publishedAt")
+        .limit(3)
+        .select("title slug featuredImage excerpt publishedAt readTime");
+    }
+
+    if (relatedBlogs.length < 3) {
+      const excludeIds = [blog._id, ...relatedBlogs.map((b) => b._id)];
+      const fillCount = 3 - relatedBlogs.length;
+      const filler = await Blog.find({
+        _id: { $nin: excludeIds },
+        status: "published",
+      })
+        .sort("-publishedAt")
+        .limit(fillCount)
+        .select("title slug featuredImage excerpt publishedAt readTime");
+      relatedBlogs = [...relatedBlogs, ...filler];
+    }
+
+    // Sidebar products
+    let sidebarProducts = [];
+    try {
+      const Product = (await import("../models/Product.js")).default;
+
+      let referencedIds = [];
+      try {
+        const blocks = JSON.parse(blog.content);
+        if (Array.isArray(blocks)) {
+          blocks.forEach((b) => {
+            if (
+              b.type === "productShowcase" &&
+              Array.isArray(b.data?.products)
+            ) {
+              b.data.products.forEach((p) => {
+                const id = typeof p === "string" ? p : p?._id;
+                if (id) referencedIds.push(id);
+              });
+            }
+          });
+        }
+      } catch {
+        /* not JSON — skip */
+      }
+
+      if (referencedIds.length > 0) {
+        sidebarProducts = await Product.find({
+          _id: { $in: referencedIds },
+          isActive: true,
+        })
+          .limit(4)
+          .select(
+            "name slug price comparePrice images brand ratings stock isActive",
+          )
+          .populate("brand", "name slug");
+      }
+
+      if (sidebarProducts.length < 3) {
+        const excludeIds = sidebarProducts.map((p) => p._id);
+        const fillCount = 3 - sidebarProducts.length;
+        const recent = await Product.find({
+          _id: { $nin: excludeIds },
+          isActive: true,
+          stock: { $gt: 0 },
+        })
+          .sort("-createdAt")
+          .limit(fillCount)
+          .select(
+            "name slug price comparePrice images brand ratings stock isActive",
+          )
+          .populate("brand", "name slug");
+        sidebarProducts = [...sidebarProducts, ...recent];
+      }
+    } catch (e) {
+      console.error("Sidebar products error:", e.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      blog,
+      relatedBlogs,
+      sidebarProducts,
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get blogs (admin — includes drafts)
 // @route   GET /api/blogs/admin/all
 export const getAdminBlogs = async (req, res) => {
@@ -129,15 +244,7 @@ export const getAdminBlogs = async (req, res) => {
   }
 };
 
-// @desc    Get single blog by slug (public)
-// @route   GET /api/blogs/:slug
-// @access  Public
-//
-//  ✓ Returns full blog
-//  ✓ Returns related blogs (same category/tags, fallback recent)
-//  ✓ Returns sidebar products (from blog.products if present, else recent active products)
-
-// @desc    Get single blog (admin - includes drafts, by ID)
+// @desc    Get single blog (admin — includes drafts, by ID)
 // @route   GET /api/blogs/admin/:id
 // @access  Private/Admin
 export const getAdminBlogById = async (req, res) => {
@@ -151,8 +258,6 @@ export const getAdminBlogById = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Blog not found" });
 
-    // ✅ Flatten category + tags to plain IDs so the form can bind cleanly.
-    // The frontend still gets the populated objects via `_populated` if it needs them.
     const blogObj = blog.toObject();
     const rawCategoryId =
       blogObj.category && typeof blogObj.category === "object"
@@ -279,7 +384,7 @@ export const toggleBlogStatus = async (req, res) => {
 };
 
 // ============================================
-// BLOG CATEGORY CRUD  (unchanged)
+// BLOG CATEGORY CRUD
 // ============================================
 
 export const getBlogCategories = async (req, res) => {
@@ -351,7 +456,7 @@ export const deleteBlogCategory = async (req, res) => {
 };
 
 // ============================================
-// BLOG TAG CRUD (unchanged)
+// BLOG TAG CRUD
 // ============================================
 
 export const getBlogTags = async (req, res) => {
