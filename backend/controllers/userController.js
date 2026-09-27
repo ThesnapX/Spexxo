@@ -2,7 +2,7 @@
 
 import User from "../models/User.js";
 import Cart from "../models/Cart.js";
-
+import { clampPagination, sanitizeSearch } from "../utils/validation.js";
 // ─────────────────────────────────────────────
 // Helper: days passed since a date
 // ─────────────────────────────────────────────
@@ -17,8 +17,44 @@ const daysPassed = (date) => {
 // @access  Private/Admin
 export const getUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-wishlist").sort("-createdAt");
-    res.status(200).json({ success: true, users });
+    const { page, limit, skip } = clampPagination(
+      req.query.page,
+      req.query.limit,
+      { defaultLimit: 50, maxLimit: 200 },
+    );
+
+    const query = {};
+    const safeSearch = sanitizeSearch(req.query.search, 100);
+    if (safeSearch) {
+      query.$or = [
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
+        { username: { $regex: safeSearch, $options: "i" } },
+        { customerId: { $regex: safeSearch, $options: "i" } },
+        { phone: { $regex: safeSearch, $options: "i" } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(query)
+        .select("-wishlist")
+        .sort("-createdAt")
+        .skip(skip)
+        .limit(limit),
+      User.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      users,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }

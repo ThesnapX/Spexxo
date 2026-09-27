@@ -9,43 +9,49 @@ import { calculateBlogSeoScore } from "../utils/seoScore.js";
 // BLOG CRUD
 // ============================================
 
+// At the top of blogController.js, add this import:
+// import { clampPagination, sanitizeSearch } from "../utils/validation.js";
+
+// At the top of blogController.js, add this import:
+// import { clampPagination, sanitizeSearch } from "../utils/validation.js";
+
 // @desc    Get published blogs (public)
 // @route   GET /api/blogs
 export const getBlogs = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 9,
-      category,
-      tag,
-      search,
-      isFeatured,
-    } = req.query;
+    const { category, tag, search, isFeatured } = req.query;
+
+    const { page, limit, skip } = clampPagination(
+      req.query.page,
+      req.query.limit,
+      { defaultLimit: 9, maxLimit: 50 },
+    );
 
     const query = { status: "published" };
 
-    if (category) {
-      const cat = await BlogCategory.findOne({ slug: category });
+    if (category && typeof category === "string") {
+      const cat = await BlogCategory.findOne({
+        slug: category.slice(0, 80),
+      });
       if (cat) query.category = cat._id;
       else query._id = { $in: [] };
     }
 
-    if (tag) {
-      const t = await BlogTag.findOne({ slug: tag });
+    if (tag && typeof tag === "string") {
+      const t = await BlogTag.findOne({ slug: tag.slice(0, 80) });
       if (t) query.tags = t._id;
       else query._id = { $in: [] };
     }
 
     if (isFeatured === "true") query.isFeatured = true;
 
-    if (search) {
+    const safeSearch = sanitizeSearch(search, 100);
+    if (safeSearch) {
       query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { excerpt: { $regex: search, $options: "i" } },
+        { title: { $regex: safeSearch, $options: "i" } },
+        { excerpt: { $regex: safeSearch, $options: "i" } },
       ];
     }
-
-    const skip = (Number(page) - 1) * Number(limit);
 
     const [blogs, total] = await Promise.all([
       Blog.find(query)
@@ -53,7 +59,7 @@ export const getBlogs = async (req, res) => {
         .populate("tags", "name slug")
         .sort("-publishedAt -createdAt")
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .select("-content -seo -seoScore"),
       Blog.countDocuments(query),
     ]);
@@ -62,10 +68,60 @@ export const getBlogs = async (req, res) => {
       success: true,
       blogs,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / Number(limit)),
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get blogs (admin — includes drafts)
+// @route   GET /api/blogs/admin/all
+export const getAdminBlogs = async (req, res) => {
+  try {
+    const { status, category, search } = req.query;
+
+    const { page, limit, skip } = clampPagination(
+      req.query.page,
+      req.query.limit,
+      { defaultLimit: 20, maxLimit: 100 },
+    );
+
+    const query = {};
+    if (status) query.status = status;
+    if (category) query.category = category;
+
+    const safeSearch = sanitizeSearch(search, 100);
+    if (safeSearch) {
+      query.$or = [
+        { title: { $regex: safeSearch, $options: "i" } },
+        { excerpt: { $regex: safeSearch, $options: "i" } },
+      ];
+    }
+
+    const [blogs, total] = await Promise.all([
+      Blog.find(query)
+        .populate("category", "name slug")
+        .populate("tags", "name slug")
+        .sort("-createdAt")
+        .skip(skip)
+        .limit(limit)
+        .select("-content"),
+      Blog.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      blogs,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
@@ -80,171 +136,6 @@ export const getBlogs = async (req, res) => {
 //  ✓ Returns full blog
 //  ✓ Returns related blogs (same category/tags, fallback recent)
 //  ✓ Returns sidebar products (from blog.products if present, else recent active products)
-export const getBlog = async (req, res) => {
-  try {
-    const blog = await Blog.findOne({
-      slug: req.params.slug,
-      status: "published",
-    })
-      .populate("category", "name slug")
-      .populate("tags", "name slug");
-
-    if (!blog)
-      return res
-        .status(404)
-        .json({ success: false, message: "Blog not found" });
-
-    // Views increment — non-blocking
-    Blog.findByIdAndUpdate(blog._id, { $inc: { views: 1 } }).catch(() => {});
-
-    // ── Related blogs: same category OR shared tags, else recent ──
-    const relatedQuery = {
-      _id: { $ne: blog._id },
-      status: "published",
-    };
-
-    let relatedBlogs = [];
-    if (blog.category || (blog.tags && blog.tags.length > 0)) {
-      const orClauses = [];
-      if (blog.category) orClauses.push({ category: blog.category._id });
-      if (blog.tags && blog.tags.length > 0)
-        orClauses.push({ tags: { $in: blog.tags.map((t) => t._id) } });
-
-      relatedBlogs = await Blog.find({ ...relatedQuery, $or: orClauses })
-        .sort("-publishedAt")
-        .limit(3)
-        .select("title slug featuredImage excerpt publishedAt readTime");
-    }
-
-    // Fallback / fill up to 3 with recent
-    if (relatedBlogs.length < 3) {
-      const excludeIds = [blog._id, ...relatedBlogs.map((b) => b._id)];
-      const fillCount = 3 - relatedBlogs.length;
-      const filler = await Blog.find({
-        _id: { $nin: excludeIds },
-        status: "published",
-      })
-        .sort("-publishedAt")
-        .limit(fillCount)
-        .select("title slug featuredImage excerpt publishedAt readTime");
-      relatedBlogs = [...relatedBlogs, ...filler];
-    }
-
-    // ── Sidebar products ──
-    // Try to use products referenced by the blog's Product Showcase blocks.
-    // Falls back to recent active products.
-    let sidebarProducts = [];
-    try {
-      const Product = (await import("../models/Product.js")).default;
-
-      // Extract product IDs from content blocks
-      let referencedIds = [];
-      try {
-        const blocks = JSON.parse(blog.content);
-        if (Array.isArray(blocks)) {
-          blocks.forEach((b) => {
-            if (
-              b.type === "productShowcase" &&
-              Array.isArray(b.data?.products)
-            ) {
-              b.data.products.forEach((p) => {
-                const id = typeof p === "string" ? p : p?._id;
-                if (id) referencedIds.push(id);
-              });
-            }
-          });
-        }
-      } catch {
-        /* not JSON — skip */
-      }
-
-      if (referencedIds.length > 0) {
-        sidebarProducts = await Product.find({
-          _id: { $in: referencedIds },
-          isActive: true,
-        })
-          .limit(4)
-          .select(
-            "name slug price comparePrice images brand ratings stock isActive",
-          )
-          .populate("brand", "name slug");
-      }
-
-      // Fill up to 3 with recent active products
-      if (sidebarProducts.length < 3) {
-        const excludeIds = sidebarProducts.map((p) => p._id);
-        const fillCount = 3 - sidebarProducts.length;
-        const recent = await Product.find({
-          _id: { $nin: excludeIds },
-          isActive: true,
-          stock: { $gt: 0 },
-        })
-          .sort("-createdAt")
-          .limit(fillCount)
-          .select(
-            "name slug price comparePrice images brand ratings stock isActive",
-          )
-          .populate("brand", "name slug");
-        sidebarProducts = [...sidebarProducts, ...recent];
-      }
-    } catch (e) {
-      console.error("Sidebar products error:", e.message);
-    }
-
-    res.status(200).json({
-      success: true,
-      blog,
-      relatedBlogs,
-      sidebarProducts,
-    });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
-
-// @desc    Get blogs (admin - includes drafts)
-// @route   GET /api/blogs/admin/all
-export const getAdminBlogs = async (req, res) => {
-  try {
-    const { page = 1, limit = 20, status, search, category } = req.query;
-    const query = {};
-
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { excerpt: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
-
-    const [blogs, total] = await Promise.all([
-      Blog.find(query)
-        .populate("category", "name slug")
-        .populate("tags", "name slug")
-        .sort("-createdAt")
-        .skip(skip)
-        .limit(Number(limit))
-        .select("-content"),
-      Blog.countDocuments(query),
-    ]);
-
-    res.status(200).json({
-      success: true,
-      blogs,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / Number(limit)),
-      },
-    });
-  } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
-  }
-};
 
 // @desc    Get single blog (admin - includes drafts, by ID)
 // @route   GET /api/blogs/admin/:id

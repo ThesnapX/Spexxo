@@ -44,23 +44,47 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // ============ CORS ============
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:5173")
+const rawOrigins = process.env.ALLOWED_ORIGINS || "";
+const parsedOrigins = rawOrigins
   .split(",")
-  .map((url) => url.trim());
+  .map((u) => u.trim())
+  .filter(Boolean);
 
 if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
+  parsedOrigins.push(process.env.FRONTEND_URL.trim());
+}
+
+// Localhost is only allowed in non-production.
+if (!isProduction) {
+  parsedOrigins.push("http://localhost:5173");
+  parsedOrigins.push("http://localhost:3000");
+}
+
+// Deduplicate.
+const allowedOrigins = [...new Set(parsedOrigins)];
+
+// Fail loudly in production if no origins configured.
+if (isProduction && allowedOrigins.length === 0) {
+  console.error(
+    "❌ FATAL: No CORS origins configured. Set ALLOWED_ORIGINS or FRONTEND_URL in production.",
+  );
+  // We do not throw — the app still boots and other endpoints work,
+  // but every browser request will be rejected with the log below.
 }
 
 app.use(
   cors({
     origin: function (origin, callback) {
+      // Allow server-to-server / curl (no Origin header).
       if (!origin) return callback(null, true);
+
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.log("Blocked by CORS:", origin);
+        console.warn("[CORS] Blocked origin:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -70,6 +94,15 @@ app.use(
   }),
 );
 
+// ============ SECURITY HEADERS ============
+// Minimal, non-breaking. Frontend already sets these via Vercel.
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
 // ============ MIDDLEWARE ============
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -78,25 +111,29 @@ app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ============ RATE LIMITING ============
-const isDev = process.env.NODE_ENV !== "production";
-
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isDev ? 2000 : 500,
-  message: "Too many requests, please try again later.",
+  max: isProduction ? 500 : 5000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => isDev && (req.ip === "::1" || req.ip === "127.0.0.1"),
+  message: {
+    success: false,
+    message: "Too many requests, please try again later.",
+  },
+  skip: (req) => !isProduction && (req.ip === "::1" || req.ip === "127.0.0.1"),
 });
 app.use("/api/", limiter);
 
 const productsLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: isDev ? 300 : 60,
-  message: "Too many product requests, please slow down.",
+  max: isProduction ? 120 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => isDev && (req.ip === "::1" || req.ip === "127.0.0.1"),
+  message: {
+    success: false,
+    message: "Too many product requests, please slow down.",
+  },
+  skip: (req) => !isProduction && (req.ip === "::1" || req.ip === "127.0.0.1"),
 });
 app.use("/api/products", productsLimiter);
 
@@ -131,8 +168,6 @@ app.use("/api/meta", metaRoutes);
 console.log("✅ All routes registered");
 
 // ============ SITEMAP ============
-// Returns XML on demand. Frontend serves its own static /sitemap.xml.
-// Use this endpoint from build scripts or cron to regenerate a static file.
 app.get("/api/sitemap.xml", async (req, res) => {
   try {
     const xml = await buildSitemapXml();
@@ -141,7 +176,7 @@ app.get("/api/sitemap.xml", async (req, res) => {
     res.status(200).send(xml);
   } catch (error) {
     console.error("[SITEMAP] generation error:", error.message);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Sitemap unavailable" });
   }
 });
 
@@ -161,32 +196,63 @@ app.get("/api/health", (req, res) => {
     status: "healthy",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    memory: process.memoryUsage(),
     database:
       mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   });
 });
 
-// ============ ERROR HANDLING ============
-app.use((err, req, res, next) => {
-  console.error("Error:", err.message);
-  console.error("Stack:", err.stack);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || "Internal Server Error",
-  });
+// ============ 404 ============
+app.use((req, res) => {
+  // Avoid noisy logs for favicon.ico and other benign hits.
+  if (
+    req.url !== "/favicon.ico" &&
+    req.url !== "/robots.txt" &&
+    req.url !== "/.well-known/"
+  ) {
+    console.log("404 - Route not found:", req.method, req.url);
+  }
+  res.status(404).json({ success: false, message: "Route not found" });
 });
 
-app.use((req, res) => {
-  console.log("404 - Route not found:", req.method, req.url);
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
+// ============ ERROR HANDLING ============
+// MUST come after all routes and the 404 handler.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+
+  // Log full details server-side, but never send to the client.
+  console.error("[ERROR]", {
+    method: req.method,
+    url: req.url,
+    status,
+    message: err.message,
+    // Include stack only in non-production.
+    stack: !isProduction ? err.stack : undefined,
   });
+
+  // Special case: CORS rejection.
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      success: false,
+      message: "Request origin not allowed",
+    });
+  }
+
+  // Do not leak internals to the client.
+  const safeMessage =
+    isProduction && status >= 500
+      ? "Internal Server Error"
+      : err.message || "Internal Server Error";
+
+  res.status(status).json({ success: false, message: safeMessage });
 });
 
 // ============ DB ============
 const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error("❌ FATAL: MONGODB_URI is not set.");
+}
 
 const connectDB = async () => {
   try {
@@ -226,5 +292,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 API available at http://localhost:${PORT}/api`);
   console.log(`🗺️  Sitemap XML: http://localhost:${PORT}/api/sitemap.xml`);
-  console.log(`🔗 Allowed origins:`, allowedOrigins.join(", "));
+  console.log(`🔗 Allowed origins:`, allowedOrigins.join(", ") || "(none)");
 });

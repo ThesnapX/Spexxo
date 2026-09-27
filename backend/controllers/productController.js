@@ -3,6 +3,12 @@
 import Product from "../models/Product.js";
 import Category from "../models/Category.js";
 import Brand from "../models/Brand.js";
+import {
+  clampPagination,
+  sanitizeSearch,
+  parseFiniteNumber,
+  parseCsvList,
+} from "../utils/validation.js";
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -10,8 +16,6 @@ import Brand from "../models/Brand.js";
 export const getProducts = async (req, res) => {
   try {
     const {
-      page = 1,
-      limit = 12,
       sort,
       search,
       category,
@@ -31,14 +35,21 @@ export const getProducts = async (req, res) => {
       hideOutOfStock = "true",
     } = req.query;
 
+    const { page, limit, skip } = clampPagination(
+      req.query.page,
+      req.query.limit,
+      {
+        defaultLimit: 12,
+        maxLimit: 100,
+      },
+    );
+
     const query = {};
 
-    // If includeInactive is not true, only show active products
     if (includeInactive !== "true") {
       query.isActive = true;
     }
 
-    // Stock filter - check both main stock AND variants
     if (hideOutOfStock !== "false" && includeInactive !== "true") {
       query.$or = [
         { stock: { $gt: 0 } },
@@ -46,23 +57,18 @@ export const getProducts = async (req, res) => {
       ];
     }
 
-    // ✅ PRICE FILTER - Handles both simple and variant products
-    if (minPrice || maxPrice) {
+    // Price filter
+    const minP = parseFiniteNumber(minPrice, null);
+    const maxP = parseFiniteNumber(maxPrice, null);
+    if (minP !== null || maxP !== null) {
       const priceFilter = {};
-      if (minPrice) priceFilter.$gte = Number(minPrice);
-      if (maxPrice) priceFilter.$lte = Number(maxPrice);
+      if (minP !== null && minP >= 0) priceFilter.$gte = minP;
+      if (maxP !== null && maxP >= 0) priceFilter.$lte = maxP;
 
       const priceConditions = [{ price: priceFilter }];
-
-      if (priceFilter.$gte !== undefined || priceFilter.$lte !== undefined) {
-        priceConditions.push({
-          variants: {
-            $elemMatch: {
-              price: priceFilter,
-            },
-          },
-        });
-      }
+      priceConditions.push({
+        variants: { $elemMatch: { price: priceFilter } },
+      });
 
       if (query.$or) {
         const stockOr = query.$or;
@@ -73,17 +79,20 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // ✅ UNIVERSAL SEARCH
-    if (search) {
-      const searchRegex = { $regex: search, $options: "i" };
+    // Search — sanitized
+    const safeSearch = sanitizeSearch(search, 100);
+    if (safeSearch) {
+      const searchRegex = { $regex: safeSearch, $options: "i" };
 
       const matchingCategories = await Category.find({
         name: searchRegex,
-      }).select("_id");
+      })
+        .select("_id")
+        .limit(50);
 
-      const matchingBrands = await Brand.find({
-        name: searchRegex,
-      }).select("_id");
+      const matchingBrands = await Brand.find({ name: searchRegex })
+        .select("_id")
+        .limit(50);
 
       const categoryIds = matchingCategories.map((c) => c._id.toString());
       const brandIds = matchingBrands.map((b) => b._id.toString());
@@ -113,9 +122,11 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Category filter
-    if (category) {
-      const cat = await Category.findOne({ slug: category });
+    // Category
+    if (category && typeof category === "string") {
+      const cat = await Category.findOne({
+        slug: category.slice(0, 80),
+      });
       if (cat) {
         const catId = cat._id.toString();
         if (query.$and) {
@@ -128,10 +139,12 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Brand filter
+    // Brand
     if (brand) {
-      const brandSlugs = brand.split(",").filter(Boolean);
-      const brands = await Brand.find({ slug: { $in: brandSlugs } });
+      const brandSlugs = parseCsvList(brand, { maxItems: 30, maxLen: 60 });
+      const brands = await Brand.find({ slug: { $in: brandSlugs } }).select(
+        "_id",
+      );
       if (brands.length > 0) {
         const brandIds = brands.map((b) => b._id.toString());
         if (query.$and) {
@@ -144,110 +157,105 @@ export const getProducts = async (req, res) => {
       }
     }
 
-    // Gender filter
+    // Gender
     if (gender) {
-      const genders = gender.split(",").filter(Boolean);
-      if (genders.length > 0) {
+      const genders = parseCsvList(gender, { maxItems: 4, maxLen: 20 });
+      const validGenders = ["men", "women", "unisex", "kids"].filter((g) =>
+        genders.includes(g),
+      );
+      if (validGenders.length > 0) {
         if (query.$and) {
-          query.$and.push({ gender: { $in: genders } });
+          query.$and.push({ gender: { $in: validGenders } });
         } else {
-          query.gender = { $in: genders };
+          query.gender = { $in: validGenders };
         }
       }
     }
 
-    // Product Category filter (eyeglasses, sunglasses, contactlens)
+    // Product category
     if (productCategory) {
-      if (query.$and) {
-        query.$and.push({ productCategory: productCategory });
-      } else {
-        query.productCategory = productCategory;
-      }
-    }
-
-    // Frame shape
-    if (frameShape) {
-      const shapes = frameShape.split(",").filter(Boolean);
-      if (shapes.length > 0) {
+      const valid = ["eyeglasses", "sunglasses", "contactlens"];
+      const value = String(productCategory).toLowerCase();
+      if (valid.includes(value)) {
         if (query.$and) {
-          query.$and.push({
-            frameShape: { $regex: shapes.join("|"), $options: "i" },
-          });
+          query.$and.push({ productCategory: value });
         } else {
-          query.frameShape = { $regex: shapes.join("|"), $options: "i" };
+          query.productCategory = value;
         }
       }
     }
 
-    // Lens type
+    // Frame shape — sanitize
+    if (frameShape) {
+      const shapes = parseCsvList(frameShape, { maxItems: 10, maxLen: 40 });
+      if (shapes.length > 0) {
+        const safeRegex = sanitizeSearch(shapes.join("|"), 200);
+        if (safeRegex) {
+          if (query.$and) {
+            query.$and.push({
+              frameShape: { $regex: safeRegex, $options: "i" },
+            });
+          } else {
+            query.frameShape = { $regex: safeRegex, $options: "i" };
+          }
+        }
+      }
+    }
+
+    // Lens type — sanitize
     if (lensType) {
-      const types = lensType.split(",").filter(Boolean);
+      const types = parseCsvList(lensType, { maxItems: 10, maxLen: 40 });
       if (types.length > 0) {
-        if (query.$and) {
-          query.$and.push({
-            lensType: { $regex: types.join("|"), $options: "i" },
-          });
-        } else {
-          query.lensType = { $regex: types.join("|"), $options: "i" };
+        const safeRegex = sanitizeSearch(types.join("|"), 200);
+        if (safeRegex) {
+          if (query.$and) {
+            query.$and.push({ lensType: { $regex: safeRegex, $options: "i" } });
+          } else {
+            query.lensType = { $regex: safeRegex, $options: "i" };
+          }
         }
       }
     }
 
     // Rating
-    if (rating) {
+    const ratingNum = parseFiniteNumber(rating, null);
+    if (ratingNum !== null && ratingNum >= 0) {
       if (query.$and) {
-        query.$and.push({ "ratings.average": { $gte: Number(rating) } });
+        query.$and.push({ "ratings.average": { $gte: ratingNum } });
       } else {
-        query["ratings.average"] = { $gte: Number(rating) };
+        query["ratings.average"] = { $gte: ratingNum };
       }
     }
 
     // Flags
     if (isFeatured === "true") {
-      if (query.$and) {
-        query.$and.push({ isFeatured: true });
-      } else {
-        query.isFeatured = true;
-      }
+      if (query.$and) query.$and.push({ isFeatured: true });
+      else query.isFeatured = true;
     }
     if (isTrending === "true") {
-      if (query.$and) {
-        query.$and.push({ isTrending: true });
-      } else {
-        query.isTrending = true;
-      }
+      if (query.$and) query.$and.push({ isTrending: true });
+      else query.isTrending = true;
     }
     if (isBestSeller === "true") {
-      if (query.$and) {
-        query.$and.push({ isBestSeller: true });
-      } else {
-        query.isBestSeller = true;
-      }
+      if (query.$and) query.$and.push({ isBestSeller: true });
+      else query.isBestSeller = true;
     }
 
-    // New Arrivals
+    // New arrivals
     if (isNewArrival === "true") {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const newArrivalCondition = {
         $or: [{ isNewArrival: true }, { createdAt: { $gte: thirtyDaysAgo } }],
       };
-
-      if (query.$and) {
-        query.$and.push(newArrivalCondition);
-      } else {
-        query.$and = [newArrivalCondition];
-      }
+      if (query.$and) query.$and.push(newArrivalCondition);
+      else query.$and = [newArrivalCondition];
     }
 
-    // ✅ FIXED: Sort options with proper price sorting for variable products
+    // Sort
     let sortOption = { createdAt: -1 };
-
     switch (sort) {
       case "price-low":
-        // For price low to high, we need to sort by the minimum price
-        // For simple products: use price field
-        // For variable products: use the minimum price from variants
         sortOption = { price: 1 };
         break;
       case "price-high":
@@ -272,79 +280,59 @@ export const getProducts = async (req, res) => {
         sortOption = { createdAt: -1 };
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-
-    // ✅ FIXED: For price sorting, we need to handle variable products differently
-    // We need to get all products and sort them in memory for variable products
     let products = [];
     let total = 0;
 
-    // For price sorting, we need to handle variable products specially
     if (sort === "price-low" || sort === "price-high") {
-      // Get all products matching the query (without pagination first)
+      // Fetch, compute effective price, sort in memory, paginate.
+      // Cap at a sane upper bound to prevent OOM on huge catalogs.
       const allProducts = await Product.find(query)
         .populate("brand", "name slug logo")
+        .limit(2000)
         .lean();
 
-      // Calculate effective price for each product
       const productsWithPrice = allProducts.map((product) => {
         let effectivePrice = product.price || 0;
-
-        // If product has variants, find the minimum price among variants
         if (product.variants && product.variants.length > 0) {
           const variantPrices = product.variants.map((v) => v.price || 0);
           const minVariantPrice = Math.min(...variantPrices);
-          // Use comparePrice if available and less than price
           const comparePrice = product.comparePrice || 0;
           effectivePrice =
             comparePrice > 0 && comparePrice < minVariantPrice
               ? comparePrice
               : minVariantPrice;
         } else {
-          // Simple product - use comparePrice if available
           const comparePrice = product.comparePrice || 0;
           effectivePrice =
             comparePrice > 0 && comparePrice < product.price
               ? comparePrice
               : product.price || 0;
         }
-
         return { ...product, effectivePrice };
       });
 
-      // Sort by effective price
-      productsWithPrice.sort((a, b) => {
-        if (sort === "price-low") {
-          return a.effectivePrice - b.effectivePrice;
-        } else {
-          return b.effectivePrice - a.effectivePrice;
-        }
-      });
+      productsWithPrice.sort((a, b) =>
+        sort === "price-low"
+          ? a.effectivePrice - b.effectivePrice
+          : b.effectivePrice - a.effectivePrice,
+      );
 
       total = productsWithPrice.length;
-
-      // Apply pagination
-      products = productsWithPrice.slice(skip, skip + Number(limit));
-
-      // Convert back to plain objects
-      products = products.map((p) => {
-        const { effectivePrice, ...rest } = p;
-        return rest;
-      });
+      products = productsWithPrice
+        .slice(skip, skip + limit)
+        .map(({ effectivePrice, ...rest }) => rest);
     } else {
-      // For non-price sorting, use regular query with pagination
       const result = await Product.find(query)
         .populate("brand", "name slug logo")
         .sort(sortOption)
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limit)
         .lean();
 
       products = result;
       total = await Product.countDocuments(query);
     }
 
-    // Get all categories for name lookup
     const allCategories = await Category.find({});
     const categoryMap = {};
     allCategories.forEach((cat) => {
@@ -372,15 +360,17 @@ export const getProducts = async (req, res) => {
       success: true,
       products: productsWithCategories,
       pagination: {
-        page: Number(page),
-        limit: Number(limit),
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / Number(limit)),
+        pages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
-    console.error("Get products error:", error);
-    res.status(400).json({ success: false, message: error.message });
+    console.error("Get products error:", error.message);
+    res
+      .status(400)
+      .json({ success: false, message: "Failed to load products" });
   }
 };
 
@@ -390,16 +380,20 @@ export const getProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const { slug } = req.params;
-    let product = await Product.findOne({ slug, isActive: true }).populate(
-      "brand",
-      "name slug logo",
-    );
-    if (!product && slug.match(/^[0-9a-fA-F]{24}$/)) {
-      product = await Product.findById(slug).populate(
+    const safeSlug = String(slug).slice(0, 200);
+
+    let product = await Product.findOne({
+      slug: safeSlug,
+      isActive: true,
+    }).populate("brand", "name slug logo");
+
+    if (!product && /^[0-9a-fA-F]{24}$/.test(safeSlug)) {
+      product = await Product.findById(safeSlug).populate(
         "brand",
         "name slug logo",
       );
     }
+
     if (!product) {
       return res
         .status(404)
@@ -431,7 +425,7 @@ export const getProduct = async (req, res) => {
       .status(200)
       .json({ success: true, product: productObj, relatedProducts });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    res.status(400).json({ success: false, message: "Failed to load product" });
   }
 };
 

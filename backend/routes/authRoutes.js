@@ -15,14 +15,14 @@ import {
   deactivateOwnAccount,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/auth.js";
-
+import { authLimiter } from "../middleware/rateLimiters.js";
 const router = express.Router();
 
 // ============ PUBLIC ROUTES ============
-router.post("/register", register);
-router.post("/login", login);
-router.post("/forgot-password", forgotPassword);
-router.put("/reset-password/:token", resetPassword);
+router.post("/register", authLimiter, register);
+router.post("/login", authLimiter, login);
+router.post("/forgot-password", authLimiter, forgotPassword);
+router.put("/reset-password/:token", authLimiter, resetPassword);
 router.get("/check-username/:username", checkUsername);
 router.post("/check-email", checkEmailExists);
 router.post("/check-phone", checkPhoneExists);

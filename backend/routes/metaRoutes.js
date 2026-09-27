@@ -3,7 +3,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { sendMetaEventController } from "../controllers/metaController.js";
-
+import { metaLimiter } from "../middleware/rateLimiters.js";
 const router = express.Router();
 
 // Strict rate limit for the public Meta ingestion endpoint

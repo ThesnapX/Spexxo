@@ -8,6 +8,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { Toaster, ToastBar, toast } from "react-hot-toast";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import App from "./App.jsx";
+import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
@@ -25,8 +26,6 @@ checkVersionAndReload().catch(() => {});
 try {
   if (typeof captureFbclid === "function") {
     captureFbclid();
-  } else {
-    console.warn("[Meta] captureFbclid not available — skipping");
   }
 } catch (err) {
   console.warn("[Meta] captureFbclid failed:", err?.message);
@@ -56,7 +55,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <AuthProvider>
             <CartProvider>
               <WishlistProvider>
-                <App />
+                <ErrorBoundary>
+                  <App />
+                </ErrorBoundary>
                 <Toaster
                   position="top-center"
                   gutter={8}
@@ -150,18 +151,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                transition: "all 0.15s ease",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background =
-                                  "rgba(255,255,255,0.12)";
-                                e.currentTarget.style.color = "#fff";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background =
-                                  "transparent";
-                                e.currentTarget.style.color =
-                                  "rgba(255,255,255,0.55)";
                               }}
                             >
                               <XMarkIcon

@@ -13,11 +13,12 @@ import {
 } from "../controllers/orderController.js";
 import { protect, admin } from "../middleware/auth.js";
 import Order from "../models/Order.js";
+import { orderLimiter } from "../middleware/rateLimiters.js";
 
 const router = express.Router();
 
 // ============ USER ROUTES ============
-router.post("/", protect, createOrder);
+router.post("/", protect, orderLimiter, createOrder);
 router.delete("/:id/cancel-pending", protect, cancelPendingOrder);
 router.get("/my-orders", protect, getOrders);
 router.get("/:id", protect, getOrder);
