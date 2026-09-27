@@ -13,6 +13,7 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
 import { captureFbclid } from "./utils/metaPixel.js";
+import { shouldRetryQuery, retryDelay } from "./utils/queryRetry.js";
 import {
   checkVersionAndReload,
   installChunkErrorHandler,
@@ -36,13 +37,19 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 10 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      // ✅ Retry only on transient failures (5xx, network). Never on 4xx.
+      retry: shouldRetryQuery,
+      retryDelay,
       refetchOnWindowFocus: false,
       refetchOnMount: true,
       refetchOnReconnect: false,
       refetchInterval: false,
       retryOnMount: true,
+    },
+    mutations: {
+      // Mutations should not silently retry — a failed order create
+      // must NOT retry invisibly. Let the UI decide.
+      retry: 0,
     },
   },
 });

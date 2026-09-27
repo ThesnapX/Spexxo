@@ -19,8 +19,6 @@ api.interceptors.request.use((config) => {
 });
 
 // ============ ADMIN API ============
-
-// Zones
 export const getZones = () => api.get("/shipping/zones");
 export const getZone = (id) => api.get(`/shipping/zones/${id}`);
 export const createZone = (data) => api.post("/shipping/zones", data);
@@ -34,7 +32,7 @@ export const updateShippingSettings = (data) =>
 
 // ============ PUBLIC API ============
 
-// Calculate shipping
+// ============ PUBLIC API ============
 export const calculateShipping = (data) =>
   api.post("/shipping/calculate", data);
 export const getShippingOptions = (data) => api.post("/shipping/options", data);

@@ -21,22 +21,30 @@ const Home = () => {
   });
 
   useEffect(() => {
-    const loadCarousels = () => {
-      setCarouselsLoaded((prev) => ({ ...prev, trending: true }));
+    const timers = [];
+
+    setCarouselsLoaded((prev) => ({ ...prev, trending: true }));
+
+    timers.push(
       setTimeout(
         () => setCarouselsLoaded((prev) => ({ ...prev, flash: true })),
         1500,
-      );
+      ),
+    );
+    timers.push(
       setTimeout(
         () => setCarouselsLoaded((prev) => ({ ...prev, newArrivals: true })),
         3000,
-      );
+      ),
+    );
+    timers.push(
       setTimeout(
         () => setCarouselsLoaded((prev) => ({ ...prev, bestSellers: true })),
         4500,
-      );
-    };
-    loadCarousels();
+      ),
+    );
+
+    return () => timers.forEach((t) => clearTimeout(t));
   }, []);
 
   return (

@@ -1,6 +1,6 @@
 // frontend/src/components/home/ProductCarousel.jsx
 
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback, memo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -26,6 +26,203 @@ import toast from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+// ─────────────────────────────────────────────
+// CarouselProductCard — moved out of the parent component and memoized.
+// Re-renders only when `product` or `onAddToCart` identity changes.
+// ─────────────────────────────────────────────
+const CarouselProductCard = memo(function CarouselProductCard({
+  product,
+  showSaleBadge,
+  isAuthenticated,
+  isAddingToCart,
+  onAddToCart,
+  onRequireAuth,
+}) {
+  const productImage = getProductImage(product);
+  const hasVariantsFlag = hasVariants(product);
+  const variantCount = getVariantCount(product);
+  const { displayPrice, originalPrice, hasDiscount, discountPercent } =
+    getProductPrice(product);
+  const outOfStock = isProductOutOfStock(product);
+  const isDeactivated = product.isActive === false;
+  const hasAnyDiscountFlag = hasAnyDiscount(product);
+  const bestDiscount = getBestDiscount(product);
+
+  const hasAnyVariantInStock =
+    hasVariantsFlag && product.variants.some((v) => v.stock > 0);
+
+  const displayDiscount = hasDiscount ? discountPercent : bestDiscount;
+
+  const handleClick = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isDeactivated || outOfStock) {
+        toast.error(
+          isDeactivated ? "This product is deactivated" : "Out of stock",
+        );
+        return;
+      }
+      if (!isAuthenticated) {
+        if (onRequireAuth) onRequireAuth();
+        return;
+      }
+      onAddToCart(product._id);
+    },
+    [
+      isDeactivated,
+      outOfStock,
+      isAuthenticated,
+      onRequireAuth,
+      onAddToCart,
+      product._id,
+    ],
+  );
+
+  return (
+    <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+      <div className="relative overflow-hidden bg-gray-50 flex-shrink-0">
+        <Link to={`/product/${product.slug}`} className="block">
+          {productImage ? (
+            <img
+              src={productImage}
+              alt={product.name}
+              className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-500"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <div className="w-full aspect-square bg-gray-200 flex items-center justify-center">
+              <span className="text-gray-400 text-sm">No image</span>
+            </div>
+          )}
+        </Link>
+
+        {isDeactivated ? (
+          <span className="absolute top-3 left-3 bg-gray-600 text-white text-xs px-2 py-1 rounded-full">
+            Inactive
+          </span>
+        ) : outOfStock ? (
+          <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+            Out of Stock
+          </span>
+        ) : (
+          showSaleBadge &&
+          hasAnyDiscountFlag &&
+          displayDiscount > 0 && (
+            <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+              {displayDiscount}% OFF
+            </span>
+          )
+        )}
+
+        {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
+          <span className="absolute top-3 right-3 bg-purple-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
+            <span className="text-[10px]">📦</span>
+            {variantCount} Variants
+          </span>
+        )}
+
+        {outOfStock && !isDeactivated && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+            <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
+              OUT OF STOCK
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 flex flex-col flex-grow">
+        {product.brand?.name && (
+          <p className="text-xs text-text-light mb-1 truncate">
+            {product.brand.name}
+          </p>
+        )}
+        <Link to={`/product/${product.slug}`} className="block flex-shrink-0">
+          <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
+            {product.name}
+          </h3>
+        </Link>
+
+        <div className="flex items-center gap-2 flex-wrap mt-auto">
+          <span
+            className={`font-bold ${
+              isDeactivated || outOfStock ? "text-gray-400" : "text-text"
+            }`}
+          >
+            ₹{displayPrice?.toLocaleString()}
+          </span>
+          {hasDiscount &&
+            !isDeactivated &&
+            !outOfStock &&
+            originalPrice > displayPrice && (
+              <span className="text-sm text-gray-400 line-through">
+                ₹{originalPrice?.toLocaleString()}
+              </span>
+            )}
+          {hasDiscount && !isDeactivated && !outOfStock && (
+            <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+              {discountPercent}% off
+            </span>
+          )}
+          {!hasDiscount &&
+            hasAnyDiscountFlag &&
+            !isDeactivated &&
+            !outOfStock && (
+              <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                {displayDiscount}% off
+              </span>
+            )}
+          {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
+            <span className="text-xs text-purple-500 font-medium">
+              ({variantCount} variants)
+            </span>
+          )}
+        </div>
+
+        {hasVariantsFlag ? (
+          <Link
+            to={`/product/${product.slug}`}
+            className="w-full mt-3 py-2 bg-purple-500/10 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-500 hover:text-white transition flex items-center justify-center gap-2"
+          >
+            <EyeIcon className="w-4 h-4" /> View Product
+          </Link>
+        ) : (
+          <button
+            onClick={handleClick}
+            disabled={isDeactivated || outOfStock || isAddingToCart}
+            className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
+              isDeactivated || outOfStock || isAddingToCart
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+            }`}
+          >
+            {isAddingToCart ? (
+              <>
+                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                Adding...
+              </>
+            ) : (
+              <>
+                <ShoppingBagIcon className="w-4 h-4" />
+                {isDeactivated
+                  ? "Unavailable"
+                  : outOfStock
+                    ? "Out of Stock"
+                    : "Add to Cart"}
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ─────────────────────────────────────────────
+// Parent carousel
+// ─────────────────────────────────────────────
 const ProductCarousel = ({
   title,
   subtitle,
@@ -38,7 +235,6 @@ const ProductCarousel = ({
   const { addToCart, isAddingToCart } = useCart();
   const { isAuthenticated } = useAuth();
 
-  // ✅ OPTIMIZED: Better caching and error handling
   const { data, isLoading, error } = useQuery({
     queryKey: [queryKey, JSON.stringify(apiParams)],
     queryFn: async () => {
@@ -50,7 +246,7 @@ const ProductCarousel = ({
         const { data } = await axios.get(`${API_URL}/products?${queryString}`);
         return data.products || [];
       } catch (err) {
-        console.error(`Failed to fetch ${queryKey}:`, err);
+        console.error(`Failed to fetch ${queryKey}:`, err.message);
         return [];
       }
     },
@@ -61,19 +257,15 @@ const ProductCarousel = ({
     refetchOnWindowFocus: false,
   });
 
-  // ✅ Filter products to only show those with discounts for Flash Sales
   const filteredProducts = useMemo(() => {
     if (queryKey === "flash-sale-products") {
-      // For Flash Sales, only show products that have a discount
       return (data || []).filter((product) => {
-        // Check if product has variants with discounts
         if (product.variants && product.variants.length > 0) {
           return product.variants.some(
             (v) =>
               v.comparePrice && v.comparePrice > 0 && v.comparePrice < v.price,
           );
         }
-        // Simple product discount check
         return (
           product.comparePrice &&
           product.comparePrice > 0 &&
@@ -86,27 +278,14 @@ const ProductCarousel = ({
 
   const products = filteredProducts;
 
-  // ✅ Handle Add to Cart
-  const handleAddToCart = async (productId, event) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+  // ✅ Stable callback passed to all cards.
+  const handleAddToCart = useCallback(
+    (productId) => {
+      addToCart(productId, 1);
+    },
+    [addToCart],
+  );
 
-    if (!isAuthenticated) {
-      if (onRequireAuth) onRequireAuth();
-      return;
-    }
-
-    try {
-      await addToCart(productId, 1);
-    } catch (error) {
-      // Error is already handled in CartContext
-      console.error("Add to cart error:", error);
-    }
-  };
-
-  // ✅ If error (like 429), show cached or empty state
   if (error) {
     return (
       <section className="container-custom py-8">
@@ -135,184 +314,6 @@ const ProductCarousel = ({
       </section>
     );
   }
-
-  const CarouselProductCard = ({ product }) => {
-    const productImage = getProductImage(product);
-    const hasVariantsFlag = hasVariants(product);
-    const variantCount = getVariantCount(product);
-    const { displayPrice, originalPrice, hasDiscount, discountPercent } =
-      getProductPrice(product);
-    const outOfStock = isProductOutOfStock(product);
-    const isDeactivated = product.isActive === false;
-    const hasAnyDiscountFlag = hasAnyDiscount(product);
-    const bestDiscount = getBestDiscount(product);
-
-    const hasAnyVariantInStock =
-      hasVariantsFlag && product.variants.some((v) => v.stock > 0);
-
-    // Use best discount for badge if available
-    const displayDiscount = hasDiscount ? discountPercent : bestDiscount;
-
-    // ✅ Handle Add to Cart with loading state
-    const handleAddToCartClick = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (isDeactivated || outOfStock) {
-        toast.error(
-          isDeactivated ? "This product is deactivated" : "Out of stock",
-        );
-        return;
-      }
-
-      if (!isAuthenticated) {
-        if (onRequireAuth) onRequireAuth();
-        return;
-      }
-
-      // Use the product ID directly - CartContext will handle the rest
-      addToCart(product._id, 1);
-    };
-
-    return (
-      <div className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col">
-        <div className="relative overflow-hidden bg-gray-50 flex-shrink-0">
-          <Link to={`/product/${product.slug}`} className="block">
-            {productImage ? (
-              <img
-                src={productImage}
-                alt={product.name}
-                className="w-full aspect-square object-cover group-hover:scale-110 transition-transform duration-500"
-                loading="lazy"
-              />
-            ) : (
-              <div className="w-full aspect-square bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-400 text-sm">No image</span>
-              </div>
-            )}
-          </Link>
-
-          {/* Badges */}
-          {isDeactivated ? (
-            <span className="absolute top-3 left-3 bg-gray-600 text-white text-xs px-2 py-1 rounded-full">
-              Inactive
-            </span>
-          ) : outOfStock ? (
-            <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-              Out of Stock
-            </span>
-          ) : (
-            showSaleBadge &&
-            hasAnyDiscountFlag &&
-            displayDiscount > 0 && (
-              <span className="absolute top-3 left-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                {displayDiscount}% OFF
-              </span>
-            )
-          )}
-
-          {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
-            <span className="absolute top-3 right-3 bg-purple-500 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 shadow-md">
-              <span className="text-[10px]">📦</span>
-              {variantCount} Variants
-            </span>
-          )}
-
-          {outOfStock && !isDeactivated && (
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-              <span className="bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-full rotate-[-15deg] shadow-lg">
-                OUT OF STOCK
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 flex flex-col flex-grow">
-          {product.brand?.name && (
-            <p className="text-xs text-text-light mb-1 truncate">
-              {product.brand.name}
-            </p>
-          )}
-          <Link to={`/product/${product.slug}`} className="block flex-shrink-0">
-            {/* ✅ Product name - FULL, not clipped */}
-            <h3 className="font-medium text-sm text-text mb-2 hover:text-primary transition break-words">
-              {product.name}
-            </h3>
-          </Link>
-
-          <div className="flex items-center gap-2 flex-wrap mt-auto">
-            <span
-              className={`font-bold ${isDeactivated || outOfStock ? "text-gray-400" : "text-text"}`}
-            >
-              ₹{displayPrice?.toLocaleString()}
-            </span>
-            {hasDiscount &&
-              !isDeactivated &&
-              !outOfStock &&
-              originalPrice > displayPrice && (
-                <span className="text-sm text-gray-400 line-through">
-                  ₹{originalPrice?.toLocaleString()}
-                </span>
-              )}
-            {hasDiscount && !isDeactivated && !outOfStock && (
-              <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                {discountPercent}% off
-              </span>
-            )}
-            {!hasDiscount &&
-              hasAnyDiscountFlag &&
-              !isDeactivated &&
-              !outOfStock && (
-                <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                  {displayDiscount}% off
-                </span>
-              )}
-            {hasVariantsFlag && !isDeactivated && hasAnyVariantInStock && (
-              <span className="text-xs text-purple-500 font-medium">
-                ({variantCount} variants)
-              </span>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          {hasVariantsFlag ? (
-            <Link
-              to={`/product/${product.slug}`}
-              className="w-full mt-3 py-2 bg-purple-500/10 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-500 hover:text-white transition flex items-center justify-center gap-2"
-            >
-              <EyeIcon className="w-4 h-4" /> View Product
-            </Link>
-          ) : (
-            <button
-              onClick={handleAddToCartClick}
-              disabled={isDeactivated || outOfStock || isAddingToCart}
-              className={`w-full mt-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-                isDeactivated || outOfStock || isAddingToCart
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-              }`}
-            >
-              {isAddingToCart ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <ShoppingBagIcon className="w-4 h-4" />
-                  {isDeactivated
-                    ? "Unavailable"
-                    : outOfStock
-                      ? "Out of Stock"
-                      : "Add to Cart"}
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <section className="container-custom py-8">
@@ -374,7 +375,14 @@ const ProductCarousel = ({
         >
           {products.map((product) => (
             <SwiperSlide key={product._id} className="h-full">
-              <CarouselProductCard product={product} />
+              <CarouselProductCard
+                product={product}
+                showSaleBadge={showSaleBadge}
+                isAuthenticated={isAuthenticated}
+                isAddingToCart={isAddingToCart}
+                onAddToCart={handleAddToCart}
+                onRequireAuth={onRequireAuth}
+              />
             </SwiperSlide>
           ))}
 

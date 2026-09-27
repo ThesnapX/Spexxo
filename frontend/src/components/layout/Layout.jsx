@@ -3,7 +3,7 @@ import Navigation from "./Navigation";
 import Footer from "./Footer";
 import PopupManager from "./PopupManager";
 import ScrollToTop from "../common/ScrollToTop";
-
+import RoutePrefetcher from "../common/RoutePrefetcher";
 const Layout = () => {
   return (
     <div className="flex flex-col min-h-screen">
@@ -14,6 +14,7 @@ const Layout = () => {
       </main>
       <Footer />
       <PopupManager />
+      <RoutePrefetcher />
     </div>
   );
 };
