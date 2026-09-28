@@ -4,70 +4,6 @@ const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID || "1753741932563893";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // ─────────────────────────────────────────────
-// Advanced Matching identity cache
-//
-// When a user is logged in, we keep their email/phone/name in a
-// module-level variable and pass it to every browser + server event.
-// This massively improves Event Match Quality for ViewContent,
-// AddToCart, InitiateCheckout, and Purchase.
-// ─────────────────────────────────────────────
-let advancedMatchingIdentity = null;
-
-/**
- * Cache the identity for Advanced Matching and re-init the pixel so
- * Meta receives hashed customer parameters on subsequent events.
- */
-export const setAdvancedMatchingIdentity = (user) => {
-  if (!user) return;
-  const identity = {
-    email: user.email || undefined,
-    phone: user.phone || undefined,
-    firstName: user.firstName || undefined,
-    lastName: user.lastName || undefined,
-    externalId: user._id ? String(user._id) : undefined,
-    city: user.defaultAddress?.city || undefined,
-    state: user.defaultAddress?.state || undefined,
-    zip: user.defaultAddress?.pincode || undefined,
-    country: "in",
-  };
-
-  // Drop undefined values so we don't send empty strings.
-  Object.keys(identity).forEach((k) => {
-    if (!identity[k]) delete identity[k];
-  });
-
-  if (Object.keys(identity).length === 0) return;
-
-  advancedMatchingIdentity = identity;
-
-  // Tell the browser pixel about the identity. Meta allows re-init
-  // and uses the union of all init calls for matching.
-  try {
-    if (typeof window !== "undefined" && typeof window.fbq === "function") {
-      window.fbq("init", PIXEL_ID, {
-        em: identity.email,
-        ph: identity.phone,
-        fn: identity.firstName,
-        ln: identity.lastName,
-        external_id: identity.externalId,
-        ct: identity.city,
-        st: identity.state,
-        zp: identity.zip,
-        country: identity.country,
-      });
-    }
-  } catch (err) {
-    console.warn("[Meta] fbq init with Advanced Matching failed:", err.message);
-  }
-};
-
-export const clearAdvancedMatchingIdentity = () => {
-  advancedMatchingIdentity = null;
-};
-
-export const getAdvancedMatchingIdentity = () => advancedMatchingIdentity;
-
-// ─────────────────────────────────────────────
 // Event ID generation
 // ─────────────────────────────────────────────
 export const generateEventId = () => {
@@ -76,6 +12,7 @@ export const generateEventId = () => {
   return `evt_${ts}_${rand}`;
 };
 
+// Session-scoped ViewContent de-dupe.
 const viewContentFiredFor = new Set();
 
 // ─────────────────────────────────────────────
@@ -125,8 +62,101 @@ export const getFbp = () => readCookie("_fbp");
 export const getFbc = () => readCookie("_fbc");
 
 // ─────────────────────────────────────────────
+// ADVANCED MATCHING
+// ─────────────────────────────────────────────
+//
+// Meta's browser pixel supports passing customer info to fbq('init', id, params).
+// Meta handles hashing automatically for these "Advanced Matching" params.
+// Only pass normalized values (lowercase email, digits-only phone with country code).
+//
+// Docs: https://developers.facebook.com/docs/meta-pixel/advanced/advanced-matching
+//
+// IMPORTANT: Do NOT hash here — the browser pixel hashes for us.
+// The CAPI path hashes separately on the backend.
+
+const normalizeEmail = (email) => {
+  if (!email || typeof email !== "string") return null;
+  const trimmed = email.trim().toLowerCase();
+  return trimmed.includes("@") ? trimmed : null;
+};
+
+const normalizePhone = (phone) => {
+  if (!phone) return null;
+  const digits = String(phone).replace(/\D/g, "");
+  if (!digits) return null;
+  // Indian default — prefix 91 if 10-digit local number.
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+};
+
+const normalizeName = (name) => {
+  if (!name || typeof name !== "string") return null;
+  const trimmed = name.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+/**
+ * Attach advanced matching params to fbq. Must be called whenever
+ * the current user (or guest session data) changes.
+ *
+ * @param {object|null} user
+ */
+export const setAdvancedMatching = (user) => {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+
+  const params = {};
+
+  if (user) {
+    const em = normalizeEmail(user.email);
+    const ph = normalizePhone(user.phone);
+    const fn = normalizeName(user.firstName);
+    const ln = normalizeName(user.lastName);
+    const externalId = user._id || user.customerId || null;
+    const city = normalizeName(user.defaultAddress?.city);
+    const state = normalizeName(user.defaultAddress?.state);
+    const zip = user.defaultAddress?.pincode
+      ? String(user.defaultAddress.pincode).replace(/\D/g, "")
+      : null;
+    const country = normalizeName(user.defaultAddress?.country) || "in";
+
+    if (em) params.em = em;
+    if (ph) params.ph = ph;
+    if (fn) params.fn = fn;
+    if (ln) params.ln = ln;
+    if (city) params.ct = city;
+    if (state) params.st = state;
+    if (zip) params.zp = zip;
+    if (country) params.country = country;
+    if (externalId) params.external_id = String(externalId);
+  }
+
+  // fbp / fbc cookies are set by the pixel / our capture — safe to always send.
+  const fbp = getFbp();
+  const fbc = getFbc();
+  if (fbp) params.fbp = fbp;
+  if (fbc) params.fbc = fbc;
+
+  try {
+    // Re-init with advanced matching. This attaches the params to
+    // all subsequent browser events from this tab.
+    window.fbq("init", PIXEL_ID, params);
+  } catch (err) {
+    console.warn("[Meta] setAdvancedMatching failed:", err.message);
+  }
+};
+
+// ─────────────────────────────────────────────
 // Core event dispatcher
 // ─────────────────────────────────────────────
+//
+// Sent to BOTH:
+//   - browser Pixel (fbq)
+//   - server CAPI (via /api/meta/event)
+//
+// Same event_id is shared so Meta dedupes.
+//
+// The `userData` passed here is a plain object; the BACKEND is
+// responsible for hashing before sending to Meta.
 export const trackMetaEvent = async ({
   eventName,
   customData = {},
@@ -159,13 +189,7 @@ export const trackMetaEvent = async ({
     if (customData.contents.length === 0) delete customData.contents;
   }
 
-  // ── Merge cached Advanced Matching identity into userData. ──
-  const identity = advancedMatchingIdentity || {};
-  const mergedUserData = {
-    ...identity,
-    ...userData, // caller-supplied values win if they conflict
-  };
-
+  // ── Browser pixel ──
   let browserFired = false;
   try {
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
@@ -176,10 +200,12 @@ export const trackMetaEvent = async ({
     console.warn(`[Meta] fbq failed for ${eventName}:`, err.message);
   }
 
+  // ── CAPI (server relay) ──
+  // Attach fbp/fbc from cookies if not supplied.
   const enrichedUserData = {
-    ...mergedUserData,
-    fbp: getFbp(),
-    fbc: getFbc(),
+    ...userData,
+    fbp: userData.fbp || getFbp(),
+    fbc: userData.fbc || getFbc(),
   };
 
   let capiResult = null;
@@ -209,7 +235,6 @@ export const trackMetaEvent = async ({
     console.log(`[Meta] ${eventName}`, {
       eventId,
       browserFired,
-      matchedFields: capiResult?.meta?.matchedFields,
       capi: capiResult
         ? capiResult.success
           ? `✅ received=${capiResult.meta?.eventsReceived ?? "?"}`
@@ -224,11 +249,13 @@ export const trackMetaEvent = async ({
 // ─────────────────────────────────────────────
 // Convenience wrappers
 // ─────────────────────────────────────────────
-export const trackViewContent = (product) => {
+export const trackViewContent = (product, user = null) => {
   if (!product?._id) return Promise.resolve();
 
   const key = String(product._id);
-  if (viewContentFiredFor.has(key)) return Promise.resolve();
+  if (viewContentFiredFor.has(key)) {
+    return Promise.resolve();
+  }
   viewContentFiredFor.add(key);
 
   const productPrice = Number(product.price) || 0;
@@ -241,6 +268,16 @@ export const trackViewContent = (product) => {
   const value = safeMoney(sellingPrice);
   if (value === null) return Promise.resolve();
 
+  const userData = user
+    ? {
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        externalId: user._id?.toString(),
+      }
+    : {};
+
   return trackMetaEvent({
     eventName: "ViewContent",
     customData: {
@@ -250,10 +287,16 @@ export const trackViewContent = (product) => {
       value,
       currency: "INR",
     },
+    userData,
   });
 };
 
-export const trackAddToCart = (product, quantity = 1, variant = null) => {
+export const trackAddToCart = (
+  product,
+  quantity = 1,
+  variant = null,
+  user = null,
+) => {
   if (!product?._id) return Promise.resolve();
 
   const qty = Number(quantity);
@@ -272,6 +315,16 @@ export const trackAddToCart = (product, quantity = 1, variant = null) => {
   const value = safeMoney(unitPrice * qty);
   if (value === null) return Promise.resolve();
 
+  const userData = user
+    ? {
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        externalId: user._id?.toString(),
+      }
+    : {};
+
   return trackMetaEvent({
     eventName: "AddToCart",
     customData: {
@@ -283,10 +336,16 @@ export const trackAddToCart = (product, quantity = 1, variant = null) => {
       value,
       currency: "INR",
     },
+    userData,
   });
 };
 
-export const trackInitiateCheckout = ({ items, value, numItems }) => {
+export const trackInitiateCheckout = ({
+  items,
+  value,
+  numItems,
+  user = null,
+}) => {
   if (!Array.isArray(items) || items.length === 0) return Promise.resolve();
 
   const contents = items
@@ -318,9 +377,20 @@ export const trackInitiateCheckout = ({ items, value, numItems }) => {
   };
   if (safeValue !== null) payload.value = safeValue;
 
+  const userData = user
+    ? {
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        externalId: user._id?.toString(),
+      }
+    : {};
+
   return trackMetaEvent({
     eventName: "InitiateCheckout",
     customData: payload,
+    userData,
   });
 };
 
@@ -348,7 +418,6 @@ export const trackPurchase = (order, user) => {
 
   const shipping = order.shippingAddress || {};
 
-  // Merge order user data with cached identity. Order user data wins.
   return trackMetaEvent({
     eventName: "Purchase",
     eventId,
@@ -370,7 +439,7 @@ export const trackPurchase = (order, user) => {
           city: shipping.city,
           state: shipping.state,
           zip: shipping.pincode,
-          country: "in",
+          country: "IN",
           externalId: user._id?.toString(),
         }
       : {
@@ -381,8 +450,29 @@ export const trackPurchase = (order, user) => {
           city: shipping.city,
           state: shipping.state,
           zip: shipping.pincode,
-          country: "in",
+          country: "IN",
           externalId: order.user?._id?.toString(),
         },
+  });
+};
+
+/**
+ * Fire PageView with advanced matching. Called by useMetaPageView.
+ */
+export const trackPageView = (user = null) => {
+  const userData = user
+    ? {
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        externalId: user._id?.toString(),
+      }
+    : {};
+
+  return trackMetaEvent({
+    eventName: "PageView",
+    customData: {},
+    userData,
   });
 };

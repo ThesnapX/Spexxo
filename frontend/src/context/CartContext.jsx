@@ -11,6 +11,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const CartContext = createContext();
 
 export const useCart = () => {
+  const { isAuthenticated, user } = useAuth();
   const context = useContext(CartContext);
   if (!context) throw new Error("useCart must be used within CartProvider");
   return context;
@@ -321,7 +322,18 @@ export const CartProvider = ({ children }) => {
       }
 
       // ── Fire AddToCart exactly once, after success. ──
-      trackAddToCart(product, quantity, variantData).catch(() => {});
+      // ── Fire AddToCart exactly once, after success. ──
+      // Pass the current user so advanced matching carries identity.
+      try {
+        const { data: me } = await axios
+          .get(`${API_URL}/auth/me`)
+          .catch(() => ({ data: null }));
+        trackAddToCart(product, quantity, variantData, me?.user || null).catch(
+          () => {},
+        );
+      } catch {
+        trackAddToCart(product, quantity, variantData, null).catch(() => {});
+      }
 
       toast.success("Added to cart! 🛒");
     } catch (error) {

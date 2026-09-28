@@ -160,6 +160,21 @@ const shippingSettingsSchema = new mongoose.Schema({
     default: 20,
     min: 0,
   },
+
+  // ─────────────────────────────────────────────
+  // COD Advance toggle
+  //
+  // When TRUE (default): COD orders require a 10% advance.
+  // When FALSE:          COD orders are confirmed instantly with
+  //                      zero upfront payment — useful when running
+  //                      ad tests that would otherwise see high
+  //                      drop-off at the advance-payment step.
+  // ─────────────────────────────────────────────
+  codAdvanceEnabled: {
+    type: Boolean,
+    default: true,
+  },
+
   quantityRules: {
     type: [],
     default: [],

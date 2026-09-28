@@ -9,7 +9,6 @@ import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import csv from "csv-parser";
 import { parse } from "fast-csv";
-// backend/controllers/shippingController.js
 
 // @desc    Get all pincode rules with search
 // @route   GET /api/shipping/pincodes
@@ -39,10 +38,8 @@ export const getPincodeRules = async (req, res) => {
 
       // If searching by pincode (numeric)
       if (isNumeric) {
-        // Search for exact pincode match
         query.$or.push({ pincode: searchTerm });
 
-        // Search for pincode within any range
         const numericSearch = parseInt(searchTerm);
         query.$or.push({
           type: "range",
@@ -64,7 +61,6 @@ export const getPincodeRules = async (req, res) => {
 // @access  Private/Admin
 export const getFolders = async (req, res) => {
   try {
-    // ✅ Get all folders with sub-folder counts
     const folders = await PincodeRule.aggregate([
       {
         $group: {
@@ -121,14 +117,12 @@ export const getFolders = async (req, res) => {
 // @access  Private/Admin
 export const createPincodeRule = async (req, res) => {
   try {
-    // ✅ Validate folder is provided
     if (!req.body.folder || !req.body.folder.trim()) {
       return res.status(400).json({
         success: false,
         message: "Folder/State name is required",
       });
     }
-    // ✅ subFolder is optional - can be null or empty
     if (req.body.subFolder === "") {
       req.body.subFolder = null;
     }
@@ -242,7 +236,6 @@ export const deleteAllPincodeRules = async (req, res) => {
 // @access  Private/Admin
 export const bulkUploadPincodes = async (req, res) => {
   try {
-    // ✅ Check if file exists
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -250,7 +243,6 @@ export const bulkUploadPincodes = async (req, res) => {
       });
     }
 
-    // ✅ Log the uploaded file info for debugging
     console.log("Uploaded file:", {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
@@ -261,13 +253,11 @@ export const bulkUploadPincodes = async (req, res) => {
     const errors = [];
     let rowNumber = 0;
 
-    // Parse CSV file
     await new Promise((resolve, reject) => {
       fs.createReadStream(req.file.path)
         .pipe(csv())
         .on("data", (data) => {
           rowNumber++;
-          // Skip empty rows
           if (
             !data.folder &&
             !data.name &&
@@ -282,7 +272,6 @@ export const bulkUploadPincodes = async (req, res) => {
         .on("error", reject);
     });
 
-    // ✅ Check if CSV has any data
     if (results.length === 0) {
       return res.status(400).json({
         success: false,
@@ -294,7 +283,6 @@ export const bulkUploadPincodes = async (req, res) => {
     let successCount = 0;
     let failedCount = 0;
 
-    // Process each row
     for (const row of results) {
       try {
         const {
@@ -310,7 +298,6 @@ export const bulkUploadPincodes = async (req, res) => {
           isActive,
         } = row;
 
-        // Validate folder is provided
         if (!folder || !folder.trim()) {
           errors.push({
             row: row.rowNumber,
@@ -321,7 +308,6 @@ export const bulkUploadPincodes = async (req, res) => {
           continue;
         }
 
-        // Validate required fields
         if (!name || !name.trim()) {
           errors.push({
             row: row.rowNumber,
@@ -342,10 +328,8 @@ export const bulkUploadPincodes = async (req, res) => {
           continue;
         }
 
-        // Determine type
         const ruleType = type?.toLowerCase() === "range" ? "range" : "single";
 
-        // Build data object
         const ruleData = {
           folder: folder.trim(),
           subFolder: subFolder && subFolder.trim() ? subFolder.trim() : null,
@@ -400,7 +384,6 @@ export const bulkUploadPincodes = async (req, res) => {
           ruleData.pincodeTo = pincodeTo;
         }
 
-        // Check for duplicate in same folder and sub-folder
         let existingRule = null;
         if (ruleType === "single") {
           existingRule = await PincodeRule.findOne({
@@ -420,13 +403,11 @@ export const bulkUploadPincodes = async (req, res) => {
         }
 
         if (existingRule) {
-          // Update existing rule
           await PincodeRule.findByIdAndUpdate(existingRule._id, ruleData, {
             new: true,
             runValidators: true,
           });
         } else {
-          // Create new rule
           await PincodeRule.create(ruleData);
         }
         successCount++;
@@ -441,7 +422,6 @@ export const bulkUploadPincodes = async (req, res) => {
       }
     }
 
-    // Upload file to Cloudinary for storage
     let cloudinaryResult = null;
     try {
       const fileBuffer = fs.readFileSync(req.file.path);
@@ -459,7 +439,6 @@ export const bulkUploadPincodes = async (req, res) => {
       console.error("Cloudinary upload failed:", cloudinaryError);
     }
 
-    // Save to history
     const history = await BulkUploadHistory.create({
       fileName: req.file.originalname,
       fileUrl: cloudinaryResult?.secure_url || "",
@@ -471,7 +450,6 @@ export const bulkUploadPincodes = async (req, res) => {
       uploadedBy: req.user._id,
     });
 
-    // Delete local file
     try {
       if (fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
@@ -492,7 +470,6 @@ export const bulkUploadPincodes = async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk upload error:", error);
-    // Clean up file
     if (req.file && req.file.path) {
       try {
         if (fs.existsSync(req.file.path)) {
@@ -534,7 +511,6 @@ export const deleteUploadHistory = async (req, res) => {
         .json({ success: false, message: "History not found" });
     }
 
-    // Delete from Cloudinary if file exists
     if (history.filePublicId) {
       try {
         await cloudinary.uploader.destroy(history.filePublicId, {
@@ -662,11 +638,9 @@ export const downloadTemplate = async (req, res) => {
 
       csvStream.pipe(res);
 
-      // Write headers
       const headerRow = headers.join(",");
       res.write(headerRow + "\n");
 
-      // Write sample rows
       for (const row of sampleRows) {
         const values = headers.map((h) => {
           const val = row[h] || "";
@@ -701,6 +675,7 @@ export const getSettings = async (req, res) => {
         defaultShippingPrice: 99,
         defaultDelivery: "3-7 business days",
         extraPerQuantity: 20,
+        codAdvanceEnabled: true,
         quantityRules: [],
       });
     }
@@ -721,16 +696,19 @@ export const updateSettings = async (req, res) => {
       defaultShippingPrice,
       defaultDelivery,
       extraPerQuantity,
+      codAdvanceEnabled,
     } = req.body;
 
     let settings = await ShippingSettings.findOne();
     if (!settings) {
       settings = await ShippingSettings.create({
-        ultraFastAdditional: ultraFastAdditional || 50,
+        ultraFastAdditional: ultraFastAdditional ?? 50,
         ultraFastDelivery: ultraFastDelivery || "1-2 business days",
-        defaultShippingPrice: defaultShippingPrice || 99,
+        defaultShippingPrice: defaultShippingPrice ?? 99,
         defaultDelivery: defaultDelivery || "3-7 business days",
-        extraPerQuantity: extraPerQuantity || 20,
+        extraPerQuantity: extraPerQuantity ?? 20,
+        codAdvanceEnabled:
+          typeof codAdvanceEnabled === "boolean" ? codAdvanceEnabled : true,
         quantityRules: [],
         updatedBy: req.user._id,
       });
@@ -750,6 +728,12 @@ export const updateSettings = async (req, res) => {
         extraPerQuantity !== undefined
           ? extraPerQuantity
           : settings.extraPerQuantity;
+
+      // ✅ Only update codAdvanceEnabled when explicitly provided
+      if (typeof codAdvanceEnabled === "boolean") {
+        settings.codAdvanceEnabled = codAdvanceEnabled;
+      }
+
       settings.updatedBy = req.user._id;
       settings.updatedAt = new Date();
       await settings.save();
@@ -795,6 +779,7 @@ export const calculateShipping = async (req, res) => {
         defaultShippingPrice: 99,
         defaultDelivery: "3-7 business days",
         extraPerQuantity: 20,
+        codAdvanceEnabled: true,
         quantityRules: [],
       });
     }
@@ -897,6 +882,7 @@ export const getShippingOptions = async (req, res) => {
         defaultShippingPrice: 99,
         defaultDelivery: "3-7 business days",
         extraPerQuantity: 20,
+        codAdvanceEnabled: true,
         quantityRules: [],
       });
     }
@@ -961,6 +947,9 @@ export const getShippingOptions = async (req, res) => {
       extraPerQuantity: extraPerQuantity,
       extraItems: extraItems,
       totalQuantity: totalQuantity,
+      // ✅ Surfaced to the checkout page so it can hide/show
+      // the "10% advance" UI accordingly.
+      codAdvanceEnabled: settings.codAdvanceEnabled !== false,
       matchedRule: matchedRule
         ? {
             name: matchedRule.name,

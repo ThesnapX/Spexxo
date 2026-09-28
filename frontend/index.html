@@ -39,10 +39,8 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
-
-    <!-- Meta Pixel — base snippet + explicit initial PageView
-         The React hook (useMetaPageView) skips the FIRST pathname render
-         so we don't double-fire PageView on initial mount. -->
+    <!-- Meta Pixel — base snippet only. PageView is fired from React
+         (useMetaPageView) so advanced matching + CAPI can run with it. -->
     <script>
       !(function (f, b, e, v, n, t, s) {
         if (f.fbq) return;
@@ -68,11 +66,11 @@
         "https://connect.facebook.net/en_US/fbevents.js",
       );
       fbq("init", "1753741932563893");
-      // ✅ Fires EXACTLY ONCE, at document load.
-      // React's useMetaPageView will NOT re-fire for the first route.
-      fbq("track", "PageView");
-      // Signal to the React hook that the boot PageView already happened.
-      window.__SPEXXO_INITIAL_PAGEVIEW_FIRED__ = true;
+      // NOTE: fbq("track", "PageView") is intentionally NOT called here.
+      // The React hook useMetaPageView fires the first PageView AFTER
+      // advanced matching params are attached to fbq('init').
+      // Signal to the React hook that it should fire the boot PageView.
+      window.__SPEXXO_INITIAL_PAGEVIEW_FIRED__ = false;
     </script>
 
     <!-- Google tag -->

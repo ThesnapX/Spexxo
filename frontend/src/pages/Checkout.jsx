@@ -73,6 +73,13 @@ const Checkout = () => {
   const [pincodeChecked, setPincodeChecked] = useState(false);
   const [shippingError, setShippingError] = useState("");
 
+  // ─────────────────────────────────────────────
+  // ✅ COD Advance toggle — fetched from
+  // /api/shipping/options. Defaults to TRUE so the UI is unchanged
+  // until the backend explicitly says otherwise.
+  // ─────────────────────────────────────────────
+  const [codAdvanceEnabled, setCodAdvanceEnabled] = useState(true);
+
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -173,6 +180,7 @@ const Checkout = () => {
       items,
       value,
       numItems: items.reduce((s, it) => s + (it.quantity || 1), 0),
+      user: user || null,
     }).catch(() => {});
   }, [isBuyNow, buyNowItems, buyNowCartTotal, cart, cartTotal, loading]);
 
@@ -204,6 +212,11 @@ const Checkout = () => {
           setShippingOptions(data.options);
           setIsPincodeValid(true);
           setPincodeChecked(true);
+
+          // ✅ Sync the COD advance toggle from the backend response.
+          // The backend always sends a boolean here; default to true.
+          setCodAdvanceEnabled(data.codAdvanceEnabled !== false);
+
           if (
             !selectedShipping ||
             !data.options.some((o) => o.id === selectedShipping?.id)
@@ -399,8 +412,16 @@ const Checkout = () => {
     effectiveCartTotal - couponDiscount + shippingCost,
   );
 
-  const advanceAmount = Math.round(grandTotal * 0.1);
-  const remainingCOD = grandTotal - advanceAmount;
+  // ─────────────────────────────────────────────
+  // COD advance math.
+  //
+  // When `codAdvanceEnabled === false`, the entire 10% advance flow
+  // is skipped. The order goes through instantly as a pure COD order.
+  // ─────────────────────────────────────────────
+  const advanceAmount = codAdvanceEnabled ? Math.round(grandTotal * 0.1) : 0;
+  const remainingCOD = codAdvanceEnabled
+    ? grandTotal - advanceAmount
+    : grandTotal;
 
   const hasDeactivatedProducts =
     !isBuyNow && cart.items.some((item) => item.product?.isActive === false);
@@ -540,12 +561,13 @@ const Checkout = () => {
       toast.error("Order total is invalid. Please refresh and try again.");
       return false;
     }
-    if (
-      paymentMethod === "online" &&
+    // Razorpay is only needed when an actual online payment is required.
+    // That is: online method, OR COD with advance enabled and total > 0.
+    const needsRazorpay =
       grandTotal > 0 &&
-      !razorpayLoaded &&
-      !window.Razorpay
-    ) {
+      (paymentMethod === "online" ||
+        (paymentMethod === "cod" && codAdvanceEnabled));
+    if (needsRazorpay && !razorpayLoaded && !window.Razorpay) {
       toast.error("Payment gateway is still loading. Please wait a moment...");
       return false;
     }
@@ -721,9 +743,6 @@ const Checkout = () => {
               navigate(`/account/orders/${data.order._id}`);
             } catch (error) {
               console.error("[PAYMENT] Verification error:", error.message);
-              // Do NOT show "payment failed" — the payment may have
-              // succeeded but verification failed. Send user to orders list
-              // so they can see the true state.
               toast.error(
                 "Payment verification is delayed. Please check My Orders in a moment.",
               );
@@ -739,7 +758,9 @@ const Checkout = () => {
 
       // ── COD ──
       setLoading(true);
-      const advance = advanceAmount;
+
+      // ✅ If codAdvanceEnabled is false, force zero advance → pure COD.
+      const advance = codAdvanceEnabled ? advanceAmount : 0;
       const isCodNoAdvance = advance <= 0;
 
       const orderData = {
@@ -748,7 +769,7 @@ const Checkout = () => {
         paymentMethod: "cod",
         isCOD: true,
         codAdvance: isCodNoAdvance ? 0 : advance,
-        remainingCOD: isCodNoAdvance ? 0 : remainingCOD,
+        remainingCOD: isCodNoAdvance ? grandTotal : remainingCOD,
         items: orderItems,
         shippingMethod: selectedShipping?.id || "basic",
         shippingMethodName: selectedShipping?.name || "Basic Shipping",
@@ -867,14 +888,6 @@ const Checkout = () => {
       );
     } finally {
       setLoading(false);
-      // Note: we intentionally do NOT reset submittingRef here.
-      // For payment flows, the Razorpay handler navigates away.
-      // For COD-instant, we also navigate away.
-      // On a caught error, the user stays on the page — and we want them
-      // to be able to retry, so we reset the lock.
-      // Detection: if we're still on /checkout after the try block,
-      // reset the lock so retry works.
-      // We use a microtask to check the current path is still /checkout.
       Promise.resolve().then(() => {
         if (window.location.pathname === "/checkout") {
           submittingRef.current = false;
@@ -921,6 +934,11 @@ const Checkout = () => {
     if (grandTotal === 0) return "Place Order (Free) 🎉";
     if (paymentMethod === "online")
       return `Pay ₹${grandTotal.toLocaleString()} Online`;
+
+    // COD — depends on the toggle.
+    if (!codAdvanceEnabled) {
+      return `Place Order (COD ₹${grandTotal.toLocaleString()})`;
+    }
     return `Pay ₹${advanceAmount.toLocaleString()} Advance (10% of ₹${grandTotal.toLocaleString()})`;
   })();
 
@@ -1193,30 +1211,35 @@ const Checkout = () => {
                     <div>
                       <p className="font-medium text-text">Cash on Delivery</p>
                       <p className="text-xs text-text-light">
-                        Pay 10% advance now, remaining on delivery
+                        {codAdvanceEnabled
+                          ? "Pay 10% advance now, remaining on delivery"
+                          : "Pay the full amount when your order is delivered"}
                       </p>
                     </div>
                   </label>
 
-                  {paymentMethod === "cod" && grandTotal > 0 && (
-                    <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                      <div className="flex items-start gap-3">
-                        <div className="w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
-                          i
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-amber-800">
-                            10% Advance Payment Required
-                          </p>
-                          <p className="text-xs text-amber-700 mt-1">
-                            Pay ₹{advanceAmount.toLocaleString()} now to confirm
-                            your order. Remaining ₹
-                            {remainingCOD.toLocaleString()} on delivery.
-                          </p>
+                  {/* COD advance info box — only shown when the toggle is ON */}
+                  {paymentMethod === "cod" &&
+                    codAdvanceEnabled &&
+                    grandTotal > 0 && (
+                      <div className="ml-8 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                        <div className="flex items-start gap-3">
+                          <div className="w-5 h-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                            i
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-amber-800">
+                              10% Advance Payment Required
+                            </p>
+                            <p className="text-xs text-amber-700 mt-1">
+                              Pay ₹{advanceAmount.toLocaleString()} now to
+                              confirm your order. Remaining ₹
+                              {remainingCOD.toLocaleString()} on delivery.
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   <label
                     className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${
@@ -1261,21 +1284,24 @@ const Checkout = () => {
                 </div>
               )}
 
-              {razorpayLoading && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-0.5"></div>
-                    <div>
-                      <p className="font-medium text-blue-700">
-                        Loading Payment Gateway...
-                      </p>
-                      <p className="text-sm text-blue-600">
-                        Please wait, the payment system is initializing.
-                      </p>
+              {razorpayLoading &&
+                grandTotal > 0 &&
+                (paymentMethod === "online" ||
+                  (paymentMethod === "cod" && codAdvanceEnabled)) && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0 mt-0.5"></div>
+                      <div>
+                        <p className="font-medium text-blue-700">
+                          Loading Payment Gateway...
+                        </p>
+                        <p className="text-sm text-blue-600">
+                          Please wait, the payment system is initializing.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <button
                 onClick={handleSubmit}
@@ -1294,12 +1320,24 @@ const Checkout = () => {
                 </p>
               )}
               {paymentMethod === "cod" &&
+                codAdvanceEnabled &&
                 !processingPayment &&
                 !loading &&
                 !hasDeactivatedProducts &&
                 grandTotal > 0 && (
                   <p className="text-xs text-text-light text-center mt-2">
                     You'll pay remaining ₹{remainingCOD.toLocaleString()} on
+                    delivery
+                  </p>
+                )}
+              {paymentMethod === "cod" &&
+                !codAdvanceEnabled &&
+                !processingPayment &&
+                !loading &&
+                !hasDeactivatedProducts &&
+                grandTotal > 0 && (
+                  <p className="text-xs text-text-light text-center mt-2">
+                    You'll pay the full ₹{grandTotal.toLocaleString()} on
                     delivery
                   </p>
                 )}
@@ -1456,6 +1494,7 @@ const Checkout = () => {
                     </p>
                   )}
                   {paymentMethod === "cod" &&
+                    codAdvanceEnabled &&
                     !hasDeactivatedProducts &&
                     grandTotal > 0 && (
                       <div className="bg-amber-50 p-3 rounded-lg mt-3">

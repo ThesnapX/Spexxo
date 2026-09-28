@@ -9,10 +9,10 @@ import { Toaster, ToastBar, toast } from "react-hot-toast";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import App from "./App.jsx";
 import ErrorBoundary from "./components/common/ErrorBoundary.jsx";
-import { AuthProvider } from "./context/AuthContext.jsx";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import { CartProvider } from "./context/CartContext.jsx";
 import { WishlistProvider } from "./context/WishlistContext.jsx";
-import { captureFbclid } from "./utils/metaPixel.js";
+import { captureFbclid, setAdvancedMatching } from "./utils/metaPixel.js";
 import { shouldRetryQuery, retryDelay } from "./utils/queryRetry.js";
 import {
   checkVersionAndReload,
@@ -23,8 +23,7 @@ import "./index.css";
 // ---- Install chunk-error handler BEFORE any dynamic import runs. ----
 installChunkErrorHandler();
 
-// On successful boot (no error thrown from import of App), clear the
-// one-shot chunk-recovery marker so future deploys can trigger again.
+// Clear one-shot chunk recovery marker on successful boot.
 try {
   sessionStorage.removeItem("spexxo_chunk_reload_attempted");
 } catch {}
@@ -53,11 +52,31 @@ const queryClient = new QueryClient({
       refetchInterval: false,
       retryOnMount: true,
     },
-    mutations: {
-      retry: 0,
-    },
+    mutations: { retry: 0 },
   },
 });
+
+/**
+ * Advanced Matching bridge — attaches email/phone/name to fbq whenever
+ * the authenticated user changes. Also fires once on mount for guests.
+ */
+const MetaAdvancedMatching = () => {
+  const { user } = useAuth();
+  const lastKeyRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const key = user?._id ? String(user._id) : "guest";
+    if (key === lastKeyRef.current) return;
+    lastKeyRef.current = key;
+    try {
+      setAdvancedMatching(user);
+    } catch (err) {
+      console.warn("[Meta] advanced matching failed:", err?.message);
+    }
+  }, [user]);
+
+  return null;
+};
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -67,6 +86,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <AuthProvider>
             <CartProvider>
               <WishlistProvider>
+                <MetaAdvancedMatching />
                 <ErrorBoundary>
                   <App />
                 </ErrorBoundary>

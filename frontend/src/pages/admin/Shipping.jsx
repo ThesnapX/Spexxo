@@ -168,7 +168,6 @@ const Shipping = () => {
     },
   });
 
-  // Delete entire folder
   const deleteFolderMutation = useMutation({
     mutationFn: async (folder) => {
       await axios.delete(
@@ -194,7 +193,6 @@ const Shipping = () => {
     },
   });
 
-  // Delete entire sub-folder
   const deleteSubFolderMutation = useMutation({
     mutationFn: async ({ folder, subFolder }) => {
       await axios.delete(
@@ -290,13 +288,11 @@ const Shipping = () => {
 
     const data = { ...pincodeForm };
 
-    // Validate folder
     if (!data.folder || !data.folder.trim()) {
       toast.error("Please enter a Folder/State name");
       return;
     }
 
-    // subFolder is optional - set to null if empty
     if (!data.subFolder || !data.subFolder.trim()) {
       data.subFolder = null;
     }
@@ -349,6 +345,7 @@ const Shipping = () => {
     defaultShippingPrice: 99,
     defaultDelivery: "3-7 business days",
     extraPerQuantity: 25,
+    codAdvanceEnabled: true,
   });
 
   useEffect(() => {
@@ -359,6 +356,7 @@ const Shipping = () => {
         defaultShippingPrice: settings.defaultShippingPrice || 99,
         defaultDelivery: settings.defaultDelivery || "3-7 business days",
         extraPerQuantity: settings.extraPerQuantity || 25,
+        codAdvanceEnabled: settings.codAdvanceEnabled !== false,
       });
     }
   }, [settings]);
@@ -368,13 +366,34 @@ const Shipping = () => {
     updateSettingsMutation.mutate(settingsForm);
   };
 
+  // ✅ Quick-toggle without opening the full form.
+  const handleToggleCodAdvance = async () => {
+    const next = !(settings.codAdvanceEnabled !== false);
+    try {
+      await axios.put(
+        `${API_URL}/shipping/settings`,
+        { codAdvanceEnabled: next },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        },
+      );
+      queryClient.invalidateQueries({ queryKey: ["shipping-settings"] });
+      toast.success(
+        next
+          ? "COD advance re-enabled (10% upfront on COD)"
+          : "COD advance disabled (pure COD, no upfront payment)",
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update toggle");
+    }
+  };
+
   // ✅ Navigate into a folder
   const handleFolderClick = (folder) => {
     setCurrentFolder(folder);
     setCurrentSubFolder(null);
     setShowFolderView(false);
     setShowSubFolderView(true);
-    // Clear search when navigating
     setSearchQuery("");
   };
 
@@ -405,10 +424,8 @@ const Shipping = () => {
     e.preventDefault();
     const query = e.target.value || searchQuery;
     setSearchQuery(query);
-    // If searching, show results in current view
     if (query.trim()) {
       setIsSearching(true);
-      // Refetch with search query
       refetchPincodes();
     } else {
       setIsSearching(false);
@@ -416,20 +433,17 @@ const Shipping = () => {
     }
   };
 
-  // ✅ Clear search
   const clearSearch = () => {
     setSearchQuery("");
     setIsSearching(false);
     refetchPincodes();
   };
 
-  // ✅ Get folder count
   const getFolderCount = (folderName) => {
     const folder = folders.find((f) => f.folder === folderName);
     return folder ? folder.totalCount : 0;
   };
 
-  // ✅ Get sub-folder count
   const getSubFolderCount = (folderName, subFolderName) => {
     const folder = folders.find((f) => f.folder === folderName);
     if (!folder) return 0;
@@ -437,7 +451,6 @@ const Shipping = () => {
     return sub ? sub.count : 0;
   };
 
-  // ✅ Get sub-folders for a folder
   const getSubFolders = (folderName) => {
     const folder = folders.find((f) => f.folder === folderName);
     return folder ? folder.subFolders || [] : [];
@@ -522,7 +535,6 @@ const Shipping = () => {
           ========================================== */}
       {activeTab === "pincodes" && (
         <>
-          {/* ✅ Search Bar */}
           <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
             <form onSubmit={handleSearch} className="relative">
               <div className="flex items-center gap-2">
@@ -1335,7 +1347,7 @@ const Shipping = () => {
       )}
 
       {/* ==========================================
-          SETTINGS TAB (unchanged)
+          SETTINGS TAB
           ========================================== */}
       {activeTab === "settings" && (
         <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -1347,10 +1359,37 @@ const Shipping = () => {
             <div className="text-center py-8">Loading settings...</div>
           ) : (
             <>
+              {/* ✅ COD Advance quick toggle */}
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="font-medium text-amber-800 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    COD 10% Advance Payment
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    {settings.codAdvanceEnabled !== false
+                      ? "Customers pay 10% upfront on COD orders."
+                      : "COD orders are confirmed with no upfront payment."}{" "}
+                    Disable this to run pure-COD ad tests.
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleCodAdvance}
+                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
+                    settings.codAdvanceEnabled !== false
+                      ? "bg-green-500 text-white hover:bg-green-600"
+                      : "bg-gray-300 text-gray-700 hover:bg-gray-400"
+                  }`}
+                >
+                  {settings.codAdvanceEnabled !== false
+                    ? "ENABLED (click to disable)"
+                    : "DISABLED (click to enable)"}
+                </button>
+              </div>
+
               {/* Current Settings Display */}
               {!showSettingsForm && (
                 <div className="space-y-6">
-                  {/* Ultra Fast Settings */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-xl">
                       <p className="text-xs text-text-light">
@@ -1373,7 +1412,6 @@ const Shipping = () => {
                     </div>
                   </div>
 
-                  {/* Default Shipping */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 p-4 rounded-xl">
                       <p className="text-xs text-text-light">
@@ -1446,7 +1484,6 @@ const Shipping = () => {
                   onSubmit={handleSettingsSubmit}
                   className="space-y-6 max-w-2xl"
                 >
-                  {/* Ultra Fast Settings */}
                   <div className="border-b pb-4">
                     <h3 className="font-medium text-text mb-3">
                       Ultra Fast Shipping
@@ -1493,7 +1530,6 @@ const Shipping = () => {
                     </div>
                   </div>
 
-                  {/* Default Shipping */}
                   <div className="border-b pb-4">
                     <h3 className="font-medium text-text mb-3">
                       Default Shipping (Fallback)
@@ -1536,7 +1572,6 @@ const Shipping = () => {
                     </div>
                   </div>
 
-                  {/* Extra Per Quantity */}
                   <div className="border-b pb-4">
                     <h3 className="font-medium text-text mb-3">
                       Extra Per Quantity
@@ -1562,17 +1597,36 @@ const Shipping = () => {
                         This amount will be added for each extra item beyond the
                         first item in the order
                       </p>
-                      <div className="mt-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                        <p className="text-xs text-blue-700">
-                          <strong>Example:</strong> Base price ₹50, Extra ₹25
-                          <br />
-                          1 item: ₹50
-                          <br />
-                          3 items: ₹50 + ₹25×2 = ₹100
-                          <br />5 items: ₹50 + ₹25×4 = ₹150
+                    </div>
+                  </div>
+
+                  {/* ✅ COD Advance toggle inside the form as well */}
+                  <div className="border-b pb-4">
+                    <h3 className="font-medium text-text mb-3">
+                      COD Advance Payment
+                    </h3>
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.codAdvanceEnabled}
+                        onChange={(e) =>
+                          setSettingsForm({
+                            ...settingsForm,
+                            codAdvanceEnabled: e.target.checked,
+                          })
+                        }
+                        className="w-4 h-4 mt-1 text-primary rounded"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-text">
+                          Require 10% advance on COD orders
+                        </span>
+                        <p className="text-xs text-text-light mt-0.5">
+                          When off, COD orders are confirmed instantly with no
+                          upfront payment.
                         </p>
                       </div>
-                    </div>
+                    </label>
                   </div>
 
                   <div className="flex gap-3 pt-2 border-t">
@@ -1594,7 +1648,6 @@ const Shipping = () => {
         </div>
       )}
 
-      {/* Bulk Upload Modal */}
       <BulkUploadModal
         isOpen={showBulkUploadModal}
         onClose={() => setShowBulkUploadModal(false)}
