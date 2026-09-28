@@ -64,16 +64,6 @@ export const getFbc = () => readCookie("_fbc");
 // ─────────────────────────────────────────────
 // ADVANCED MATCHING
 // ─────────────────────────────────────────────
-//
-// Meta's browser pixel supports passing customer info to fbq('init', id, params).
-// Meta handles hashing automatically for these "Advanced Matching" params.
-// Only pass normalized values (lowercase email, digits-only phone with country code).
-//
-// Docs: https://developers.facebook.com/docs/meta-pixel/advanced/advanced-matching
-//
-// IMPORTANT: Do NOT hash here — the browser pixel hashes for us.
-// The CAPI path hashes separately on the backend.
-
 const normalizeEmail = (email) => {
   if (!email || typeof email !== "string") return null;
   const trimmed = email.trim().toLowerCase();
@@ -84,7 +74,6 @@ const normalizePhone = (phone) => {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, "");
   if (!digits) return null;
-  // Indian default — prefix 91 if 10-digit local number.
   if (digits.length === 10) return `91${digits}`;
   return digits;
 };
@@ -130,33 +119,43 @@ export const setAdvancedMatching = (user) => {
     if (externalId) params.external_id = String(externalId);
   }
 
-  // fbp / fbc cookies are set by the pixel / our capture — safe to always send.
   const fbp = getFbp();
   const fbc = getFbc();
   if (fbp) params.fbp = fbp;
   if (fbc) params.fbc = fbc;
 
   try {
-    // Re-init with advanced matching. This attaches the params to
-    // all subsequent browser events from this tab.
     window.fbq("init", PIXEL_ID, params);
   } catch (err) {
     console.warn("[Meta] setAdvancedMatching failed:", err.message);
   }
 };
 
+/**
+ * Clear advanced matching on logout.
+ */
+export const clearAdvancedMatching = () => {
+  if (typeof window === "undefined" || typeof window.fbq !== "function") return;
+  try {
+    window.fbq("init", PIXEL_ID, {});
+  } catch (err) {
+    console.warn("[Meta] clearAdvancedMatching failed:", err.message);
+  }
+};
+
+// ─────────────────────────────────────────────
+// ✅ ALIAS EXPORTS
+// ─────────────────────────────────────────────
+// AuthContext.jsx imports functions with the "Identity" suffix.
+// These aliases make the module satisfy BOTH naming conventions so
+// nothing breaks regardless of which name is used anywhere in the app.
+
+export const setAdvancedMatchingIdentity = setAdvancedMatching;
+export const clearAdvancedMatchingIdentity = clearAdvancedMatching;
+
 // ─────────────────────────────────────────────
 // Core event dispatcher
 // ─────────────────────────────────────────────
-//
-// Sent to BOTH:
-//   - browser Pixel (fbq)
-//   - server CAPI (via /api/meta/event)
-//
-// Same event_id is shared so Meta dedupes.
-//
-// The `userData` passed here is a plain object; the BACKEND is
-// responsible for hashing before sending to Meta.
 export const trackMetaEvent = async ({
   eventName,
   customData = {},
@@ -189,7 +188,6 @@ export const trackMetaEvent = async ({
     if (customData.contents.length === 0) delete customData.contents;
   }
 
-  // ── Browser pixel ──
   let browserFired = false;
   try {
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
@@ -200,8 +198,6 @@ export const trackMetaEvent = async ({
     console.warn(`[Meta] fbq failed for ${eventName}:`, err.message);
   }
 
-  // ── CAPI (server relay) ──
-  // Attach fbp/fbc from cookies if not supplied.
   const enrichedUserData = {
     ...userData,
     fbp: userData.fbp || getFbp(),
@@ -456,9 +452,6 @@ export const trackPurchase = (order, user) => {
   });
 };
 
-/**
- * Fire PageView with advanced matching. Called by useMetaPageView.
- */
 export const trackPageView = (user = null) => {
   const userData = user
     ? {

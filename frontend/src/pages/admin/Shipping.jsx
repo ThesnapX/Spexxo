@@ -21,6 +21,7 @@ import {
   FolderTree,
   Search,
   ArrowLeft,
+  Power,
 } from "lucide-react";
 import axios from "axios";
 import BulkUploadModal from "../../components/admin/BulkUploadModal";
@@ -380,8 +381,8 @@ const Shipping = () => {
       queryClient.invalidateQueries({ queryKey: ["shipping-settings"] });
       toast.success(
         next
-          ? "COD advance re-enabled (10% upfront on COD)"
-          : "COD advance disabled (pure COD, no upfront payment)",
+          ? "✅ COD advance ENABLED (10% upfront on COD)"
+          : "✅ COD advance DISABLED (pure COD, no upfront payment)",
       );
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update toggle");
@@ -459,6 +460,8 @@ const Shipping = () => {
   // ============================================
   // RENDER
   // ============================================
+  const codAdvanceOn = settings.codAdvanceEnabled !== false;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -497,6 +500,60 @@ const Shipping = () => {
           </button>
         )}
       </div>
+
+      {/* ✅ COD Advance Status Banner — always visible across both tabs */}
+      {!settingsLoading && (
+        <div
+          className={`mb-6 rounded-xl border-2 p-5 flex items-center justify-between flex-wrap gap-3 transition ${
+            codAdvanceOn
+              ? "bg-amber-50 border-amber-300"
+              : "bg-emerald-50 border-emerald-300"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                codAdvanceOn ? "bg-amber-500" : "bg-emerald-500"
+              }`}
+            >
+              <Power className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-base text-text flex items-center gap-2">
+                COD 10% Advance Payment
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    codAdvanceOn
+                      ? "bg-amber-500 text-white"
+                      : "bg-emerald-500 text-white"
+                  }`}
+                >
+                  {codAdvanceOn ? "ON" : "OFF"}
+                </span>
+              </p>
+              <p
+                className={`text-xs mt-1 ${
+                  codAdvanceOn ? "text-amber-700" : "text-emerald-700"
+                }`}
+              >
+                {codAdvanceOn
+                  ? "Customers must pay 10% upfront on COD orders."
+                  : "COD orders are confirmed instantly — no upfront payment. Ideal for ad tests."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleToggleCodAdvance}
+            className={`px-6 py-3 rounded-xl text-sm font-bold transition shadow-md whitespace-nowrap ${
+              codAdvanceOn
+                ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                : "bg-amber-500 text-white hover:bg-amber-600"
+            }`}
+          >
+            {codAdvanceOn ? "TURN OFF" : "TURN ON"}
+          </button>
+        </div>
+      )}
 
       {/* TABS */}
       <div className="flex gap-1 border-b mb-6 overflow-x-auto">
@@ -653,7 +710,6 @@ const Shipping = () => {
               </div>
 
               <form onSubmit={handlePincodeSubmit} className="space-y-4">
-                {/* Folder Field */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     State/Folder <span className="text-red-500">*</span>
@@ -679,7 +735,6 @@ const Shipping = () => {
                   </p>
                 </div>
 
-                {/* Sub-Folder Field */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     City/Zone (Sub-Folder){" "}
@@ -710,7 +765,6 @@ const Shipping = () => {
                   </p>
                 </div>
 
-                {/* Pincode Type */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Pincode Type
@@ -745,7 +799,6 @@ const Shipping = () => {
                   </div>
                 </div>
 
-                {/* Name Field */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Name <span className="text-red-500">*</span>
@@ -766,7 +819,6 @@ const Shipping = () => {
                   />
                 </div>
 
-                {/* Pincode Inputs */}
                 {pincodeForm.type === "single" ? (
                   <div className="max-w-xs">
                     <label className="block text-sm font-medium mb-1">
@@ -836,7 +888,6 @@ const Shipping = () => {
                   </div>
                 )}
 
-                {/* Shipping Price */}
                 <div className="max-w-xs">
                   <label className="block text-sm font-medium mb-1">
                     Shipping Price (₹) <span className="text-red-500">*</span>
@@ -857,7 +908,6 @@ const Shipping = () => {
                   />
                 </div>
 
-                {/* Estimated Delivery */}
                 <div className="max-w-xs">
                   <label className="block text-sm font-medium mb-1">
                     Estimated Delivery
@@ -876,7 +926,6 @@ const Shipping = () => {
                   />
                 </div>
 
-                {/* Active */}
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -910,9 +959,7 @@ const Shipping = () => {
             </div>
           )}
 
-          {/* ==========================================
-              FOLDER VIEW (States)
-              ========================================== */}
+          {/* FOLDER VIEW */}
           {showFolderView && !searchQuery ? (
             foldersLoading ? (
               <div className="text-center py-12">Loading folders...</div>
@@ -992,9 +1039,7 @@ const Shipping = () => {
             )
           ) : null}
 
-          {/* ==========================================
-              SEARCH RESULTS VIEW
-              ========================================== */}
+          {/* SEARCH RESULTS VIEW */}
           {searchQuery && (
             <div className="space-y-4">
               {pincodesLoading ? (
@@ -1110,9 +1155,7 @@ const Shipping = () => {
             </div>
           )}
 
-          {/* ==========================================
-              SUB-FOLDER VIEW (Cities/Zones)
-              ========================================== */}
+          {/* SUB-FOLDER VIEW */}
           {!showFolderView && showSubFolderView && !searchQuery && (
             <>
               {foldersLoading ? (
@@ -1225,9 +1268,7 @@ const Shipping = () => {
             </>
           )}
 
-          {/* ==========================================
-              PINCODES VIEW (Inside Sub-Folder or All)
-              ========================================== */}
+          {/* PINCODES VIEW */}
           {!showFolderView && !showSubFolderView && !searchQuery && (
             <>
               {pincodesLoading ? (
@@ -1359,34 +1400,6 @@ const Shipping = () => {
             <div className="text-center py-8">Loading settings...</div>
           ) : (
             <>
-              {/* ✅ COD Advance quick toggle */}
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between flex-wrap gap-3">
-                <div>
-                  <p className="font-medium text-amber-800 flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    COD 10% Advance Payment
-                  </p>
-                  <p className="text-xs text-amber-700 mt-1">
-                    {settings.codAdvanceEnabled !== false
-                      ? "Customers pay 10% upfront on COD orders."
-                      : "COD orders are confirmed with no upfront payment."}{" "}
-                    Disable this to run pure-COD ad tests.
-                  </p>
-                </div>
-                <button
-                  onClick={handleToggleCodAdvance}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition ${
-                    settings.codAdvanceEnabled !== false
-                      ? "bg-green-500 text-white hover:bg-green-600"
-                      : "bg-gray-300 text-gray-700 hover:bg-gray-400"
-                  }`}
-                >
-                  {settings.codAdvanceEnabled !== false
-                    ? "ENABLED (click to disable)"
-                    : "DISABLED (click to enable)"}
-                </button>
-              </div>
-
               {/* Current Settings Display */}
               {!showSettingsForm && (
                 <div className="space-y-6">
@@ -1462,18 +1475,6 @@ const Shipping = () => {
                       <br />
                       5. Ultra Fast = Basic Price + Additional Amount
                     </p>
-                    <div className="mt-2 text-xs text-blue-600 space-y-1">
-                      <p>
-                        Example: 1 item → ₹50, 3 items → ₹50 + ₹
-                        {settings.extraPerQuantity || 25}×2 = ₹
-                        {50 + (settings.extraPerQuantity || 25) * 2}
-                      </p>
-                      <p>
-                        Example: 5 items → ₹50 + ₹
-                        {settings.extraPerQuantity || 25}×4 = ₹
-                        {50 + (settings.extraPerQuantity || 25) * 4}
-                      </p>
-                    </div>
                   </div>
                 </div>
               )}
@@ -1506,9 +1507,6 @@ const Shipping = () => {
                           min="0"
                           required
                         />
-                        <p className="text-xs text-text-light mt-1">
-                          Added to Basic price
-                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
@@ -1593,14 +1591,9 @@ const Shipping = () => {
                         min="0"
                         placeholder="e.g. 25"
                       />
-                      <p className="text-xs text-text-light mt-1">
-                        This amount will be added for each extra item beyond the
-                        first item in the order
-                      </p>
                     </div>
                   </div>
 
-                  {/* ✅ COD Advance toggle inside the form as well */}
                   <div className="border-b pb-4">
                     <h3 className="font-medium text-text mb-3">
                       COD Advance Payment
