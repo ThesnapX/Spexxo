@@ -8,61 +8,95 @@ import Loading from "./components/common/Loading";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import AdminRoute from "./components/common/AdminRoute";
 import { useCart } from "./context/CartContext";
-
-// Lazy loaded pages
-const Home = lazy(() => import("./pages/Home"));
-const Shop = lazy(() => import("./pages/Shop"));
-const ProductDetail = lazy(() => import("./pages/ProductDetail"));
-const Cart = lazy(() => import("./pages/Cart"));
-const Checkout = lazy(() => import("./pages/Checkout"));
-const Login = lazy(() => import("./pages/Login"));
-const Register = lazy(() => import("./pages/Register"));
-const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
-const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const Profile = lazy(() => import("./pages/Profile"));
-const MyOrders = lazy(() => import("./pages/MyOrders"));
-const OrderDetail = lazy(() => import("./pages/OrderDetail"));
-const Wishlist = lazy(() => import("./pages/Wishlist"));
-const Blog = lazy(() => import("./pages/Blog"));
-const BlogDetail = lazy(() => import("./pages/BlogDetail"));
-const About = lazy(() => import("./pages/About"));
-const Contact = lazy(() => import("./pages/Contact"));
-const FAQ = lazy(() => import("./pages/FAQ"));
-const Privacy = lazy(() => import("./pages/Privacy"));
-const Terms = lazy(() => import("./pages/Terms"));
-const Refund = lazy(() => import("./pages/Refund"));
-const NotFound = lazy(() => import("./pages/NotFound"));
 import { useMetaPageView } from "./utils/useMetaPixel";
+import { lazyRevalidate } from "./utils/versionCheck";
+
+// ✅ Every lazy route uses lazyRevalidate so stale chunks recover
+// silently instead of showing the ErrorBoundary fallback.
+const Home = lazy(lazyRevalidate(() => import("./pages/Home")));
+const Shop = lazy(lazyRevalidate(() => import("./pages/Shop")));
+const ProductDetail = lazy(
+  lazyRevalidate(() => import("./pages/ProductDetail")),
+);
+const Cart = lazy(lazyRevalidate(() => import("./pages/Cart")));
+const Checkout = lazy(lazyRevalidate(() => import("./pages/Checkout")));
+const Login = lazy(lazyRevalidate(() => import("./pages/Login")));
+const Register = lazy(lazyRevalidate(() => import("./pages/Register")));
+const ForgotPassword = lazy(
+  lazyRevalidate(() => import("./pages/ForgotPassword")),
+);
+const ResetPassword = lazy(
+  lazyRevalidate(() => import("./pages/ResetPassword")),
+);
+const Profile = lazy(lazyRevalidate(() => import("./pages/Profile")));
+const MyOrders = lazy(lazyRevalidate(() => import("./pages/MyOrders")));
+const OrderDetail = lazy(lazyRevalidate(() => import("./pages/OrderDetail")));
+const Wishlist = lazy(lazyRevalidate(() => import("./pages/Wishlist")));
+const Blog = lazy(lazyRevalidate(() => import("./pages/Blog")));
+const BlogDetail = lazy(lazyRevalidate(() => import("./pages/BlogDetail")));
+const About = lazy(lazyRevalidate(() => import("./pages/About")));
+const Contact = lazy(lazyRevalidate(() => import("./pages/Contact")));
+const FAQ = lazy(lazyRevalidate(() => import("./pages/FAQ")));
+const Privacy = lazy(lazyRevalidate(() => import("./pages/Privacy")));
+const Terms = lazy(lazyRevalidate(() => import("./pages/Terms")));
+const Refund = lazy(lazyRevalidate(() => import("./pages/Refund")));
+const NotFound = lazy(lazyRevalidate(() => import("./pages/NotFound")));
 
 // Admin Pages
-const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
-const Products = lazy(() => import("./pages/admin/Products"));
-const AddProduct = lazy(() => import("./pages/admin/AddProduct"));
-const EditProduct = lazy(() => import("./pages/admin/EditProduct"));
-const ProductDetailView = lazy(() => import("./pages/admin/ProductDetailView"));
-const Orders = lazy(() => import("./pages/admin/Orders"));
-const OrderDetailAdmin = lazy(() => import("./pages/admin/OrderDetailView"));
-const Reviews = lazy(() => import("./pages/admin/Reviews"));
-const Categories = lazy(() => import("./pages/admin/Categories"));
-const Brands = lazy(() => import("./pages/admin/Brands"));
-const Shapes = lazy(() => import("./pages/admin/Shapes"));
-const Colors = lazy(() => import("./pages/admin/Colors"));
-const LensTypes = lazy(() => import("./pages/admin/LensTypes"));
-const FrameMaterials = lazy(() => import("./pages/admin/FrameMaterials"));
-const UserInspection = lazy(() => import("./pages/admin/UserInspection"));
-const UserDetailView = lazy(() => import("./pages/admin/UserDetailView"));
-const Subscribers = lazy(() => import("./pages/admin/Subscribers"));
-const ContactForms = lazy(() => import("./pages/admin/ContactForms"));
-const Blogs = lazy(() => import("./pages/admin/Blogs"));
-const AddBlog = lazy(() => import("./pages/admin/AddBlog"));
-const EditBlog = lazy(() => import("./pages/admin/EditBlog"));
-const Coupons = lazy(() => import("./pages/admin/Coupons"));
-const Popups = lazy(() => import("./pages/admin/Popups"));
-const EmailMarketing = lazy(() => import("./pages/admin/EmailMarketing"));
-const Shipping = lazy(() => import("./pages/admin/Shipping"));
-const BlogDetailView = lazy(() => import("./pages/admin/BlogDetailView"));
-const BlogCategories = lazy(() => import("./pages/admin/BlogCategories"));
-const BlogTags = lazy(() => import("./pages/admin/BlogTags"));
+const Dashboard = lazy(lazyRevalidate(() => import("./pages/admin/Dashboard")));
+const Products = lazy(lazyRevalidate(() => import("./pages/admin/Products")));
+const AddProduct = lazy(
+  lazyRevalidate(() => import("./pages/admin/AddProduct")),
+);
+const EditProduct = lazy(
+  lazyRevalidate(() => import("./pages/admin/EditProduct")),
+);
+const ProductDetailView = lazy(
+  lazyRevalidate(() => import("./pages/admin/ProductDetailView")),
+);
+const Orders = lazy(lazyRevalidate(() => import("./pages/admin/Orders")));
+const OrderDetailAdmin = lazy(
+  lazyRevalidate(() => import("./pages/admin/OrderDetailView")),
+);
+const Reviews = lazy(lazyRevalidate(() => import("./pages/admin/Reviews")));
+const Categories = lazy(
+  lazyRevalidate(() => import("./pages/admin/Categories")),
+);
+const Brands = lazy(lazyRevalidate(() => import("./pages/admin/Brands")));
+const Shapes = lazy(lazyRevalidate(() => import("./pages/admin/Shapes")));
+const Colors = lazy(lazyRevalidate(() => import("./pages/admin/Colors")));
+const LensTypes = lazy(lazyRevalidate(() => import("./pages/admin/LensTypes")));
+const FrameMaterials = lazy(
+  lazyRevalidate(() => import("./pages/admin/FrameMaterials")),
+);
+const UserInspection = lazy(
+  lazyRevalidate(() => import("./pages/admin/UserInspection")),
+);
+const UserDetailView = lazy(
+  lazyRevalidate(() => import("./pages/admin/UserDetailView")),
+);
+const Subscribers = lazy(
+  lazyRevalidate(() => import("./pages/admin/Subscribers")),
+);
+const ContactForms = lazy(
+  lazyRevalidate(() => import("./pages/admin/ContactForms")),
+);
+const Blogs = lazy(lazyRevalidate(() => import("./pages/admin/Blogs")));
+const AddBlog = lazy(lazyRevalidate(() => import("./pages/admin/AddBlog")));
+const EditBlog = lazy(lazyRevalidate(() => import("./pages/admin/EditBlog")));
+const Coupons = lazy(lazyRevalidate(() => import("./pages/admin/Coupons")));
+const Popups = lazy(lazyRevalidate(() => import("./pages/admin/Popups")));
+const EmailMarketing = lazy(
+  lazyRevalidate(() => import("./pages/admin/EmailMarketing")),
+);
+const Shipping = lazy(lazyRevalidate(() => import("./pages/admin/Shipping")));
+const BlogDetailView = lazy(
+  lazyRevalidate(() => import("./pages/admin/BlogDetailView")),
+);
+const BlogCategories = lazy(
+  lazyRevalidate(() => import("./pages/admin/BlogCategories")),
+);
+const BlogTags = lazy(lazyRevalidate(() => import("./pages/admin/BlogTags")));
 
 function App() {
   useMetaPageView();
@@ -167,13 +201,10 @@ function App() {
           <Route path="orders" element={<Orders />} />
           <Route path="orders/:id" element={<OrderDetailAdmin />} />
           <Route path="reviews" element={<Reviews />} />
-
-          {/* ✅ Users section */}
           <Route path="user-inspection" element={<UserInspection />} />
           <Route path="users/:id" element={<UserDetailView />} />
           <Route path="subscribers" element={<Subscribers />} />
           <Route path="contact-forms" element={<ContactForms />} />
-
           <Route path="blogs" element={<Blogs />} />
           <Route path="blogs/view/:id" element={<BlogDetailView />} />
           <Route path="blog-categories" element={<BlogCategories />} />

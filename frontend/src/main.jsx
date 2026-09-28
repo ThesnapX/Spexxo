@@ -20,8 +20,16 @@ import {
 } from "./utils/versionCheck.js";
 import "./index.css";
 
-// ---- Version + chunk-error guards (must run before render) ----
+// ---- Install chunk-error handler BEFORE any dynamic import runs. ----
 installChunkErrorHandler();
+
+// On successful boot (no error thrown from import of App), clear the
+// one-shot chunk-recovery marker so future deploys can trigger again.
+try {
+  sessionStorage.removeItem("spexxo_chunk_reload_attempted");
+} catch {}
+
+// Background version check — never blocks render.
 checkVersionAndReload().catch(() => {});
 
 try {
@@ -113,10 +121,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
                       }}
                     >
                       {({ icon, message }) => (
-                        <div
-                          className="custom-toast-wrapper"
-                          style={{ width: "100%" }}
-                        >
+                        <div className="custom-toast-wrapper">
                           <div
                             style={{
                               display: "flex",
