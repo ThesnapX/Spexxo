@@ -1,6 +1,12 @@
+// frontend/src/context/AuthContext.jsx
+
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
+import {
+  setAdvancedMatchingIdentity,
+  clearAdvancedMatchingIdentity,
+} from "../utils/metaPixel";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -8,9 +14,7 @@ const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider");
   return context;
 };
 
@@ -19,7 +23,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(() => localStorage.getItem("token"));
 
-  // Set up axios interceptor - runs whenever token changes
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -28,11 +31,11 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
-  // Load user on mount or when token changes
   useEffect(() => {
     const loadUser = async () => {
       if (!token) {
         setUser(null);
+        clearAdvancedMatchingIdentity();
         setLoading(false);
         return;
       }
@@ -40,12 +43,14 @@ export const AuthProvider = ({ children }) => {
       try {
         const { data } = await axios.get(`${API_URL}/auth/me`);
         setUser(data.user);
+        // ✅ Feed the identity into Meta Advanced Matching.
+        setAdvancedMatchingIdentity(data.user);
       } catch (error) {
         console.error("Failed to load user:", error);
-        // Clear invalid token
         localStorage.removeItem("token");
         setToken(null);
         setUser(null);
+        clearAdvancedMatchingIdentity();
       } finally {
         setLoading(false);
       }
@@ -63,6 +68,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", data.token);
       setToken(data.token);
       setUser(data.user);
+      // ✅ Update Advanced Matching with the freshly logged-in user.
+      setAdvancedMatchingIdentity(data.user);
       toast.success("Logged in successfully!");
       return data;
     } catch (error) {
@@ -77,6 +84,8 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("token", data.token);
       setToken(data.token);
       setUser(data.user);
+      // ✅ New user registers → immediately identify for Meta matching.
+      setAdvancedMatchingIdentity(data.user);
       toast.success("Account created successfully!");
       return data;
     } catch (error) {
@@ -87,13 +96,14 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("savedCredentials"); // Also clear saved credentials on logout
+    localStorage.removeItem("savedCredentials");
     setToken(null);
     setUser(null);
+    // ✅ Clear Meta Advanced Matching on logout.
+    clearAdvancedMatchingIdentity();
     toast.success("Logged out successfully");
   };
 
-  // In AuthContext.jsx - Make sure this exists and works
   const updateProfile = async (profileData) => {
     try {
       const { data } = await axios.put(
@@ -101,6 +111,8 @@ export const AuthProvider = ({ children }) => {
         profileData,
       );
       setUser(data.user);
+      // Refresh identity in case email/phone changed.
+      setAdvancedMatchingIdentity(data.user);
       toast.success("Profile updated successfully!");
       return data;
     } catch (error) {

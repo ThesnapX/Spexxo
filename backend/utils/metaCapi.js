@@ -5,13 +5,11 @@ import crypto from "crypto";
 const PIXEL_ID = process.env.META_PIXEL_ID;
 const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN;
 const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE;
-// Explicit opt-in test mode — never implicitly enabled by NODE_ENV.
 const TEST_MODE = process.env.META_CAPI_TEST_MODE === "true";
-// Controlled API version.
 const API_VERSION = process.env.META_CAPI_API_VERSION || "v21.0";
 
 // ─────────────────────────────────────────────
-// Hashing / normalisation
+// Normalisation + hashing
 // ─────────────────────────────────────────────
 const sha256 = (value) => {
   if (value === null || value === undefined || value === "") return null;
@@ -21,28 +19,92 @@ const sha256 = (value) => {
     .digest("hex");
 };
 
+// Meta wants digits only. We normalize Indian numbers to 91XXXXXXXXXX.
+// Any non-digit is stripped. If 10 digits → prefix 91. If 12 digits
+// starting with 91 → keep. Otherwise pass through digits as-is.
 const normalizePhone = (phone) => {
   if (!phone) return null;
   const digits = String(phone).replace(/\D/g, "");
+  if (!digits) return null;
   if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return digits;
+  if (digits.length === 11 && digits.startsWith("0"))
+    return `91${digits.slice(1)}`;
   return digits;
 };
 
+// Meta expects first/last names as lowercase, trimmed, no punctuation.
+const normalizeName = (name) => {
+  if (!name) return null;
+  const cleaned = String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z\u0900-\u097F\s]/g, "") // keep letters incl. Devanagari
+    .replace(/\s+/g, " ");
+  return cleaned || null;
+};
+
+// Meta wants lowercase city/state without spaces or punctuation.
+const normalizeCityState = (value) => {
+  if (!value) return null;
+  const cleaned = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  return cleaned || null;
+};
+
+// Meta wants country as a 2-letter ISO code, lowercase.
+const normalizeCountry = (value) => {
+  if (!value) return "in";
+  const c = String(value).trim().toLowerCase();
+  if (c.length === 2) return c;
+  // Map common full names → ISO.
+  const map = {
+    india: "in",
+    "united states": "us",
+    usa: "us",
+    "united kingdom": "gb",
+    uk: "gb",
+  };
+  return map[c] || c.slice(0, 2);
+};
+
 // ─────────────────────────────────────────────
-// Build Meta user_data
+// Build Meta user_data with Advanced Matching
 // ─────────────────────────────────────────────
 const buildUserData = (userData = {}) => {
   const out = {};
 
-  if (userData.email) out.em = [sha256(userData.email)];
-  if (userData.phone) out.ph = [sha256(normalizePhone(userData.phone))];
-  if (userData.firstName) out.fn = [sha256(userData.firstName)];
-  if (userData.lastName) out.ln = [sha256(userData.lastName)];
-  if (userData.city) out.ct = [sha256(userData.city)];
-  if (userData.state) out.st = [sha256(userData.state)];
-  if (userData.zip) out.zp = [sha256(userData.zip)];
-  if (userData.country) out.country = [sha256(userData.country)];
-  if (userData.externalId) out.external_id = [sha256(userData.externalId)];
+  // Hashed PII
+  const email = userData.email ? sha256(userData.email) : null;
+  const phone = userData.phone ? sha256(normalizePhone(userData.phone)) : null;
+  const fn = userData.firstName
+    ? sha256(normalizeName(userData.firstName))
+    : null;
+  const ln = userData.lastName
+    ? sha256(normalizeName(userData.lastName))
+    : null;
+  const ct = userData.city ? sha256(normalizeCityState(userData.city)) : null;
+  const st = userData.state ? sha256(normalizeCityState(userData.state)) : null;
+  const zp = userData.zip ? sha256(String(userData.zip).trim()) : null;
+  const country = userData.country
+    ? sha256(normalizeCountry(userData.country))
+    : null;
+  const externalId = userData.externalId
+    ? sha256(String(userData.externalId))
+    : null;
+
+  // Meta expects arrays. Only attach keys with non-null values.
+  if (email) out.em = [email];
+  if (phone) out.ph = [phone];
+  if (fn) out.fn = [fn];
+  if (ln) out.ln = [ln];
+  if (ct) out.ct = [ct];
+  if (st) out.st = [st];
+  if (zp) out.zp = [zp];
+  if (country) out.country = [country];
+  if (externalId) out.external_id = [externalId];
 
   // Non-hashed browser/server context.
   if (userData.clientIpAddress)
@@ -52,17 +114,17 @@ const buildUserData = (userData = {}) => {
   if (userData.fbc) out.fbc = userData.fbc;
   if (userData.fbp) out.fbp = userData.fbp;
 
-  // Drop null hash entries.
+  // Drop empty-array keys defensively.
   Object.keys(out).forEach((k) => {
     const v = out[k];
-    if (Array.isArray(v) && v[0] === null) delete out[k];
+    if (Array.isArray(v) && v.length === 0) delete out[k];
   });
 
   return out;
 };
 
 // ─────────────────────────────────────────────
-// Build Meta custom_data — strict naming & numeric validation
+// custom_data builder (unchanged semantics)
 // ─────────────────────────────────────────────
 const isFiniteNonNegative = (v) => {
   const n = Number(v);
@@ -72,7 +134,6 @@ const isFiniteNonNegative = (v) => {
 const buildCustomData = (customData = {}) => {
   const out = {};
 
-  // value — must be finite, non-negative, ≤ 1e9 (sane upper bound).
   const value = customData.value;
   if (value !== undefined && value !== null) {
     const n = Number(value);
@@ -88,7 +149,7 @@ const buildCustomData = (customData = {}) => {
     out.content_ids = contentIds
       .map((id) => (id === null || id === undefined ? null : String(id)))
       .filter(Boolean)
-      .slice(0, 50); // Meta caps at 50.
+      .slice(0, 50);
   }
 
   if (customData.content_type || customData.contentType) {
@@ -122,9 +183,7 @@ const buildCustomData = (customData = {}) => {
   const numItems = customData.num_items ?? customData.numItems;
   if (numItems !== undefined && numItems !== null) {
     const n = Number(numItems);
-    if (Number.isFinite(n) && n >= 0) {
-      out.num_items = Math.floor(n);
-    }
+    if (Number.isFinite(n) && n >= 0) out.num_items = Math.floor(n);
   }
 
   const orderId = customData.order_id || customData.orderId;
@@ -163,7 +222,6 @@ export const sendMetaEvent = async ({
   actionSource = "website",
   eventTime = Math.floor(Date.now() / 1000),
 }) => {
-  // Validate event_id BEFORE sending — an empty id disables dedup.
   if (!eventId || typeof eventId !== "string" || eventId.length > 100) {
     return {
       success: false,
@@ -245,8 +303,25 @@ export const sendMetaEvent = async ({
       };
     }
 
+    // Diagnostic: how many hashed user_data fields we actually sent.
+    const matchingFields = Object.keys(user_data).filter((k) =>
+      [
+        "em",
+        "ph",
+        "fn",
+        "ln",
+        "ct",
+        "st",
+        "zp",
+        "country",
+        "external_id",
+      ].includes(k),
+    );
+
     console.log(
-      `[CAPI] ✅ ${eventName} sent | eventId=${eventId} | received=${result.events_received ?? "?"}`,
+      `[CAPI] ✅ ${eventName} sent | eventId=${eventId} | received=${
+        result.events_received ?? "?"
+      } | matchFields=[${matchingFields.join(",")}]`,
     );
 
     return {
@@ -255,6 +330,7 @@ export const sendMetaEvent = async ({
       fbtraceId: result.fbtrace_id,
       eventName,
       eventId,
+      matchedFields: matchingFields,
     };
   } catch (error) {
     console.error(`[CAPI] ❌ ${eventName} exception:`, {
