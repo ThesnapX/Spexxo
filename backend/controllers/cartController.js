@@ -25,13 +25,10 @@ export const getCart = async (req, res) => {
       cart = await Cart.create({ user: req.user._id, items: [] });
     }
 
-    // Filter out items with null products
+    // ✅ Filter out items with null products (product was deleted).
+    // We do NOT save the cart here — saving on read is dangerous because
+    // a transient populate failure would silently empty the user's cart.
     const activeItems = cart.items.filter((item) => item.product !== null);
-
-    if (activeItems.length !== cart.items.length) {
-      cart.items = activeItems;
-      await cart.save();
-    }
 
     // Build response with proper variant data
     const itemsWithPrices = activeItems
@@ -225,6 +222,9 @@ export const addToCart = async (req, res) => {
     // ✅ Reset follow-up tracking on cart activity
     cart.lastActivityAt = new Date();
     cart.followUpStage = 0;
+
+    // 🔥 THE FIX: PERSIST THE CART TO MONGODB
+    await cart.save();
 
     try {
       const ActivityLog = (await import("../models/ActivityLog.js")).default;
