@@ -41,6 +41,24 @@
     <link rel="apple-touch-icon" href="/favicon.png" />
     <!-- Meta Pixel — base snippet only. PageView is fired from React
          (useMetaPageView) so advanced matching + CAPI can run with it. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href="https://spexxo.in/" />
+    <script>
+      // Old Vercel host → 301 to spexxo.in, preserving the full path + query.
+      (function () {
+        try {
+          var h = window.location.hostname;
+          if (h === "spexxo.vercel.app" || h === "www.spexxo.vercel.app") {
+            window.location.replace(
+              "https://spexxo.in" +
+                window.location.pathname +
+                window.location.search +
+                window.location.hash,
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script>
       !(function (f, b, e, v, n, t, s) {
         if (f.fbq) return;
